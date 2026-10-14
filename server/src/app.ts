@@ -6,6 +6,7 @@ import type { Env } from './settings';
 import { HttpError } from './http';
 import { settingsRoutes } from './routes/settings';
 import { memoryRoutes } from './routes/memories';
+import { modelRoutes } from './routes/models';
 
 export interface Deps {
   db: DB;
@@ -24,6 +25,7 @@ export function createApp(deps: Deps): Hono {
 
   app.route('/api/settings', settingsRoutes(deps));
   app.route('/api/memories', memoryRoutes(deps));
+  app.route('/api/models', modelRoutes(deps));
 
   return app;
 }
