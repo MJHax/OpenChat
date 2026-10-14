@@ -1,0 +1,51 @@
+import { describe, it, expect } from 'vitest';
+import { openDb } from '../src/db';
+import { getPersona, getSettingsView, maskKey, resolveApiKey, updateSettings } from '../src/settings';
+import { HttpError } from '../src/http';
+
+describe('resolveApiKey', () => {
+  it('prefers the Settings value over the environment', () => {
+    const db = openDb(':memory:');
+    expect(resolveApiKey(db, {})).toEqual({ key: '', source: 'none' });
+    expect(resolveApiKey(db, { OPENROUTER_API_KEY: 'env-key' })).toEqual({ key: 'env-key', source: 'env' });
+    updateSettings(db, { apiKey: '  settings-key ' });
+    expect(resolveApiKey(db, { OPENROUTER_API_KEY: 'env-key' })).toEqual({ key: 'settings-key', source: 'settings' });
+    updateSettings(db, { apiKey: '' });
+    expect(resolveApiKey(db, { OPENROUTER_API_KEY: 'env-key' }).source).toBe('env');
+  });
+});
+
+describe('maskKey', () => {
+  it('shows only the start and end of the key', () => {
+    expect(maskKey('sk-or-v1-abcdef1234567890')).toBe('sk-or-…7890');
+    expect(maskKey('short')).toBe('••••');
+    expect(maskKey('')).toBe('');
+  });
+});
+
+describe('getSettingsView', () => {
+  it('has defaults and never includes the raw key', () => {
+    const db = openDb(':memory:');
+    updateSettings(db, { apiKey: 'sk-or-v1-supersecretvalue99' });
+    const view = getSettingsView(db, {});
+    expect(view).toMatchObject({ hasApiKey: true, apiKeySource: 'settings', theme: 'system', aboutMe: '' });
+    expect(JSON.stringify(view)).not.toContain('supersecret');
+  });
+});
+
+describe('updateSettings', () => {
+  it('rejects an invalid theme', () => {
+    const db = openDb(':memory:');
+    expect(() => updateSettings(db, { theme: 'neon' as never })).toThrow(HttpError);
+  });
+});
+
+describe('getPersona', () => {
+  it('includes only enabled memories', () => {
+    const db = openDb(':memory:');
+    updateSettings(db, { aboutMe: 'Sam', customInstructions: 'Be brief' });
+    db.prepare('INSERT INTO memories (content, enabled, created_at) VALUES (?, ?, ?)').run('Likes tea', 1, 1);
+    db.prepare('INSERT INTO memories (content, enabled, created_at) VALUES (?, ?, ?)').run('Paused fact', 0, 2);
+    expect(getPersona(db)).toEqual({ aboutMe: 'Sam', customInstructions: 'Be brief', memories: ['Likes tea'] });
+  });
+});
