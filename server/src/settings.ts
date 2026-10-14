@@ -10,6 +10,7 @@ const DEFAULTS = {
   theme: 'system',
   default_model_id: '',
   title_model_id: '',
+  memory_model_id: '',
 };
 export type SettingKey = keyof typeof DEFAULTS;
 export type Env = Record<string, string | undefined>;
@@ -23,6 +24,7 @@ const UPDATE_KEYS: Record<keyof SettingsUpdate, SettingKey> = {
   theme: 'theme',
   defaultModelId: 'default_model_id',
   titleModelId: 'title_model_id',
+  memoryModelId: 'memory_model_id',
 };
 
 export function getSetting(db: DB, key: SettingKey): string {
@@ -59,6 +61,7 @@ export function getSettingsView(db: DB, env: Env): SettingsView {
     theme: getSetting(db, 'theme') as Theme,
     defaultModelId: getSetting(db, 'default_model_id'),
     titleModelId: getSetting(db, 'title_model_id'),
+    memoryModelId: getSetting(db, 'memory_model_id'),
   };
 }
 

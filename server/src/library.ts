@@ -51,4 +51,5 @@ export function removeModel(db: DB, id: string): void {
     setSetting(db, 'default_model_id', next?.id ?? '');
   }
   if (getSetting(db, 'title_model_id') === id) setSetting(db, 'title_model_id', '');
+  if (getSetting(db, 'memory_model_id') === id) setSetting(db, 'memory_model_id', '');
 }

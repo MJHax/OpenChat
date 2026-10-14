@@ -76,6 +76,7 @@ export interface SettingsView {
   theme: Theme;
   defaultModelId: string;
   titleModelId: string;
+  memoryModelId: string;
 }
 
 export type SettingsUpdate = Partial<{
@@ -85,6 +86,7 @@ export type SettingsUpdate = Partial<{
   theme: Theme;
   defaultModelId: string;
   titleModelId: string;
+  memoryModelId: string;
 }>;
 
 export interface SearchHit {

@@ -3,6 +3,7 @@ import type { Deps } from '../app';
 import type { DB } from '../db';
 import { now } from '../db';
 import { HttpError, readJson } from '../http';
+import { suggestMemory } from '../memorySuggest';
 import type { Memory } from '../../../shared/types';
 
 interface MemoryRow { id: number; content: string; enabled: number; created_at: number }
@@ -21,7 +22,8 @@ function cleanContent(content: unknown): string {
   return text;
 }
 
-export function memoryRoutes({ db }: Deps): Hono {
+export function memoryRoutes(deps: Deps): Hono {
+  const { db } = deps;
   const r = new Hono();
 
   r.get('/', (c) => {
@@ -33,6 +35,11 @@ export function memoryRoutes({ db }: Deps): Hono {
     const { content } = await readJson<{ content?: string }>(c);
     const info = db.prepare('INSERT INTO memories (content, enabled, created_at) VALUES (?, 1, ?)').run(cleanContent(content), now());
     return c.json(toMemory(requireMemory(db, Number(info.lastInsertRowid))), 201);
+  });
+
+  r.post('/suggest', async (c) => {
+    const { text } = await readJson<{ text?: unknown }>(c);
+    return c.json({ suggestion: await suggestMemory(deps, text) });
   });
 
   r.patch('/:id', async (c) => {
