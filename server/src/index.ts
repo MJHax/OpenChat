@@ -17,7 +17,7 @@ const app = createApp({ db, openrouter: createOpenRouterClient(), env: process.e
 // In `npm start`, serve the built frontend. In `npm run dev`, Vite serves it instead.
 if (existsSync('dist')) app.use('/*', serveStatic({ root: './dist' }));
 
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(process.env.OPENCHAT_PORT ?? 3000);
 serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, (info) => {
   console.log(`OpenChat server running at http://127.0.0.1:${info.port}`);
 });

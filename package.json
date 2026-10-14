@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
-    "dev:server": "tsx watch server/src/index.ts",
+    "dev:server": "node --watch --import tsx server/src/index.ts",
     "dev:web": "vite",
     "build": "vite build",
     "start": "vite build && tsx server/src/index.ts",
