@@ -166,6 +166,19 @@ describe('comparisons', () => {
     expect(detail.compare?.replies.map((m) => m.modelId)).toEqual(['m/a', 'm/b', 'm/c']);
   });
 
+  it('a compare regenerate where no model replies keeps the previous reply visible', async () => {
+    const fail = { chunks: [], failWith: new OpenRouterError('Rate limited.', 429) };
+    const { streamChat } = byModel({ 'm/b': fail, 'm/c': fail });
+    const { call } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const first = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'm/a' }));
+    const { userMessageId, assistantMessageId } = first[0].data;
+    await readEvents(await call('POST', `/api/chats/${chatId}/regenerate`, { parentId: userMessageId, modelIds: ['m/b', 'm/c'] }));
+    const detail = (await (await call('GET', `/api/chats/${chatId}`)).json()) as ChatDetail;
+    expect(detail.messages.map((m) => m.id)).toEqual([userMessageId, assistantMessageId]);
+    expect(detail.compare).toBeNull();
+  });
+
   it('validates modelIds', async () => {
     const { call } = makeApp();
     const chatId = await newChat(call);

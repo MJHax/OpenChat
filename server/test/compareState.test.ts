@@ -52,6 +52,18 @@ describe('comparison state', () => {
     expect(detail.messages.map((m) => m.id)).toEqual([u.id, b.id]);
   });
 
+  it('a pending choice with no saved replies does not lock the chat', async () => {
+    // e.g. the server stopped mid-comparison before any reply was saved
+    const { call, db } = makeApp({ streamChat: async function* () { yield { type: 'delta', text: 'ok' }; } });
+    const chat = (await (await call('POST', '/api/chats')).json()) as ChatSummary;
+    const u = insertMessage(db, { chatId: chat.id, parentId: null, role: 'user', content: 'Q' });
+    setActiveLeaf(db, chat.id, u.id);
+    setCompareParent(db, chat.id, u.id);
+    const detail = (await (await call('GET', `/api/chats/${chat.id}`)).json()) as ChatDetail;
+    expect(detail.compare).toBeNull();
+    expect((await call('POST', `/api/chats/${chat.id}/regenerate`, { parentId: u.id, modelId: 'm/a' })).status).toBe(200);
+  });
+
   it('lists every version of a reply', async () => {
     const { call, chat, u, a, b } = await seed();
     const replies = (await (await call('GET', `/api/chats/${chat.id}/replies?parentId=${u.id}`)).json()) as Message[];

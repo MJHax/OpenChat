@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import type { Deps } from '../app';
 import { HttpError, readJson } from '../http';
-import { requireChat, setActiveLeaf, touchChat, type ChatRow } from '../chats';
+import { pendingChoice, requireChat, setActiveLeaf, touchChat, type ChatRow } from '../chats';
 import { getMessage, insertMessage } from '../messages';
 import { streamReply } from '../generate';
 import { streamComparison } from '../compare';
@@ -42,7 +42,7 @@ export function generationRoutes(deps: Deps): Hono {
   /** Reserves the chat for one generation. A running generation wins over a pending choice (it sets that choice). */
   function claim(chat: ChatRow): void {
     if (inFlight.has(chat.id)) throw new HttpError(409, 'A reply is still being generated in this chat. Wait for it to finish.');
-    if (chat.compare_parent_id) throw new HttpError(409, 'Pick a reply to continue.');
+    if (pendingChoice(db, chat)) throw new HttpError(409, 'Pick a reply to continue.');
     inFlight.add(chat.id);
   }
 

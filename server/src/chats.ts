@@ -53,6 +53,16 @@ export function setCompareParent(db: DB, id: string, parentId: string | null): v
   db.prepare('UPDATE chats SET compare_parent_id = ? WHERE id = ?').run(parentId, id);
 }
 
+/**
+ * The user message whose replies await a choice, or null. A marker with no saved replies (e.g. the server
+ * stopped mid-comparison) is ignored so it can never lock the chat.
+ */
+export function pendingChoice(db: DB, chat: ChatRow): string | null {
+  if (!chat.compare_parent_id) return null;
+  const hasReply = db.prepare("SELECT 1 FROM messages WHERE parent_id = ? AND role = 'assistant' LIMIT 1").get(chat.compare_parent_id);
+  return hasReply ? chat.compare_parent_id : null;
+}
+
 export function touchChat(db: DB, id: string): void {
   db.prepare('UPDATE chats SET updated_at = ? WHERE id = ?').run(now(), id);
 }
@@ -65,9 +75,10 @@ export function getChatDetail(db: DB, id: string): ChatDetail {
   const row = requireChat(db, id);
   const all = getChatMessages(db, id);
   const totalCost = all.reduce((sum, m) => sum + (m.cost ?? 0), 0);
+  const choiceParent = pendingChoice(db, row);
   return {
     chat: { id: row.id, title: row.title, updatedAt: row.updated_at, totalCost, activeLeafId: row.active_leaf_id },
     messages: withSiblings(all, activePath(all, row.active_leaf_id)),
-    compare: row.compare_parent_id ? { parentId: row.compare_parent_id, replies: repliesTo(all, row.compare_parent_id) } : null,
+    compare: choiceParent ? { parentId: choiceParent, replies: repliesTo(all, choiceParent) } : null,
   };
 }

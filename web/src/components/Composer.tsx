@@ -54,7 +54,7 @@ export function Composer({ disabledReason, streaming, models, modelId, onModelCh
             <button
               className="toggle"
               aria-pressed={compare.enabled}
-              disabled={models.length < 2}
+              disabled={models.length < 2 && !compare.enabled}
               title="Send each message to several models and pick a reply"
               onClick={() => onCompareChange({ ...compare, enabled: !compare.enabled })}
             >

@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 import type { Deps } from './app';
 import { newId } from './db';
-import { setActiveLeaf, setCompareParent, touchChat } from './chats';
+import { getChatRow, setActiveLeaf, setCompareParent, touchChat } from './chats';
 import { replyErrorMessage } from './generate';
 import { getChatMessages, insertMessage } from './messages';
 import { OpenRouterError, type Usage } from './openrouter';
@@ -39,6 +39,8 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
   let finished = false;
   c.req.raw.signal.addEventListener('abort', () => abort.abort());
 
+  // Restored if no model replies, so a failed "compare again" doesn't hide the reply that was showing.
+  const previousLeaf = getChatRow(db, o.chatId)?.active_leaf_id ?? o.parentId;
   setActiveLeaf(db, o.chatId, o.parentId);
   setCompareParent(db, o.chatId, o.parentId);
 
@@ -66,7 +68,10 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
     await send('start', { userMessageId: o.userMessageId, slots } satisfies CompareStart);
     const saved = (await Promise.all(slots.map((slot, i) => runSlot(i, slot, send)))).filter((m): m is Message => m !== null);
 
-    if (saved.length === 0) setCompareParent(db, o.chatId, null);
+    if (saved.length === 0) {
+      setCompareParent(db, o.chatId, null);
+      setActiveLeaf(db, o.chatId, previousLeaf);
+    }
     touchChat(db, o.chatId);
     if (abort.signal.aborted) return;
     await send('done', { compareParentId: saved.length ? o.parentId : null } satisfies CompareDone);
