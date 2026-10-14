@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChatDetail, LibraryModel, SettingsView } from '../../../shared/types';
 import { api, streamGeneration } from '../api';
 import { formatCost } from '../lib/format';
+import { initialModelId } from '../lib/models';
 import { navigate } from '../lib/route';
 import { Composer } from './Composer';
 import { Markdown } from './Markdown';
@@ -68,11 +69,9 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     reload(chatId).catch((e: Error) => setError(e.message));
   }, [chatId, reloadToken]);
 
-  // Default model: last model used in this chat, else the current pick, else the library default.
+  // New chats start on the default model; existing chats continue with the last model that replied.
   useEffect(() => {
-    const ids = new Set(models.map((m) => m.id));
-    const lastUsed = [...messages].reverse().find((m) => m.role === 'assistant' && m.modelId && ids.has(m.modelId))?.modelId;
-    setModelId((current) => lastUsed ?? (ids.has(current) ? current : (models.find((m) => m.isDefault) ?? models[0])?.id ?? ''));
+    setModelId(initialModelId(messages, models));
   }, [detail, models]);
 
   // Keep the newest content in view.
