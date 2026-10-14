@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LibraryModel } from '../../../shared/types';
+import { MAX_COMPARE, toggleModel, type CompareState } from '../lib/compare';
 
 interface Props {
-  disabled: boolean;
+  /** Why sending is blocked right now, or null if it isn't. */
+  disabledReason: string | null;
   streaming: boolean;
   models: LibraryModel[];
   modelId: string;
   onModelChange(id: string): void;
+  compare: CompareState;
+  onCompareChange(next: CompareState): void;
   onSend(text: string): void;
   onStop(): void;
 }
 
-export function Composer({ disabled, streaming, models, modelId, onModelChange, onSend, onStop }: Props) {
+export function Composer({ disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, onSend, onStop }: Props) {
   const [text, setText] = useState('');
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -24,7 +28,7 @@ export function Composer({ disabled, streaming, models, modelId, onModelChange, 
 
   const submit = () => {
     const trimmed = text.trim();
-    if (!trimmed || disabled || streaming || !modelId) return;
+    if (!trimmed || disabledReason || streaming) return;
     onSend(trimmed);
     setText('');
   };
@@ -46,15 +50,46 @@ export function Composer({ disabled, streaming, models, modelId, onModelChange, 
           }}
         />
         <div className="composer-bar">
-          <select value={modelId} onChange={(e) => onModelChange(e.target.value)} disabled={models.length === 0} aria-label="Model">
-            {models.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
-          </select>
+          <div className="composer-models">
+            <button
+              className="toggle"
+              aria-pressed={compare.enabled}
+              disabled={models.length < 2}
+              title="Send each message to several models and pick a reply"
+              onClick={() => onCompareChange({ ...compare, enabled: !compare.enabled })}
+            >
+              Compare
+            </button>
+            {compare.enabled ? (
+              <div className="compare-picker">
+                {models.map((m) => {
+                  const on = compare.modelIds.includes(m.id);
+                  return (
+                    <label key={m.id} className={`chip${on ? ' on' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={!on && compare.modelIds.length >= MAX_COMPARE}
+                        onChange={() => onCompareChange(toggleModel(compare, m.id))}
+                      />
+                      {m.displayName}
+                    </label>
+                  );
+                })}
+              </div>
+            ) : (
+              <select value={modelId} onChange={(e) => onModelChange(e.target.value)} disabled={models.length === 0} aria-label="Model">
+                {models.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
+              </select>
+            )}
+          </div>
           {streaming ? (
             <button className="primary" onClick={onStop}>Stop</button>
           ) : (
-            <button className="primary" onClick={submit} disabled={disabled || !text.trim()}>Send</button>
+            <button className="primary" onClick={submit} disabled={!!disabledReason || !text.trim()}>Send</button>
           )}
         </div>
+        {disabledReason && !streaming && <div className="composer-hint">{disabledReason}</div>}
       </div>
     </div>
   );

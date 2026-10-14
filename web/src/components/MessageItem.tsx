@@ -9,12 +9,16 @@ interface Props {
   modelName: string;
   models: LibraryModel[];
   disabled: boolean;
+  /** When on, Regenerate re-runs the comparison instead of offering a model list. */
+  compareMode: boolean;
   onSelectSibling(id: string): void;
-  onRegenerate(modelId: string): void;
+  /** null = regenerate with the compare models. */
+  onRegenerate(modelId: string | null): void;
   onEdit(text: string): void;
+  onCompareVersions(): void;
 }
 
-export function MessageItem({ message, modelName, models, disabled, onSelectSibling, onRegenerate, onEdit }: Props) {
+export function MessageItem({ message, modelName, models, disabled, compareMode, onSelectSibling, onRegenerate, onEdit, onCompareVersions }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const [copied, setCopied] = useState(false);
@@ -69,16 +73,23 @@ export function MessageItem({ message, modelName, models, disabled, onSelectSibl
         {tokens > 0 && <span>{formatTokens(tokens)} tok</span>}
         {message.cost !== null && <span>· {formatCost(message.cost)}</span>}
         <button className="link" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
-        <select
-          className="regen"
-          value=""
-          disabled={disabled || models.length === 0}
-          onChange={(e) => e.target.value && onRegenerate(e.target.value)}
-          aria-label="Regenerate with model"
-        >
-          <option value="">↻ Regenerate</option>
-          {regenerateChoices.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
-        </select>
+        {compareMode ? (
+          <button className="link" disabled={disabled} onClick={() => onRegenerate(null)}>↻ Compare again</button>
+        ) : (
+          <select
+            className="regen"
+            value=""
+            disabled={disabled || models.length === 0}
+            onChange={(e) => e.target.value && onRegenerate(e.target.value)}
+            aria-label="Regenerate with model"
+          >
+            <option value="">↻ Regenerate</option>
+            {regenerateChoices.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
+          </select>
+        )}
+        {message.siblingIds.length > 1 && (
+          <button className="link" disabled={disabled} onClick={onCompareVersions}>Compare versions</button>
+        )}
       </div>
     </div>
   );
