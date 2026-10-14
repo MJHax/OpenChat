@@ -55,6 +55,16 @@ describe('OpenRouter client', () => {
     expect(JSON.parse(String(calls[0].init.body))).toMatchObject({ model: 'openai/gpt-4o', stream: true, usage: { include: true } });
   });
 
+  it('yields reasoning deltas separately from content', async () => {
+    const { fn } = fakeFetch(() => sse(
+      'data: {"choices":[{"delta":{"content":"","reasoning":"Let me think"}}]}',
+      'data: {"choices":[{"delta":{"content":"Answer"}}]}',
+      'data: [DONE]',
+    ));
+    const events = await collect(createOpenRouterClient(fn).streamChat({ apiKey: 'k', model: 'm', messages: [] }));
+    expect(events).toEqual([{ type: 'reasoning', text: 'Let me think' }, { type: 'delta', text: 'Answer' }]);
+  });
+
   it('turns HTTP errors into friendly OpenRouterErrors', async () => {
     const { fn } = fakeFetch(() => Response.json({ error: { message: 'No auth credentials found' } }, { status: 401 }));
     const err = await collect(createOpenRouterClient(fn).streamChat({ apiKey: 'bad', model: 'm', messages: [] })).catch((e) => e);

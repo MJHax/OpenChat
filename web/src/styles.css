@@ -88,7 +88,11 @@ mark { background: var(--mark); color: inherit; border-radius: 2px; }
 .edit-box { width: min(600px, 80vw); display: flex; flex-direction: column; gap: 6px; }
 .row { display: flex; gap: 8px; justify-content: flex-end; }
 .thinking { color: var(--muted); font-style: italic; }
+.reasoning { font-style: normal; font-size: 13px; margin-top: 6px; }
+.reasoning summary { cursor: pointer; }
+.reasoning-text { white-space: pre-wrap; max-height: 240px; overflow-y: auto; border-left: 2px solid var(--border); padding-left: 10px; margin-top: 4px; }
 .error-bubble { border: 1px solid var(--danger); color: var(--danger); border-radius: 12px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.no-reply { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: 1px dashed var(--border); border-radius: 12px; padding: 10px 14px; }
 .code-block { position: relative; }
 .code-block pre { background: var(--code-bg); color: #e6e6e6; border-radius: 10px; padding: 14px; overflow-x: auto; font-size: 13.5px; }
 .code-block pre code.hljs { background: transparent; padding: 0; }

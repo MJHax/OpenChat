@@ -28,7 +28,8 @@ export async function maybeGenerateTitle(deps: Deps, chatId: string, apiKey: str
     const raw = await openrouter.complete({
       apiKey,
       model: getSetting(db, 'title_model_id') || fallbackModel,
-      maxTokens: 30,
+      // Reasoning models think before answering; a small budget is spent entirely on reasoning.
+      maxTokens: 1000,
       messages: [
         { role: 'system', content: 'Write a short title (at most 6 words) for this conversation. Reply with the title only.' },
         { role: 'user', content: transcript },

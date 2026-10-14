@@ -47,7 +47,10 @@ export interface Usage {
   cost: number | null;
 }
 
-export type StreamEvent = { type: 'delta'; text: string } | { type: 'usage'; usage: Usage };
+export type StreamEvent =
+  | { type: 'delta'; text: string }
+  | { type: 'reasoning'; text: string }
+  | { type: 'usage'; usage: Usage };
 
 export interface OpenRouterClient {
   listModels(): Promise<CatalogModel[]>;
@@ -126,8 +129,9 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
           const status = Number(chunk.error.code) || 502;
           throw new OpenRouterError(friendlyError(status, chunk.error.message), status);
         }
-        const text = chunk.choices?.[0]?.delta?.content;
-        if (text) yield { type: 'delta', text };
+        const delta = chunk.choices?.[0]?.delta;
+        if (delta?.reasoning) yield { type: 'reasoning', text: delta.reasoning };
+        if (delta?.content) yield { type: 'delta', text: delta.content };
         if (chunk.usage) {
           yield {
             type: 'usage',

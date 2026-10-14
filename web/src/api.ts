@@ -43,6 +43,7 @@ export const api = {
 export interface StreamHandlers {
   onStart(e: StreamStart): void;
   onDelta(text: string): void;
+  onReasoning(text: string): void;
   onDone(e: StreamDone): void;
   onError(e: StreamError): void;
   onTitle(e: StreamTitle): void;
@@ -65,6 +66,7 @@ export async function streamGeneration(url: string, body: unknown, h: StreamHand
     const data = JSON.parse(ev.data);
     if (ev.event === 'start') h.onStart(data);
     else if (ev.event === 'delta') h.onDelta(data.text);
+    else if (ev.event === 'reasoning') h.onReasoning(data.text);
     else if (ev.event === 'done') h.onDone(data);
     else if (ev.event === 'error') h.onError(data);
     else if (ev.event === 'title') h.onTitle(data);

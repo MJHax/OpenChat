@@ -18,7 +18,7 @@ interface ReplyOptions {
   modelId: string;
   /** Set when this request created a new user message. */
   userMessageId: string | null;
-  /** Called once the stream has fully finished, however it ended. */
+  /** Called once, as soon as the reply is saved or the stream ends, whichever comes first. */
   onFinish?: () => void;
 }
 
@@ -32,15 +32,22 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
   const { key } = resolveApiKey(db, env);
   const assistantId = newId();
   const abort = new AbortController();
+  let finished = false;
   c.req.raw.signal.addEventListener('abort', () => abort.abort());
 
   return streamSSE(c, async (stream) => {
     try {
       await run(stream);
     } finally {
-      o.onFinish?.();
+      finish();
     }
   });
+
+  function finish() {
+    if (finished) return;
+    finished = true;
+    o.onFinish?.();
+  }
 
   async function run(stream: SSEStreamingApi) {
     stream.onAbort(() => abort.abort());
@@ -73,12 +80,15 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
         if (event.type === 'delta') {
           text += event.text;
           await send('delta', { text: event.text });
+        } else if (event.type === 'reasoning') {
+          await send('reasoning', { text: event.text });
         } else {
           usage = event.usage;
         }
       }
       const message = save('complete');
       await send('done', { message } satisfies StreamDone);
+      finish(); // the reply is saved; titling below shouldn't block new generations in this chat
       const title = await maybeGenerateTitle(deps, o.chatId, key, o.modelId);
       if (title) await send('title', { title } satisfies StreamTitle);
     } catch (err) {

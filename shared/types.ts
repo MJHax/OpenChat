@@ -96,6 +96,7 @@ export interface SearchHit {
 // Server-sent events emitted by /messages, /regenerate and /edit
 export interface StreamStart { userMessageId: string | null; assistantMessageId: string }
 export interface StreamDelta { text: string }
+export interface StreamReasoning { text: string }
 export interface StreamDone { message: Message }
 export interface StreamError { message: string; partial: Message | null }
 export interface StreamTitle { title: string }

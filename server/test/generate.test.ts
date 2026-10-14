@@ -250,6 +250,49 @@ describe('review fixes', () => {
   });
 });
 
+describe('reasoning models', () => {
+  it('forwards reasoning as its own event and keeps it out of the saved reply', async () => {
+    const streamChat: OpenRouterClient['streamChat'] = async function* () {
+      yield { type: 'reasoning', text: 'Thinking hard' };
+      yield { type: 'delta', text: 'Answer' };
+    };
+    const { call, db } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const events = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'm/a' }));
+    expect(events.slice(0, 3).map((e) => [e.event, e.data.text])).toEqual([['start', undefined], ['reasoning', 'Thinking hard'], ['delta', 'Answer']]);
+    expect(getChatMessages(db, chatId)[1].content).toBe('Answer');
+  });
+
+  it('allows a new generation while the title is still being generated', async () => {
+    let releaseTitle!: () => void;
+    const titleGate = new Promise<void>((r) => { releaseTitle = r; });
+    const { streamChat } = scripted([{ chunks: ['One'] }, { chunks: ['Two'] }]);
+    const { call } = makeApp({ streamChat, complete: async () => { await titleGate; return 'Slow title'; } });
+    const chatId = await newChat(call);
+    const first = await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'm/a' });
+    const reader = first.body!.getReader();
+    const dec = new TextDecoder();
+    let seen = '';
+    while (!seen.includes('event: done')) seen += dec.decode((await reader.read()).value);
+    const userId = JSON.parse(seen.split('\n').find((l) => l.startsWith('data: '))!.slice(6)).userMessageId;
+    const regen = await call('POST', `/api/chats/${chatId}/regenerate`, { parentId: userId, modelId: 'm/b' });
+    expect(regen.status).toBe(200);
+    await readEvents(regen);
+    releaseTitle();
+    await reader.cancel().catch(() => {});
+  });
+
+  it('gives the title call enough tokens for models that reason first', async () => {
+    const { streamChat } = scripted([{ chunks: ['Hi there'] }]);
+    // Reasoning models spend small budgets entirely on reasoning and return no content.
+    const complete: OpenRouterClient['complete'] = async ({ maxTokens }) => ((maxTokens ?? 0) >= 500 ? 'Greeting' : '');
+    const { call, db } = makeApp({ streamChat, complete });
+    const chatId = await newChat(call);
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: 'm/a' }));
+    expect(getChatRow(db, chatId)?.title).toBe('Greeting');
+  });
+});
+
 describe('cleanTitle', () => {
   it('strips quotes, markdown and trailing punctuation and keeps one line', () => {
     expect(cleanTitle('"Trip planning ideas."')).toBe('Trip planning ideas');

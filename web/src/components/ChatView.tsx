@@ -23,6 +23,9 @@ interface Pending {
   /** Optimistic user bubble for send/edit; null for regenerate. */
   userText: string | null;
   replyText: string;
+  /** Live reasoning from models that think before answering; shown while pending, not saved. */
+  reasoningText: string;
+  startedAt: number;
   modelId: string;
 }
 
@@ -106,6 +109,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       baseLength: opts.baseLength,
       userText: opts.kind === 'regenerate' ? null : opts.text,
       replyText: '',
+      reasoningText: '',
+      startedAt: Date.now(),
       modelId: opts.model,
     });
 
@@ -129,6 +134,9 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
         onStart: () => {},
         onDelta: (text) => {
           if (isShown()) setPending((p) => (p && p.chatId === streamChat ? { ...p, replyText: p.replyText + text } : p));
+        },
+        onReasoning: (text) => {
+          if (isShown()) setPending((p) => (p && p.chatId === streamChat ? { ...p, reasoningText: p.reasoningText + text } : p));
         },
         onDone: () => { void finish(null); },
         onError: (e) => { void finish(e.message); },
@@ -171,6 +179,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   const shown = pending ? messages.slice(0, pending.baseLength) : messages;
   const noKey = settings !== null && !settings.hasApiKey;
   const noModels = models.length === 0;
+  // A user message at the end of the path means its reply was stopped or lost before any text arrived.
+  const awaitingReply = messages.length > 0 && messages[messages.length - 1].role === 'user';
 
   return (
     <div className="chat">
@@ -207,9 +217,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
           )}
           {pending && (
             <div className="msg assistant">
-              <div className="msg-body">
-                {pending.replyText ? <Markdown text={pending.replyText} /> : <span className="thinking">Thinking…</span>}
-              </div>
+              {!pending.replyText && <ThinkingIndicator startedAt={pending.startedAt} reasoning={pending.reasoningText} />}
+              {pending.replyText && <div className="msg-body"><Markdown text={pending.replyText} /></div>}
               <div className="msg-meta"><span className="model-tag">{nameOf(pending.modelId)}</span></div>
             </div>
           )}
@@ -218,6 +227,12 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
             <div className="error-bubble">
               <span>{error}</span>
               {messages.length > 0 && <button onClick={retry}>Retry</button>}
+            </div>
+          )}
+          {!error && !pending && awaitingReply && (
+            <div className="no-reply">
+              <span className="muted">No reply yet. It was stopped before any text arrived.</span>
+              <button onClick={retry} disabled={noKey || noModels}>Generate reply</button>
             </div>
           )}
         </div>
@@ -232,6 +247,27 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
         onSend={send}
         onStop={() => abortRef.current?.abort()}
       />
+    </div>
+  );
+}
+
+/** Shown until the first words arrive; reasoning models can think silently for 20+ seconds. */
+function ThinkingIndicator({ startedAt, reasoning }: { startedAt: number; reasoning: string }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const seconds = Math.max(0, Math.floor((now - startedAt) / 1000));
+  return (
+    <div className="thinking">
+      Thinking… {seconds}s
+      {reasoning && (
+        <details className="reasoning">
+          <summary>Show reasoning</summary>
+          <div className="reasoning-text">{reasoning}</div>
+        </details>
+      )}
     </div>
   );
 }
