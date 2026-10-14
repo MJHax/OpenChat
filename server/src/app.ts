@@ -9,6 +9,7 @@ import { memoryRoutes } from './routes/memories';
 import { modelRoutes } from './routes/models';
 import { chatRoutes } from './routes/chats';
 import { searchRoutes } from './routes/search';
+import { generationRoutes } from './routes/generate';
 
 export interface Deps {
   db: DB;
@@ -29,6 +30,7 @@ export function createApp(deps: Deps): Hono {
   app.route('/api/memories', memoryRoutes(deps));
   app.route('/api/models', modelRoutes(deps));
   app.route('/api/chats', chatRoutes(deps));
+  app.route('/api/chats', generationRoutes(deps));
   app.route('/api/search', searchRoutes(deps));
 
   return app;

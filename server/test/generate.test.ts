@@ -1,0 +1,223 @@
+import { describe, it, expect } from 'vitest';
+import { makeApp, readEvents } from './appHelpers';
+import { OpenRouterError, type OpenRouterClient, type StreamEvent, type Usage } from '../src/openrouter';
+import type { ChatMessage } from '../src/prompt';
+import { getChatMessages } from '../src/messages';
+import { getChatRow } from '../src/chats';
+import { cleanTitle } from '../src/title';
+import { updateSettings } from '../src/settings';
+import type { ChatDetail, ChatSummary, Message } from '../../shared/types';
+
+const USAGE: Usage = { promptTokens: 10, completionTokens: 5, cost: 0.0004 };
+
+/** Fake streamChat that plays `chunks`, then either fails or reports usage. Records every prompt it receives. */
+function scripted(replies: { chunks: string[]; failWith?: Error }[]) {
+  const calls: ChatMessage[][] = [];
+  const streamChat: OpenRouterClient['streamChat'] = async function* ({ messages }): AsyncGenerator<StreamEvent> {
+    calls.push(messages);
+    const reply = replies[Math.min(calls.length - 1, replies.length - 1)];
+    for (const text of reply.chunks) yield { type: 'delta', text };
+    if (reply.failWith) throw reply.failWith;
+    yield { type: 'usage', usage: USAGE };
+  };
+  return { streamChat, calls };
+}
+
+async function newChat(call: ReturnType<typeof makeApp>['call']) {
+  return ((await (await call('POST', '/api/chats')).json()) as ChatSummary).id;
+}
+
+describe('send', () => {
+  it('streams a reply, saves both messages, and auto-titles the chat', async () => {
+    const { streamChat } = scripted([{ chunks: ['Hel', 'lo!'] }]);
+    const { call, db } = makeApp({ streamChat, complete: async () => '"Greeting chat."' });
+    const chatId = await newChat(call);
+
+    const events = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: 'openai/gpt-4o' }));
+    expect(events.map((e) => e.event)).toEqual(['start', 'delta', 'delta', 'done', 'title']);
+    const done = events[3].data.message as Message;
+    expect(done).toMatchObject({ role: 'assistant', content: 'Hello!', modelId: 'openai/gpt-4o', promptTokens: 10, completionTokens: 5, cost: 0.0004, status: 'complete' });
+    expect(events[4].data).toEqual({ title: 'Greeting chat' });
+
+    const saved = getChatMessages(db, chatId);
+    expect(saved.map((m) => [m.role, m.content])).toEqual([['user', 'Hi'], ['assistant', 'Hello!']]);
+    expect(saved[1].parentId).toBe(saved[0].id);
+    expect(getChatRow(db, chatId)).toMatchObject({ active_leaf_id: done.id, title: 'Greeting chat' });
+  });
+
+  it('includes the persona and only enabled memories in the prompt', async () => {
+    const { streamChat, calls } = scripted([{ chunks: ['ok'] }]);
+    const { call, db } = makeApp({ streamChat });
+    updateSettings(db, { aboutMe: 'I am Sam.' });
+    await call('POST', '/api/memories', { content: 'Likes tea' });
+    const paused = (await (await call('POST', '/api/memories', { content: 'Secret fact' })).json()) as { id: number };
+    await call('PATCH', `/api/memories/${paused.id}`, { enabled: false });
+    const chatId = await newChat(call);
+
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: 'm/x' }));
+    expect(calls[0][0].role).toBe('system');
+    expect(calls[0][0].content).toContain('I am Sam.');
+    expect(calls[0][0].content).toContain('Likes tea');
+    expect(calls[0][0].content).not.toContain('Secret fact');
+    expect(calls[0].at(-1)).toEqual({ role: 'user', content: 'Hi' });
+  });
+
+  it('continues from the active leaf on the second message', async () => {
+    const { streamChat, calls } = scripted([{ chunks: ['A1'] }, { chunks: ['A2'] }]);
+    const { call } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q1', modelId: 'm/x' }));
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q2', modelId: 'm/y' }));
+    expect(calls[1].map((m) => m.content)).toEqual(['Q1', 'A1', 'Q2']);
+    const detail = (await (await call('GET', `/api/chats/${chatId}`)).json()) as ChatDetail;
+    expect(detail.messages.map((m) => [m.content, m.modelId])).toEqual([['Q1', null], ['A1', 'm/x'], ['Q2', null], ['A2', 'm/y']]);
+  });
+
+  it('rejects empty content and a missing model with 400, unknown chat with 404', async () => {
+    const { call } = makeApp();
+    const chatId = await newChat(call);
+    expect((await call('POST', `/api/chats/${chatId}/messages`, { content: '  ', modelId: 'm/x' })).status).toBe(400);
+    expect((await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: '' })).status).toBe(400);
+    expect((await call('POST', '/api/chats/nope/messages', { content: 'Hi', modelId: 'm/x' })).status).toBe(404);
+  });
+
+  it('sends an error event when no API key is configured', async () => {
+    const { call, db } = makeApp({}, {});
+    const chatId = await newChat(call);
+    const events = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: 'm/x' }));
+    expect(events.map((e) => e.event)).toEqual(['start', 'error']);
+    expect(events[1].data.message).toMatch(/Settings/);
+    expect(getChatMessages(db, chatId).map((m) => m.role)).toEqual(['user']);
+  });
+});
+
+describe('regenerate and edit', () => {
+  it('regenerate adds a sibling reply and hides the old one from the prompt', async () => {
+    const { streamChat, calls } = scripted([{ chunks: ['First'] }, { chunks: ['Second'] }]);
+    const { call } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const first = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'm/a' }));
+    const userId = first[0].data.userMessageId as string;
+
+    await readEvents(await call('POST', `/api/chats/${chatId}/regenerate`, { parentId: userId, modelId: 'm/b' }));
+    expect(calls[1].map((m) => m.content)).toEqual(['Q']);
+
+    const detail = (await (await call('GET', `/api/chats/${chatId}`)).json()) as ChatDetail;
+    expect(detail.messages[1]).toMatchObject({ content: 'Second', modelId: 'm/b', siblingIndex: 1 });
+    expect(detail.messages[1].siblingIds).toHaveLength(2);
+  });
+
+  it('edit creates a sibling user message and a new reply, keeping the old branch', async () => {
+    const { streamChat, calls } = scripted([{ chunks: ['About cats'] }, { chunks: ['About dogs'] }]);
+    const { call, db } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const first = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Cats?', modelId: 'm/a' }));
+    const userId = first[0].data.userMessageId as string;
+
+    const events = await readEvents(await call('POST', `/api/chats/${chatId}/edit`, { messageId: userId, content: 'Dogs?', modelId: 'm/a' }));
+    expect(events[0].data.userMessageId).not.toBe(userId);
+    expect(calls[1].map((m) => m.content)).toEqual(['Dogs?']);
+
+    const detail = (await (await call('GET', `/api/chats/${chatId}`)).json()) as ChatDetail;
+    expect(detail.messages.map((m) => m.content)).toEqual(['Dogs?', 'About dogs']);
+    expect(detail.messages[0]).toMatchObject({ siblingIndex: 1, siblingIds: [userId, events[0].data.userMessageId] });
+    expect(getChatMessages(db, chatId)).toHaveLength(4);
+  });
+
+  it('rejects regenerate/edit targets that are not user messages in this chat', async () => {
+    const { streamChat } = scripted([{ chunks: ['A'] }]);
+    const { call } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const first = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'm/a' }));
+    const assistantId = first[0].data.assistantMessageId as string;
+    expect((await call('POST', `/api/chats/${chatId}/regenerate`, { parentId: assistantId, modelId: 'm/a' })).status).toBe(400);
+    expect((await call('POST', `/api/chats/${chatId}/edit`, { messageId: assistantId, content: 'x', modelId: 'm/a' })).status).toBe(400);
+    expect((await call('POST', `/api/chats/${chatId}/regenerate`, { parentId: 'nope', modelId: 'm/a' })).status).toBe(400);
+  });
+});
+
+describe('failures', () => {
+  it('error before any output keeps the user message and saves no reply', async () => {
+    const { streamChat } = scripted([{ chunks: [], failWith: new OpenRouterError('Your OpenRouter account is out of credits.', 402) }]);
+    const { call, db } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const events = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: 'm/a' }));
+    expect(events.map((e) => e.event)).toEqual(['start', 'error']);
+    expect(events[1].data).toEqual({ message: 'Your OpenRouter account is out of credits.', partial: null });
+    const saved = getChatMessages(db, chatId);
+    expect(saved.map((m) => m.role)).toEqual(['user']);
+    expect(getChatRow(db, chatId)?.active_leaf_id).toBe(saved[0].id);
+  });
+
+  it('mid-stream error saves partial output as stopped', async () => {
+    const { streamChat } = scripted([{ chunks: ['Half an ans'], failWith: new OpenRouterError('The model provider returned an error.', 502) }]);
+    const { call, db } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const events = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: 'm/a' }));
+    const error = events.at(-1)!;
+    expect(error.event).toBe('error');
+    expect(error.data.partial).toMatchObject({ content: 'Half an ans', status: 'stopped' });
+    expect(getChatRow(db, chatId)?.active_leaf_id).toBe(error.data.partial.id);
+  });
+
+  it('a failed regenerate leaves the previous reply active', async () => {
+    const { streamChat } = scripted([{ chunks: ['Good'] }, { chunks: [], failWith: new OpenRouterError('Rate limited.', 429) }]);
+    const { call, db } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const first = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'm/a' }));
+    const { userMessageId, assistantMessageId } = first[0].data;
+    await readEvents(await call('POST', `/api/chats/${chatId}/regenerate`, { parentId: userMessageId, modelId: 'm/b' }));
+    expect(getChatRow(db, chatId)?.active_leaf_id).toBe(assistantMessageId);
+  });
+
+  it('client abort mid-stream saves partial as stopped', async () => {
+    const streamChat: OpenRouterClient['streamChat'] = async function* ({ signal }) {
+      yield { type: 'delta', text: 'Partial' };
+      // Like fetch, reject immediately if the signal is already aborted.
+      const abortError = () => Object.assign(new Error('aborted'), { name: 'AbortError' });
+      await new Promise((_, reject) => {
+        if (signal?.aborted) reject(abortError());
+        signal?.addEventListener('abort', () => reject(abortError()));
+      });
+    };
+    const { app, db, call } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const controller = new AbortController();
+    const res = await app.request(new Request(`http://localhost/api/chats/${chatId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: 'Hi', modelId: 'm/a' }),
+      signal: controller.signal,
+    }));
+    const reader = res.body!.getReader();
+    const dec = new TextDecoder();
+    let seen = '';
+    while (!seen.includes('event: delta')) seen += dec.decode((await reader.read()).value);
+    controller.abort();
+    await reader.cancel().catch(() => {});
+
+    let saved: Message[] = [];
+    for (let i = 0; i < 50 && saved.length < 2; i++) {
+      await new Promise((r) => setTimeout(r, 20));
+      saved = getChatMessages(db, chatId);
+    }
+    expect(saved[1]).toMatchObject({ role: 'assistant', content: 'Partial', status: 'stopped' });
+  });
+
+  it('title failure does not affect the reply', async () => {
+    const { streamChat } = scripted([{ chunks: ['Fine'] }]);
+    const { call, db } = makeApp({ streamChat, complete: async () => { throw new OpenRouterError('boom', 502); } });
+    const chatId = await newChat(call);
+    const events = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: 'm/a' }));
+    expect(events.map((e) => e.event)).toEqual(['start', 'delta', 'done']);
+    expect(getChatRow(db, chatId)?.title).toBe('New chat');
+  });
+});
+
+describe('cleanTitle', () => {
+  it('strips quotes, markdown and trailing punctuation and keeps one line', () => {
+    expect(cleanTitle('"Trip planning ideas."')).toBe('Trip planning ideas');
+    expect(cleanTitle('## **Rust lifetimes**\nextra')).toBe('Rust lifetimes');
+    expect(cleanTitle('   ')).toBe('');
+  });
+});
