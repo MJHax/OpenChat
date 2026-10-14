@@ -11,6 +11,12 @@ import { maybeGenerateTitle } from './title';
 import { activePath } from './tree';
 import type { Message, MessageStatus, StreamDone, StreamError, StreamStart, StreamTitle } from '../../shared/types';
 
+export function replyErrorMessage(err: unknown): string {
+  if (err instanceof OpenRouterError) return err.message;
+  console.error(err);
+  return 'Something went wrong while generating the reply.';
+}
+
 interface ReplyOptions {
   chatId: string;
   /** The user message being replied to. */
@@ -94,9 +100,7 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
     } catch (err) {
       const partial = text ? save('stopped') : null;
       if (abort.signal.aborted) return; // client went away; nothing to send
-      const message = err instanceof OpenRouterError ? err.message : 'Something went wrong while generating the reply.';
-      if (!(err instanceof OpenRouterError)) console.error(err);
-      await send('error', { message, partial } satisfies StreamError);
+      await send('error', { message: replyErrorMessage(err), partial } satisfies StreamError);
     }
   }
 }

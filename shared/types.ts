@@ -102,3 +102,11 @@ export interface StreamReasoning { text: string }
 export interface StreamDone { message: Message }
 export interface StreamError { message: string; partial: Message | null }
 export interface StreamTitle { title: string }
+
+// Server-sent events emitted when a generation endpoint is called with `modelIds` (a comparison)
+export interface CompareSlot { assistantMessageId: string; modelId: string }
+export interface CompareStart { userMessageId: string | null; slots: CompareSlot[] }
+export interface CompareSlotText { slot: number; text: string }
+export interface CompareSlotDone { slot: number; message: Message }
+export interface CompareSlotError { slot: number; message: string; partial: Message | null }
+export interface CompareDone { compareParentId: string | null }
