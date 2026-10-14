@@ -1,7 +1,7 @@
 import { parseSSE } from '../../shared/sse';
 import type {
-  CatalogResponse, ChatDetail, ChatSummary, LibraryModel, Memory, SearchHit, SettingsUpdate, SettingsView,
-  StreamDone, StreamError, StreamStart, StreamTitle,
+  CatalogResponse, ChatDetail, ChatSummary, CompareDone, CompareSlotDone, CompareSlotError, CompareStart, LibraryModel, Memory,
+  Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle,
 } from '../../shared/types';
 
 async function json<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -22,6 +22,8 @@ export const api = {
   renameChat: (id: string, title: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { title }),
   selectMessage: (id: string, messageId: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { selectMessageId: messageId }),
   deleteChat: (id: string) => json<{ ok: true }>('DELETE', `/api/chats/${id}`),
+  replies: (chatId: string, parentId: string) =>
+    json<Message[]>('GET', `/api/chats/${chatId}/replies?parentId=${encodeURIComponent(parentId)}`),
   search: (q: string) => json<SearchHit[]>('GET', `/api/search?q=${encodeURIComponent(q)}`),
 
   listModels: () => json<LibraryModel[]>('GET', '/api/models'),
@@ -38,6 +40,7 @@ export const api = {
   addMemory: (content: string) => json<Memory>('POST', '/api/memories', { content }),
   updateMemory: (id: number, patch: { content?: string; enabled?: boolean }) => json<Memory>('PATCH', `/api/memories/${id}`, patch),
   deleteMemory: (id: number) => json<{ ok: true }>('DELETE', `/api/memories/${id}`),
+  suggestMemory: (text: string) => json<{ suggestion: string }>('POST', '/api/memories/suggest', { text }).then((r) => r.suggestion),
 };
 
 export interface StreamHandlers {
@@ -49,8 +52,8 @@ export interface StreamHandlers {
   onTitle(e: StreamTitle): void;
 }
 
-/** POSTs to a generation endpoint and dispatches its SSE events. Rejects with AbortError when `signal` aborts. */
-export async function streamGeneration(url: string, body: unknown, h: StreamHandlers, signal: AbortSignal): Promise<void> {
+/** POSTs to a generation endpoint; returns its SSE events, or reports an HTTP error through `onError`. */
+async function postStream(url: string, body: unknown, signal: AbortSignal, onError: (e: StreamError) => void) {
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -59,16 +62,50 @@ export async function streamGeneration(url: string, body: unknown, h: StreamHand
   });
   if (!res.ok || !res.body) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    h.onError({ message: data.error ?? `Request failed (${res.status})`, partial: null });
-    return;
+    onError({ message: data.error ?? `Request failed (${res.status})`, partial: null });
+    return null;
   }
-  for await (const ev of parseSSE(res.body)) {
+  return parseSSE(res.body);
+}
+
+/** Streams a single-model reply. Rejects with AbortError when `signal` aborts. */
+export async function streamGeneration(url: string, body: unknown, h: StreamHandlers, signal: AbortSignal): Promise<void> {
+  const events = await postStream(url, body, signal, h.onError);
+  if (!events) return;
+  for await (const ev of events) {
     const data = JSON.parse(ev.data);
     if (ev.event === 'start') h.onStart(data);
     else if (ev.event === 'delta') h.onDelta(data.text);
     else if (ev.event === 'reasoning') h.onReasoning(data.text);
     else if (ev.event === 'done') h.onDone(data);
     else if (ev.event === 'error') h.onError(data);
+    else if (ev.event === 'title') h.onTitle(data);
+  }
+}
+
+export interface CompareHandlers {
+  onStart(e: CompareStart): void;
+  onDelta(slot: number, text: string): void;
+  onReasoning(slot: number, text: string): void;
+  onSlotDone(e: CompareSlotDone): void;
+  onSlotError(e: CompareSlotError): void;
+  onDone(e: CompareDone): void;
+  onError(e: StreamError): void;
+  onTitle(e: StreamTitle): void;
+}
+
+/** Streams a comparison (body has `modelIds`). Rejects with AbortError when `signal` aborts. */
+export async function streamComparison(url: string, body: unknown, h: CompareHandlers, signal: AbortSignal): Promise<void> {
+  const events = await postStream(url, body, signal, h.onError);
+  if (!events) return;
+  for await (const ev of events) {
+    const data = JSON.parse(ev.data);
+    if (ev.event === 'start') h.onStart(data);
+    else if (ev.event === 'delta') h.onDelta(data.slot, data.text);
+    else if (ev.event === 'reasoning') h.onReasoning(data.slot, data.text);
+    else if (ev.event === 'slot-done') h.onSlotDone(data);
+    else if (ev.event === 'slot-error') h.onSlotError(data);
+    else if (ev.event === 'done') h.onDone(data);
     else if (ev.event === 'title') h.onTitle(data);
   }
 }
