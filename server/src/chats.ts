@@ -1,7 +1,9 @@
 import type { DB } from './db';
 import { newId, now } from './db';
 import { HttpError } from './http';
-import type { ChatSummary } from '../../shared/types';
+import { getChatMessages } from './messages';
+import { activePath, withSiblings } from './tree';
+import type { ChatDetail, ChatSummary } from '../../shared/types';
 
 export const DEFAULT_TITLE = 'New chat';
 
@@ -52,4 +54,14 @@ export function touchChat(db: DB, id: string): void {
 
 export function deleteChat(db: DB, id: string): void {
   db.prepare('DELETE FROM chats WHERE id = ?').run(id);
+}
+
+export function getChatDetail(db: DB, id: string): ChatDetail {
+  const row = requireChat(db, id);
+  const all = getChatMessages(db, id);
+  const totalCost = all.reduce((sum, m) => sum + (m.cost ?? 0), 0);
+  return {
+    chat: { id: row.id, title: row.title, updatedAt: row.updated_at, totalCost, activeLeafId: row.active_leaf_id },
+    messages: withSiblings(all, activePath(all, row.active_leaf_id)),
+  };
 }
