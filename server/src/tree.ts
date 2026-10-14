@@ -32,3 +32,8 @@ export function withSiblings(messages: Message[], path: Message[]): PathMessage[
     return { ...m, siblingIds, siblingIndex: siblingIds.indexOf(m.id) };
   });
 }
+
+/** Assistant replies to a user message, oldest first. */
+export function repliesTo(messages: Message[], parentId: string): Message[] {
+  return childrenOf(messages, parentId).filter((m) => m.role === 'assistant');
+}

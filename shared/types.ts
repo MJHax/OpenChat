@@ -32,6 +32,8 @@ export interface ChatSummary {
 export interface ChatDetail {
   chat: ChatSummary & { activeLeafId: string | null };
   messages: PathMessage[];
+  /** Set while a comparison's replies are waiting for the user to pick one. */
+  compare: { parentId: string; replies: Message[] } | null;
 }
 
 export interface CatalogModel {

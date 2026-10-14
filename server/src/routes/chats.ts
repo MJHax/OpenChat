@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import type { Deps } from '../app';
 import { HttpError, readJson } from '../http';
-import { createChat, deleteChat, getChatDetail, listChats, renameChat, requireChat, setActiveLeaf } from '../chats';
-import { getChatMessages } from '../messages';
-import { newestLeafFrom } from '../tree';
+import { createChat, deleteChat, getChatDetail, listChats, renameChat, requireChat, setActiveLeaf, setCompareParent } from '../chats';
+import { getChatMessages, getMessage } from '../messages';
+import { newestLeafFrom, repliesTo } from '../tree';
 
 export function chatRoutes({ db }: Deps): Hono {
   const r = new Hono();
@@ -27,8 +27,17 @@ export function chatRoutes({ db }: Deps): Hono {
       const all = getChatMessages(db, id);
       if (!all.some((m) => m.id === body.selectMessageId)) throw new HttpError(400, 'Message is not in this chat.');
       setActiveLeaf(db, id, newestLeafFrom(all, body.selectMessageId));
+      setCompareParent(db, id, null); // choosing a reply settles any pending comparison
     }
     return c.json(getChatDetail(db, id));
+  });
+
+  r.get('/:id/replies', (c) => {
+    const id = c.req.param('id');
+    requireChat(db, id);
+    const parent = getMessage(db, c.req.query('parentId') ?? '');
+    if (!parent || parent.chatId !== id || parent.role !== 'user') throw new HttpError(400, 'parentId must be a user message in this chat.');
+    return c.json(repliesTo(getChatMessages(db, id), parent.id));
   });
 
   r.delete('/:id', (c) => {

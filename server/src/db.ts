@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS chats (
   title TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  active_leaf_id TEXT
+  active_leaf_id TEXT,
+  compare_parent_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -73,7 +74,14 @@ export function openDb(file: string): DB {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+/** Brings databases created by older versions up to the current schema. */
+function migrate(db: DB): void {
+  const chatColumns = (db.prepare('PRAGMA table_info(chats)').all() as { name: string }[]).map((c) => c.name);
+  if (!chatColumns.includes('compare_parent_id')) db.exec('ALTER TABLE chats ADD COLUMN compare_parent_id TEXT');
 }
 
 export const newId = (): string => randomUUID();

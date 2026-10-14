@@ -2,7 +2,7 @@ import type { DB } from './db';
 import { newId, now } from './db';
 import { HttpError } from './http';
 import { getChatMessages } from './messages';
-import { activePath, withSiblings } from './tree';
+import { activePath, repliesTo, withSiblings } from './tree';
 import type { ChatDetail, ChatSummary } from '../../shared/types';
 
 export const DEFAULT_TITLE = 'New chat';
@@ -13,6 +13,7 @@ export interface ChatRow {
   created_at: number;
   updated_at: number;
   active_leaf_id: string | null;
+  compare_parent_id: string | null;
 }
 
 export function createChat(db: DB): ChatSummary {
@@ -48,6 +49,10 @@ export function setActiveLeaf(db: DB, id: string, leafId: string | null): void {
   db.prepare('UPDATE chats SET active_leaf_id = ? WHERE id = ?').run(leafId, id);
 }
 
+export function setCompareParent(db: DB, id: string, parentId: string | null): void {
+  db.prepare('UPDATE chats SET compare_parent_id = ? WHERE id = ?').run(parentId, id);
+}
+
 export function touchChat(db: DB, id: string): void {
   db.prepare('UPDATE chats SET updated_at = ? WHERE id = ?').run(now(), id);
 }
@@ -63,5 +68,6 @@ export function getChatDetail(db: DB, id: string): ChatDetail {
   return {
     chat: { id: row.id, title: row.title, updatedAt: row.updated_at, totalCost, activeLeafId: row.active_leaf_id },
     messages: withSiblings(all, activePath(all, row.active_leaf_id)),
+    compare: row.compare_parent_id ? { parentId: row.compare_parent_id, replies: repliesTo(all, row.compare_parent_id) } : null,
   };
 }
