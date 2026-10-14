@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { LibraryModel, PathMessage } from '../../../shared/types';
 import { formatCost, formatTokens } from '../lib/format';
 import { Markdown } from './Markdown';
+import { RememberBox } from './RememberBox';
 import { SiblingNav } from './SiblingNav';
 
 interface Props {
@@ -22,6 +23,34 @@ export function MessageItem({ message, modelName, models, disabled, compareMode,
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const [copied, setCopied] = useState(false);
+  const [remembering, setRemembering] = useState<string | null>(null);
+  const [rememberedNote, setRememberedNote] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const selectionRef = useRef('');
+
+  // Captured on mousedown, before the click can move focus: text highlighted inside this message, if any.
+  const captureSelection = () => {
+    const sel = window.getSelection();
+    const text = sel?.toString().trim() ?? '';
+    selectionRef.current = text && sel?.anchorNode && bodyRef.current?.contains(sel.anchorNode) ? text : '';
+  };
+  const rememberButton = (
+    <button className="link" onMouseDown={captureSelection} onClick={() => setRemembering(selectionRef.current || message.content)}>
+      {rememberedNote ? 'Saved to memory' : 'Remember'}
+    </button>
+  );
+  const rememberBox = remembering !== null && (
+    <RememberBox
+      text={remembering}
+      onClose={(saved) => {
+        setRemembering(null);
+        if (saved) {
+          setRememberedNote(true);
+          setTimeout(() => setRememberedNote(false), 2000);
+        }
+      }}
+    />
+  );
 
   const copy = async () => {
     await navigator.clipboard.writeText(message.content);
@@ -48,12 +77,14 @@ export function MessageItem({ message, modelName, models, disabled, compareMode,
           </div>
         ) : (
           <>
-            <div className="bubble">{message.content}</div>
+            <div className="bubble" ref={bodyRef}>{message.content}</div>
             <div className="msg-meta">
               {nav}
               <button className="link" disabled={disabled} onClick={() => { setDraft(message.content); setEditing(true); }}>Edit</button>
               <button className="link" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
+              {rememberButton}
             </div>
+            {rememberBox}
           </>
         )}
       </div>
@@ -65,7 +96,7 @@ export function MessageItem({ message, modelName, models, disabled, compareMode,
 
   return (
     <div className="msg assistant">
-      <div className="msg-body"><Markdown text={message.content} /></div>
+      <div className="msg-body" ref={bodyRef}><Markdown text={message.content} /></div>
       {message.status === 'stopped' && <div className="muted small">Response stopped</div>}
       <div className="msg-meta">
         {nav}
@@ -73,6 +104,7 @@ export function MessageItem({ message, modelName, models, disabled, compareMode,
         {tokens > 0 && <span>{formatTokens(tokens)} tok</span>}
         {message.cost !== null && <span>· {formatCost(message.cost)}</span>}
         <button className="link" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
+        {rememberButton}
         {compareMode ? (
           <button className="link" disabled={disabled} onClick={() => onRegenerate(null)}>↻ Compare again</button>
         ) : (
@@ -91,6 +123,7 @@ export function MessageItem({ message, modelName, models, disabled, compareMode,
           <button className="link" disabled={disabled} onClick={onCompareVersions}>Compare versions</button>
         )}
       </div>
+      {rememberBox}
     </div>
   );
 }

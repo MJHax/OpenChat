@@ -166,6 +166,13 @@ export function Settings({ models, onChanged }: SettingsProps) {
             </select>
           </label>
           <label className="field">
+            Model for memories
+            <select value={view.memoryModelId} onChange={(e) => update({ memoryModelId: e.target.value })}>
+              <option value="">Same as default model</option>
+              {models.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
+            </select>
+          </label>
+          <label className="field">
             Theme
             <select value={view.theme} onChange={(e) => update({ theme: e.target.value as Theme })}>
               <option value="system">System</option>
