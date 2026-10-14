@@ -214,6 +214,42 @@ describe('failures', () => {
   });
 });
 
+describe('review fixes', () => {
+  it('rejects a second generation in the same chat while one is in flight', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let n = 0;
+    const streamChat: OpenRouterClient['streamChat'] = async function* () {
+      n++;
+      yield { type: 'delta', text: 'Working' };
+      if (n === 1) await gate;
+      yield { type: 'usage', usage: USAGE };
+    };
+    const { call, db } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const first = call('POST', `/api/chats/${chatId}/messages`, { content: 'Long task', modelId: 'm/a' });
+    const firstRes = await first;
+    const busy = await call('POST', `/api/chats/${chatId}/messages`, { content: 'Second', modelId: 'm/a' });
+    expect(busy.status).toBe(409);
+    expect(getChatMessages(db, chatId).filter((m) => m.role === 'user')).toHaveLength(1);
+    release();
+    await readEvents(firstRes);
+    const after = await call('POST', `/api/chats/${chatId}/messages`, { content: 'Second', modelId: 'm/a' });
+    expect(after.status).toBe(200);
+    await readEvents(after);
+  });
+
+  it('titles the chat when the first complete reply follows a stopped one', async () => {
+    const { streamChat } = scripted([{ chunks: ['Par'], failWith: new OpenRouterError('The model provider returned an error.', 502) }, { chunks: ['Full'] }]);
+    const { call, db } = makeApp({ streamChat, complete: async () => 'Recovered chat' });
+    const chatId = await newChat(call);
+    const first = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: 'm/a' }));
+    const events = await readEvents(await call('POST', `/api/chats/${chatId}/regenerate`, { parentId: first[0].data.userMessageId, modelId: 'm/a' }));
+    expect(events.map((e) => e.event)).toContain('title');
+    expect(getChatRow(db, chatId)?.title).toBe('Recovered chat');
+  });
+});
+
 describe('cleanTitle', () => {
   it('strips quotes, markdown and trailing punctuation and keeps one line', () => {
     expect(cleanTitle('"Trip planning ideas."')).toBe('Trip planning ideas');

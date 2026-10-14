@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import { streamSSE } from 'hono/streaming';
+import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 import type { Deps } from './app';
 import { newId } from './db';
 import { setActiveLeaf, touchChat } from './chats';
@@ -18,6 +18,8 @@ interface ReplyOptions {
   modelId: string;
   /** Set when this request created a new user message. */
   userMessageId: string | null;
+  /** Called once the stream has fully finished, however it ended. */
+  onFinish?: () => void;
 }
 
 /**
@@ -33,6 +35,14 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
   c.req.raw.signal.addEventListener('abort', () => abort.abort());
 
   return streamSSE(c, async (stream) => {
+    try {
+      await run(stream);
+    } finally {
+      o.onFinish?.();
+    }
+  });
+
+  async function run(stream: SSEStreamingApi) {
     stream.onAbort(() => abort.abort());
     const send = (event: string, data: unknown) => stream.writeSSE({ event, data: JSON.stringify(data) });
 
@@ -78,5 +88,5 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
       if (!(err instanceof OpenRouterError)) console.error(err);
       await send('error', { message, partial } satisfies StreamError);
     }
-  });
+  }
 }

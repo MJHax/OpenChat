@@ -18,7 +18,8 @@ export async function maybeGenerateTitle(deps: Deps, chatId: string, apiKey: str
   const chat = getChatRow(db, chatId);
   if (!chat || chat.title !== DEFAULT_TITLE) return null;
   const all = getChatMessages(db, chatId);
-  if (all.filter((m) => m.role === 'assistant').length !== 1) return null;
+  // Title after the first complete reply; earlier stopped/partial replies don't count.
+  if (all.filter((m) => m.role === 'assistant' && m.status === 'complete').length !== 1) return null;
   const transcript = activePath(all, chat.active_leaf_id)
     .map((m) => `${m.role}: ${m.content}`)
     .join('\n\n')
