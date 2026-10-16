@@ -72,12 +72,11 @@ export function withCatalogDefaults(m: Partial<CatalogModel> & { id: string }): 
 
 /** OpenRouter's `/models?category=` values. */
 export type Category =
-  | 'programming' | 'roleplay' | 'marketing' | 'marketing/seo' | 'technology' | 'science'
+  | 'programming' | 'marketing' | 'marketing/seo' | 'technology' | 'science'
   | 'translation' | 'legal' | 'finance' | 'health' | 'trivia' | 'academia';
 
 export const CATEGORIES: { id: Category; label: string }[] = [
   { id: 'programming', label: 'Programming' },
-  { id: 'roleplay', label: 'Roleplay' },
   { id: 'marketing', label: 'Marketing' },
   { id: 'marketing/seo', label: 'SEO' },
   { id: 'technology', label: 'Technology' },

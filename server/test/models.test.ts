@@ -45,7 +45,7 @@ describe('catalog', () => {
     const { call } = makeApp({
       listModels: async () => CATALOG,
       listCategory: async (category) => {
-        if (category === 'roleplay') throw new OpenRouterError('boom', 502);
+        if (category === 'trivia') throw new OpenRouterError('boom', 502);
         return category === 'programming' ? ['google/gemini', '~anthropic/claude'] : [];
       },
     });
@@ -53,6 +53,15 @@ describe('catalog', () => {
     expect(res.models).toHaveLength(3);
     expect(res.rankings.programming).toEqual(['google/gemini', '~anthropic/claude']);
     expect(res.rankings.legal).toEqual([]);
+    expect(res.rankings).not.toHaveProperty('trivia');
+  });
+
+  it('does not fetch or offer the roleplay category', async () => {
+    const requested: string[] = [];
+    const { call } = makeApp({ listModels: async () => CATALOG, listCategory: async (category) => { requested.push(category); return []; } });
+    const res = (await (await call('GET', '/api/models/catalog')).json()) as CatalogResponse;
+    expect(requested).not.toContain('roleplay');
+    expect(requested).toHaveLength(11);
     expect(res.rankings).not.toHaveProperty('roleplay');
   });
 
@@ -61,7 +70,7 @@ describe('catalog', () => {
     const { call } = makeApp({ listModels: async () => CATALOG, listCategory: async () => { rankingCalls++; return ['google/gemini']; } });
     await call('GET', '/api/models/catalog');
     const second = (await (await call('GET', '/api/models/catalog')).json()) as CatalogResponse;
-    expect(rankingCalls).toBe(12);
+    expect(rankingCalls).toBe(11);
     expect(second.rankings.programming).toEqual(['google/gemini']);
   });
 
@@ -94,7 +103,7 @@ describe('catalog', () => {
       const { call } = makeApp({
         listModels: async () => { modelCalls++; return CATALOG; },
         listCategory: async (category) => {
-          if (fail && category === 'roleplay') throw new OpenRouterError('Rate limited', 429);
+          if (fail && category === 'trivia') throw new OpenRouterError('Rate limited', 429);
           return ['google/gemini'];
         },
       });
@@ -106,7 +115,7 @@ describe('catalog', () => {
       vi.setSystemTime(t0 + 6 * 60_000);
       const res = (await (await call('GET', '/api/models/catalog')).json()) as CatalogResponse;
       expect(modelCalls).toBe(2);
-      expect(res.rankings.roleplay).toEqual(['google/gemini']);
+      expect(res.rankings.trivia).toEqual(['google/gemini']);
     } finally {
       vi.useRealTimers();
     }
