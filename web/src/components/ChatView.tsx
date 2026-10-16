@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ChatDetail, LibraryModel, Message, SettingsView } from '../../../shared/types';
+import type { Attachment, ChatDetail, LibraryModel, Message, SettingsView } from '../../../shared/types';
 import { api, streamComparison, streamGeneration } from '../api';
 import { COMPARE_OFF, compareModels, loadCompare, saveCompare, type CompareState } from '../lib/compare';
 import { formatCost } from '../lib/format';
 import { initialModelId } from '../lib/models';
 import { navigate } from '../lib/route';
+import { AttachmentChips } from './AttachmentChips';
 import { CompareColumns, type Column } from './CompareColumns';
 import { Composer } from './Composer';
 import { Markdown } from './Markdown';
 import { MessageItem } from './MessageItem';
 import { ThinkingIndicator } from './ThinkingIndicator';
+import { toDraft } from './useAttachmentDraft';
 
 export interface ChatViewProps {
   chatId: string | null;
@@ -36,15 +38,16 @@ interface Pending {
   baseLength: number;
   /** Optimistic user bubble for send/edit; null for regenerate. */
   userText: string | null;
+  userAttachments: Attachment[];
   startedAt: number;
   /** One slot for a normal reply, 2–4 for a comparison. */
   slots: SlotState[];
 }
 
 type RunOptions =
-  | { kind: 'send'; text: string; baseLength: number; models: string[] }
+  | { kind: 'send'; text: string; attachments: Attachment[]; baseLength: number; models: string[] }
   | { kind: 'regenerate'; parentId: string; baseLength: number; models: string[] }
-  | { kind: 'edit'; messageId: string; text: string; baseLength: number; models: string[] };
+  | { kind: 'edit'; messageId: string; text: string; attachments: Attachment[]; baseLength: number; models: string[] };
 
 export function ChatView({ chatId, title, reloadToken, models, settings, onChatsChanged }: ChatViewProps) {
   const [detail, setDetail] = useState<ChatDetail | null>(null);
@@ -136,6 +139,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       chatId: streamChat,
       baseLength: opts.baseLength,
       userText: opts.kind === 'regenerate' ? null : opts.text,
+      userAttachments: opts.kind === 'regenerate' ? [] : opts.attachments,
       startedAt: Date.now(),
       slots: opts.models.map((id) => ({ modelId: id, text: '', reasoning: '', error: null, message: null, done: false })),
     });
@@ -147,9 +151,9 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     const url = `/api/chats/${streamChat}/${opts.kind === 'send' ? 'messages' : opts.kind}`;
     const modelField = opts.models.length === 1 ? { modelId: opts.models[0] } : { modelIds: opts.models };
     const body =
-      opts.kind === 'send' ? { content: opts.text, ...modelField }
+      opts.kind === 'send' ? { content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), ...modelField }
       : opts.kind === 'regenerate' ? { parentId: opts.parentId, ...modelField }
-      : { messageId: opts.messageId, content: opts.text, ...modelField };
+      : { messageId: opts.messageId, content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), ...modelField };
 
     let settled = false;
     const finish = async (message: string | null) => {
@@ -205,13 +209,17 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   /** The models the next generation uses: the compare list, or the picked model. */
   const runModels = compare.enabled ? compareList : modelId ? [modelId] : null;
 
-  const send = (text: string) => runModels && run({ kind: 'send', text, baseLength: messages.length, models: runModels });
+  /** Library entries for the models the next generation uses, for the composer's image checks. */
+  const replyModels = (runModels ?? []).map((id) => models.find((m) => m.id === id)).filter((m): m is LibraryModel => !!m);
+
+  const send = (text: string, attachments: Attachment[]) =>
+    runModels && run({ kind: 'send', text, attachments, baseLength: messages.length, models: runModels });
   const regenerate = (index: number, model: string | null) => {
     const list = model ? [model] : compareList;
     if (list) run({ kind: 'regenerate', parentId: messages[index].parentId!, baseLength: index, models: list });
   };
-  const edit = (index: number, text: string) =>
-    runModels && run({ kind: 'edit', messageId: messages[index].id, text, baseLength: index, models: runModels });
+  const edit = (index: number, text: string, attachments: Attachment[]) =>
+    runModels && run({ kind: 'edit', messageId: messages[index].id, text, attachments, baseLength: index, models: runModels });
   const retry = () => {
     const last = messages[messages.length - 1];
     if (!last || !runModels) return;
@@ -283,13 +291,17 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
               compareMode={compareList !== null}
               onSelectSibling={selectSibling}
               onRegenerate={(model) => regenerate(i, model)}
-              onEdit={(text) => edit(i, text)}
+              replyModels={replyModels}
+              onEdit={(text, attachments) => edit(i, text, attachments)}
               onCompareVersions={() => openVersions(i)}
             />
           ))}
 
           {pending?.userText != null && (
-            <div className="msg user"><div className="bubble">{pending.userText}</div></div>
+            <div className="msg user">
+              <AttachmentChips items={pending.userAttachments.map(toDraft)} inMessage />
+              {pending.userText && <div className="bubble">{pending.userText}</div>}
+            </div>
           )}
           {pending && pending.slots.length === 1 && (
             <div className="msg assistant">
@@ -334,6 +346,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
         onModelChange={setModelId}
         compare={compare}
         onCompareChange={setCompare}
+        replyModels={replyModels}
+        path={messages}
         onSend={send}
         onStop={() => abortRef.current?.abort()}
       />

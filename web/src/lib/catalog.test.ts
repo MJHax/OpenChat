@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   capabilitiesOf, countLabel, filterCatalog, isFiltering, isNew, latestOnly, NO_FILTER, popularFor, providerChips, providerOf,
-  sortCatalog, topProviders, type Capability,
-} from './catalog';
+  sortCatalog, topProviders, type Capability, CAPABILITIES } from './catalog';
 import { withCatalogDefaults, type CatalogModel } from '../../../shared/types';
 
 const m = (id: string, o: Partial<CatalogModel> = {}): CatalogModel => withCatalogDefaults({ id, name: id, ...o });
@@ -180,5 +179,12 @@ describe('isNew', () => {
     expect(isNew(m('a/x', { created: now / 1000 - 30 * DAY_S }), now)).toBe(true);
     expect(isNew(m('a/x', { created: now / 1000 - 30 * DAY_S - 1 }), now)).toBe(false);
     expect(isNew(m('a/x', { created: null }), now)).toBe(false);
+  });
+});
+
+describe('CAPABILITIES', () => {
+  it('marks Vision and File input as used by OpenChat, and Tools as not yet', () => {
+    const used = Object.fromEntries(CAPABILITIES.map((c) => [c.id, c.usedByOpenChat]));
+    expect(used).toMatchObject({ vision: true, file: true, tools: false });
   });
 });

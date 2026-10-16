@@ -8,6 +8,12 @@ export function formatCost(usd: number | null): string {
 
 export const formatTokens = (n: number): string => n.toLocaleString('en-US');
 
+export function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${+(n / 1024).toFixed(1)} KB`;
+  return `${+(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function formatPricePerM(perToken: number | null): string {
   if (perToken === null) return '—';
   if (perToken < 0) return 'varies';

@@ -8,9 +8,9 @@ export const CAPABILITIES: { id: Capability; label: string; usedByOpenChat: bool
   { id: 'reasoning', label: 'Reasoning', usedByOpenChat: true },
   { id: 'free', label: 'Free', usedByOpenChat: true },
   { id: 'longContext', label: 'Long context', usedByOpenChat: true },
-  { id: 'vision', label: 'Vision', usedByOpenChat: false },
+  { id: 'vision', label: 'Vision', usedByOpenChat: true },
   { id: 'tools', label: 'Tools', usedByOpenChat: false },
-  { id: 'file', label: 'File input', usedByOpenChat: false },
+  { id: 'file', label: 'File input', usedByOpenChat: true },
 ];
 
 export const UNUSED_HINT = 'Not used by OpenChat yet';

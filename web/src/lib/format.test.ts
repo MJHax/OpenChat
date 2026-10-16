@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatContext, formatCost, formatPricePerM, formatTokens, groupByDate, splitSnippet } from './format';
+import { formatContext, formatCost, formatPricePerM, formatTokens, groupByDate, splitSnippet, formatBytes } from './format';
 
 describe('formatCost', () => {
   it('formats small and large amounts', () => {
@@ -43,5 +43,14 @@ describe('splitSnippet', () => {
       { text: 'bananas', hit: true },
       { text: ' a lot', hit: false },
     ]);
+  });
+});
+
+describe('formatBytes', () => {
+  it('formats file sizes', () => {
+    expect(formatBytes(512)).toBe('512 B');
+    expect(formatBytes(1536)).toBe('1.5 KB');
+    expect(formatBytes(5 * 1024 * 1024)).toBe('5 MB');
+    expect(formatBytes(20.25 * 1024 * 1024)).toBe('20.3 MB');
   });
 });

@@ -1,6 +1,10 @@
 import { useRef, useState } from 'react';
-import type { LibraryModel, PathMessage } from '../../../shared/types';
+import type { Attachment, LibraryModel, PathMessage } from '../../../shared/types';
+import { sendBlockReason } from '../lib/attachments';
 import { formatCost, formatTokens } from '../lib/format';
+import { AttachButton, useFileDrop } from './AttachButton';
+import { AttachmentChips } from './AttachmentChips';
+import { toDraft, useAttachmentDraft } from './useAttachmentDraft';
 import { Markdown } from './Markdown';
 import { RememberBox } from './RememberBox';
 import { SiblingNav } from './SiblingNav';
@@ -15,13 +19,19 @@ interface Props {
   onSelectSibling(id: string): void;
   /** null = regenerate with the compare models. */
   onRegenerate(modelId: string | null): void;
-  onEdit(text: string): void;
+  /** The model(s) an edit would be sent to, for the image check. */
+  replyModels: LibraryModel[];
+  onEdit(text: string, attachments: Attachment[]): void;
   onCompareVersions(): void;
 }
 
-export function MessageItem({ message, modelName, models, disabled, compareMode, onSelectSibling, onRegenerate, onEdit, onCompareVersions }: Props) {
+export function MessageItem({
+  message, modelName, models, disabled, compareMode, onSelectSibling, onRegenerate, replyModels, onEdit, onCompareVersions,
+}: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
+  const files = useAttachmentDraft();
+  const drop = useFileDrop(files.add);
   const [copied, setCopied] = useState(false);
   const [remembering, setRemembering] = useState<string | null>(null);
   const [rememberedNote, setRememberedNote] = useState(false);
@@ -63,24 +73,32 @@ export function MessageItem({ message, modelName, models, disabled, compareMode,
   );
 
   if (message.role === 'user') {
+    // Only images added in this edit are checked; the message's own images are handled with a note if needed.
+    const editBlock = sendBlockReason(files.items.filter((i) => !i.sent && i.status !== 'error').map((i) => i.kind), replyModels);
+    const canSave = (!!draft.trim() || files.ready.length > 0) && !files.uploading && !editBlock && !disabled;
     return (
       <div className="msg user">
         {editing ? (
-          <div className="edit-box">
-            <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={Math.min(12, draft.split('\n').length + 1)} autoFocus />
+          <div className={`edit-box${drop.dragging ? ' dragging' : ''}`} {...drop.handlers}>
+            <AttachmentChips items={files.items} onRemove={files.remove} />
+            <textarea value={draft} onChange={(e) => setDraft(e.target.value)} onPaste={drop.onPaste} rows={Math.min(12, draft.split('\n').length + 1)} autoFocus />
+            {editBlock && <div className="composer-hint">{editBlock}</div>}
             <div className="row">
-              <button onClick={() => { setEditing(false); setDraft(message.content); }}>Cancel</button>
-              <button className="primary" disabled={!draft.trim() || disabled} onClick={() => { setEditing(false); onEdit(draft.trim()); }}>
+              <AttachButton onFiles={files.add} />
+              <span className="spacer" />
+              <button onClick={() => { setEditing(false); setDraft(message.content); files.discard(); }}>Cancel</button>
+              <button className="primary" disabled={!canSave} onClick={() => { setEditing(false); onEdit(draft.trim(), files.ready); files.clear(); }}>
                 Save & send
               </button>
             </div>
           </div>
         ) : (
           <>
-            <div className="bubble" ref={bodyRef}>{message.content}</div>
+            <AttachmentChips items={message.attachments.map(toDraft)} inMessage />
+            {message.content && <div className="bubble" ref={bodyRef}>{message.content}</div>}
             <div className="msg-meta">
               {nav}
-              <button className="link" disabled={disabled} onClick={() => { setDraft(message.content); setEditing(true); }}>Edit</button>
+              <button className="link" disabled={disabled} onClick={() => { setDraft(message.content); files.reset(message.attachments); setEditing(true); }}>Edit</button>
               <button className="link" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
               {rememberButton}
             </div>

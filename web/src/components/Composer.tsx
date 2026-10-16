@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import type { LibraryModel } from '../../../shared/types';
+import type { Attachment, LibraryModel } from '../../../shared/types';
+import { sendBlockReason, skippedImagesNotice } from '../lib/attachments';
 import { MAX_COMPARE, toggleModel, type CompareState } from '../lib/compare';
+import { AttachmentChips } from './AttachmentChips';
+import { AttachButton, useFileDrop } from './AttachButton';
+import { useAttachmentDraft } from './useAttachmentDraft';
 
 interface Props {
   /** Why sending is blocked right now, or null if it isn't. */
@@ -11,13 +15,24 @@ interface Props {
   onModelChange(id: string): void;
   compare: CompareState;
   onCompareChange(next: CompareState): void;
-  onSend(text: string): void;
+  /** The model(s) the next send goes to, for the image checks. */
+  replyModels: LibraryModel[];
+  /** The chat's messages so far, to warn when earlier images will be skipped. */
+  path: { attachments: Attachment[] }[];
+  onSend(text: string, attachments: Attachment[]): void;
   onStop(): void;
 }
 
-export function Composer({ disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, onSend, onStop }: Props) {
+export function Composer({
+  disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, replyModels, path, onSend, onStop,
+}: Props) {
   const [text, setText] = useState('');
   const ref = useRef<HTMLTextAreaElement>(null);
+  const draft = useAttachmentDraft();
+  const drop = useFileDrop(draft.add);
+  const blockReason = sendBlockReason(draft.kinds, replyModels);
+  const notice = blockReason ?? skippedImagesNotice(path, replyModels);
+  const canSend = (!!text.trim() || draft.ready.length > 0) && !draft.uploading && !blockReason && !disabledReason;
 
   useEffect(() => {
     const el = ref.current;
@@ -27,21 +42,23 @@ export function Composer({ disabledReason, streaming, models, modelId, onModelCh
   }, [text]);
 
   const submit = () => {
-    const trimmed = text.trim();
-    if (!trimmed || disabledReason || streaming) return;
-    onSend(trimmed);
+    if (!canSend || streaming) return;
+    onSend(text.trim(), draft.ready);
     setText('');
+    draft.clear();
   };
 
   return (
     <div className="composer">
-      <div className="composer-box">
+      <div className={`composer-box${drop.dragging ? ' dragging' : ''}`} {...drop.handlers}>
+        <AttachmentChips items={draft.items} onRemove={draft.remove} />
         <textarea
           ref={ref}
           rows={1}
           value={text}
           placeholder="Message…"
           onChange={(e) => setText(e.target.value)}
+          onPaste={drop.onPaste}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
@@ -51,6 +68,7 @@ export function Composer({ disabledReason, streaming, models, modelId, onModelCh
         />
         <div className="composer-bar">
           <div className="composer-models">
+            <AttachButton onFiles={draft.add} />
             <button
               className="toggle"
               aria-pressed={compare.enabled}
@@ -86,10 +104,11 @@ export function Composer({ disabledReason, streaming, models, modelId, onModelCh
           {streaming ? (
             <button className="primary" onClick={onStop}>Stop</button>
           ) : (
-            <button className="primary" onClick={submit} disabled={!!disabledReason || !text.trim()}>Send</button>
+            <button className="primary" onClick={submit} disabled={!canSend}>Send</button>
           )}
         </div>
         {disabledReason && !streaming && <div className="composer-hint">{disabledReason}</div>}
+        {!disabledReason && notice && <div className="composer-hint">{notice}</div>}
       </div>
     </div>
   );
