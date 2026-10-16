@@ -62,6 +62,19 @@ CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE OF content ON messages BEG
   INSERT INTO messages_fts(rowid, content) VALUES (new.seq, new.content);
 END;
 
+CREATE TABLE IF NOT EXISTS attachments (
+  id TEXT PRIMARY KEY,
+  message_id TEXT REFERENCES messages(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL DEFAULT 0,
+  kind TEXT NOT NULL CHECK (kind IN ('image', 'pdf', 'text')),
+  filename TEXT NOT NULL,
+  mime TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  data BLOB NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS attachments_message ON attachments(message_id, position);
+
 CREATE TABLE IF NOT EXISTS model_catalog_cache (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   fetched_at INTEGER NOT NULL,

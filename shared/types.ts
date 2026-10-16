@@ -1,6 +1,16 @@
 export type Role = 'user' | 'assistant';
 export type MessageStatus = 'complete' | 'stopped';
 export type Theme = 'light' | 'dark' | 'system';
+export type AttachmentKind = 'image' | 'pdf' | 'text';
+
+/** A file attached to a user message (metadata only; the bytes are served by /api/attachments/:id). */
+export interface Attachment {
+  id: string;
+  kind: AttachmentKind;
+  filename: string;
+  mime: string;
+  size: number;
+}
 
 export interface Message {
   id: string;
