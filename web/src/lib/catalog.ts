@@ -9,7 +9,7 @@ export const CAPABILITIES: { id: Capability; label: string; usedByOpenChat: bool
   { id: 'free', label: 'Free', usedByOpenChat: true },
   { id: 'longContext', label: 'Long context', usedByOpenChat: true },
   { id: 'vision', label: 'Vision', usedByOpenChat: true },
-  { id: 'tools', label: 'Tools', usedByOpenChat: false },
+  { id: 'tools', label: 'Tools', usedByOpenChat: true },
   { id: 'file', label: 'File input', usedByOpenChat: true },
 ];
 

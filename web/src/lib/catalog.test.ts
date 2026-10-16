@@ -183,8 +183,8 @@ describe('isNew', () => {
 });
 
 describe('CAPABILITIES', () => {
-  it('marks Vision and File input as used by OpenChat, and Tools as not yet', () => {
+  it('marks Vision, File input and Tools as used by OpenChat', () => {
     const used = Object.fromEntries(CAPABILITIES.map((c) => [c.id, c.usedByOpenChat]));
-    expect(used).toMatchObject({ vision: true, file: true, tools: false });
+    expect(used).toMatchObject({ vision: true, file: true, tools: true });
   });
 });

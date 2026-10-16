@@ -43,7 +43,7 @@ export function CatalogFilters({ filter, onFilter, sort, onSort, providers, load
             </button>
           );
         })}
-        <span className="muted small">• {UNUSED_HINT}</span>
+        {CAPABILITIES.some((c) => !c.usedByOpenChat) && <span className="muted small">• {UNUSED_HINT}</span>}
       </div>
 
       <div className="chip-row" role="group" aria-label="Providers">
