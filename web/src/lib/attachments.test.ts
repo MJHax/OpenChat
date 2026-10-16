@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addError, guessKind, sendBlockReason, skippedImagesNotice } from './attachments';
+import { addError, addErrors, guessKind, sendBlockReason, skippedImagesNotice, withRestored } from './attachments';
 import { MB, TOO_MANY_FILES, TOO_MUCH_TOTAL, UNSUPPORTED_TYPE } from '../../../shared/attachments';
 import type { Attachment, LibraryModel } from '../../../shared/types';
 
@@ -48,6 +48,33 @@ describe('addError for files that may not be text', () => {
     expect(addError([], { name: 'report.docx', size: 4 * MB, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })).toBeNull();
     expect(addError([], { name: 'types.ts', size: 2 * MB, type: 'video/mp2t' })).toBeNull();
     expect(addError([], { name: 'huge.zip', size: 25 * MB, type: 'application/zip' })).toBe('huge.zip is too large. The limit is 20 MB.');
+  });
+});
+
+describe('addErrors', () => {
+  it('counts files accepted earlier in the same batch, but not rejected ones', () => {
+    const nine = Array.from({ length: 9 }, () => ({ size: 1 }));
+    const files = [
+      { name: 'huge.png', size: 6 * MB, type: 'image/png' },
+      { name: 'a.txt', size: 1, type: 'text/plain' },
+      { name: 'b.txt', size: 1, type: 'text/plain' },
+    ];
+    expect(addErrors(nine, files)).toEqual(['huge.png is too large. The limit for image files is 5 MB.', null, TOO_MANY_FILES]);
+  });
+
+  it('leaves the existing list alone', () => {
+    const existing = [{ size: 1 }];
+    addErrors(existing, [{ name: 'a.txt', size: 1, type: 'text/plain' }]);
+    expect(existing).toHaveLength(1);
+  });
+});
+
+describe('withRestored', () => {
+  const item = (key: string, id: string | null) => ({ key, attachment: id ? { ...image, id } : null });
+  it('puts restored items first and drops current items for the same attachment', () => {
+    const current = [item('new', 'n'), item('dup', 'r1'), item('failed', null)];
+    const restored = [item('r1', 'r1'), item('r2', 'r2')];
+    expect(withRestored(current, restored).map((i) => i.key)).toEqual(['r1', 'r2', 'new', 'failed']);
   });
 });
 

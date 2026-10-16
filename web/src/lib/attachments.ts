@@ -39,6 +39,22 @@ export function addError(existing: { size: number }[], file: { name: string; siz
   return null;
 }
 
+/** addError for each of `files` in turn, counting the ones accepted before it. */
+export function addErrors(existing: { size: number }[], files: { name: string; size: number; type: string }[]): (string | null)[] {
+  const counted = [...existing];
+  return files.map((file) => {
+    const error = addError(counted, file);
+    if (!error) counted.push(file);
+    return error;
+  });
+}
+
+/** `restored` (a failed send's attachments) back at the front of the draft, without doubling any still in it. */
+export function withRestored<T extends { attachment: { id: string } | null }>(current: T[], restored: T[]): T[] {
+  const ids = new Set(restored.map((i) => i.attachment?.id));
+  return [...restored, ...current.filter((i) => !i.attachment || !ids.has(i.attachment.id))];
+}
+
 /** Why the draft can't be sent to `models` (the model or compare set that would reply), or null. */
 export function sendBlockReason(kinds: AttachmentKind[], models: LibraryModel[]): string | null {
   if (!kinds.includes('image')) return null;

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Attachment, AttachmentKind } from '../../../shared/types';
 import { attachmentUrl, deleteAttachment, uploadAttachment } from '../api';
-import { addError, guessKind } from '../lib/attachments';
+import { addErrors, guessKind, withRestored } from '../lib/attachments';
 
 export interface DraftAttachment {
   key: string;
@@ -47,27 +47,28 @@ export function useAttachmentDraft() {
   }, []);
 
   function add(files: FileList | File[]) {
-    const counted = itemsRef.current.filter((i) => i.status !== 'error');
-    const added: DraftAttachment[] = [];
-    for (const file of Array.from(files)) {
+    const list = Array.from(files);
+    const errors = addErrors(itemsRef.current.filter((i) => i.status !== 'error'), list);
+    const added = list.map((file, n): DraftAttachment => {
       const key = `draft-${nextKey++}`;
       const kind = guessKind(file);
-      const error = addError(counted, file);
+      const error = errors[n];
       const item: DraftAttachment = {
         key, name: file.name || 'file', size: file.size, kind, status: error ? 'error' : 'uploading', progress: 0, error,
         attachment: null, previewUrl: kind === 'image' && !error ? URL.createObjectURL(file) : null, sent: false,
       };
-      added.push(item);
-      if (error) continue;
-      counted.push(item);
+      if (error) return item;
       const controller = new AbortController();
       uploads.current.set(key, controller);
       uploadAttachment(file, (progress) => update(key, { progress }), controller.signal)
         .then((attachment) => update(key, { status: 'ready', progress: 1, attachment, kind: attachment.kind }))
         .catch((e: Error) => { if (e.name !== 'AbortError') update(key, { status: 'error', error: e.message }); })
         .finally(() => uploads.current.delete(key));
-    }
-    setItems((list) => [...list, ...added]);
+      return item;
+    });
+    // Another add() before the next render (e.g. a drop right after a paste) must count these against the limits.
+    itemsRef.current = [...itemsRef.current, ...added];
+    setItems((current) => [...current, ...added]);
   }
 
   function remove(key: string) {
@@ -82,6 +83,7 @@ export function useAttachmentDraft() {
   /** Empties the draft after a send: the uploads now belong to the message. */
   function clear() {
     itemsRef.current.forEach(revoke);
+    itemsRef.current = [];
     setItems([]);
   }
 
@@ -91,10 +93,23 @@ export function useAttachmentDraft() {
     setItems([]);
   }
 
+  /**
+   * Puts a send's attachments back after the server refused it (nothing was claimed).
+   * `sentIds` are the ones that already belonged to the message being edited.
+   */
+  function restore(list: Attachment[], sentIds: string[] = []) {
+    const restored = list.map((a) => ({ ...toDraft(a), sent: sentIds.includes(a.id) }));
+    itemsRef.current = withRestored(itemsRef.current, restored);
+    setItems((current) => withRestored(current, restored));
+  }
+
   /** Starts over from a sent message's attachments (opening an edit box). */
   function reset(list: Attachment[]) {
+    uploads.current.forEach((c) => c.abort());
+    uploads.current.clear();
     itemsRef.current.forEach(revoke);
-    setItems(list.map(toDraft));
+    itemsRef.current = list.map(toDraft);
+    setItems(itemsRef.current);
   }
 
   const ready = items.filter((i) => i.status === 'ready' && i.attachment).map((i) => i.attachment!);
@@ -104,6 +119,7 @@ export function useAttachmentDraft() {
     remove,
     clear,
     discard,
+    restore,
     reset,
     /** Attachments ready to send, in order. */
     ready,

@@ -19,7 +19,8 @@ interface Props {
   replyModels: LibraryModel[];
   /** The chat's messages so far, to warn when earlier images will be skipped. */
   path: { attachments: Attachment[] }[];
-  onSend(text: string, attachments: Attachment[]): void;
+  /** Resolves false when the send was refused before the server took it; the draft is then put back. */
+  onSend(text: string, attachments: Attachment[]): Promise<boolean>;
   onStop(): void;
 }
 
@@ -41,11 +42,15 @@ export function Composer({
     el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
   }, [text]);
 
-  const submit = () => {
+  const submit = async () => {
     if (!canSend || streaming) return;
-    onSend(text.trim(), draft.ready);
+    const sentText = text.trim();
+    const sent = draft.ready;
     setText('');
     draft.clear();
+    if (await onSend(sentText, sent)) return;
+    setText((current) => (current.trim() ? current : sentText));
+    draft.restore(sent);
   };
 
   return (
@@ -62,7 +67,7 @@ export function Composer({
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
-              submit();
+              void submit();
             }
           }}
         />
@@ -104,7 +109,7 @@ export function Composer({
           {streaming ? (
             <button className="primary" onClick={onStop}>Stop</button>
           ) : (
-            <button className="primary" onClick={submit} disabled={!canSend}>Send</button>
+            <button className="primary" onClick={() => { void submit(); }} disabled={!canSend}>Send</button>
           )}
         </div>
         {disabledReason && !streaming && <div className="composer-hint">{disabledReason}</div>}

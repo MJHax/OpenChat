@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Attachment, LibraryModel, PathMessage } from '../../../shared/types';
 import { sendBlockReason } from '../lib/attachments';
 import { formatCost, formatTokens } from '../lib/format';
@@ -22,15 +22,23 @@ interface Props {
   /** The model(s) an edit would be sent to, for the image check. */
   replyModels: LibraryModel[];
   onEdit(text: string, attachments: Attachment[]): void;
+  /** An edit of this message the server refused before taking it: the edit box reopens with it. */
+  restoredEdit?: { text: string; attachments: Attachment[] } | null;
   onCompareVersions(): void;
 }
 
 export function MessageItem({
-  message, modelName, models, disabled, compareMode, onSelectSibling, onRegenerate, replyModels, onEdit, onCompareVersions,
+  message, modelName, models, disabled, compareMode, onSelectSibling, onRegenerate, replyModels, onEdit, restoredEdit, onCompareVersions,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const files = useAttachmentDraft();
+  useEffect(() => {
+    if (!restoredEdit) return;
+    setDraft(restoredEdit.text);
+    files.restore(restoredEdit.attachments, message.attachments.map((a) => a.id));
+    setEditing(true);
+  }, [restoredEdit]);
   const drop = useFileDrop(files.add);
   const [copied, setCopied] = useState(false);
   const [remembering, setRemembering] = useState<string | null>(null);

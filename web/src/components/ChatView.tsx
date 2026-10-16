@@ -53,6 +53,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   const [detail, setDetail] = useState<ChatDetail | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** An edit the server refused before taking it, to reopen in its edit box. */
+  const [failedEdit, setFailedEdit] = useState<{ messageId: string; text: string; attachments: Attachment[] } | null>(null);
   const [modelId, setModelId] = useState('');
   const [compare, setCompareState] = useState<CompareState>(COMPARE_OFF);
   /** "Compare versions" view: the path index of the reply being compared, and all its versions. */
@@ -87,6 +89,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     }
     setError(null);
     setVersions(null);
+    setFailedEdit(null);
     setPending((p) => (p && p.chatId === chatId ? p : null));
     setCompareState(chatId ? loadCompare(chatId) : COMPARE_OFF);
     if (!chatId) {
@@ -127,11 +130,13 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     }
   }
 
-  async function run(opts: RunOptions) {
+  /** Resolves false when the request failed before the server took it, so the caller can give the draft back. */
+  async function run(opts: RunOptions): Promise<boolean> {
     setError(null);
     setVersions(null);
+    setFailedEdit(null);
     const streamChat = await ensureChat();
-    if (!streamChat) return;
+    if (!streamChat) return false;
     const isShown = () => viewChatRef.current === streamChat;
     const controller = new AbortController();
     abortRef.current = controller;
@@ -156,6 +161,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       : { messageId: opts.messageId, content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), ...modelField };
 
     let settled = false;
+    // The server sends `start` before anything else, after the message is saved; an error before it means nothing was kept.
+    let started = false;
     const finish = async (message: string | null) => {
       if (settled) return;
       settled = true;
@@ -170,7 +177,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     try {
       if (opts.models.length === 1) {
         await streamGeneration(url, body, {
-          onStart: () => {},
+          onStart: () => { started = true; },
           onDelta: (text) => updateSlot(0, (s) => ({ ...s, text: s.text + text })),
           onReasoning: (text) => updateSlot(0, (s) => ({ ...s, reasoning: s.reasoning + text })),
           onDone: () => { void finish(null); },
@@ -180,7 +187,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       } else {
         const failures: string[] = [];
         await streamComparison(url, body, {
-          onStart: () => {},
+          onStart: () => { started = true; },
           onDelta: (slot, text) => updateSlot(slot, (s) => ({ ...s, text: s.text + text })),
           onReasoning: (slot, text) => updateSlot(slot, (s) => ({ ...s, reasoning: s.reasoning + text })),
           onSlotDone: (e) => updateSlot(e.slot, (s) => ({ ...s, message: e.message, done: true })),
@@ -194,13 +201,15 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
         }, controller.signal);
       }
       if (!settled) void finish(null); // stream closed without a final event
+      return started;
     } catch (e) {
       if ((e as Error).name === 'AbortError') {
         // The server saves partial replies when it notices the disconnect; give it a moment.
         setTimeout(() => { void finish(null); }, 400);
-      } else {
-        void finish((e as Error).message);
+        return true;
       }
+      void finish((e as Error).message);
+      return started;
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
     }
@@ -212,14 +221,20 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   /** Library entries for the models the next generation uses, for the composer's image checks. */
   const replyModels = (runModels ?? []).map((id) => models.find((m) => m.id === id)).filter((m): m is LibraryModel => !!m);
 
-  const send = (text: string, attachments: Attachment[]) =>
-    runModels && run({ kind: 'send', text, attachments, baseLength: messages.length, models: runModels });
+  const send = async (text: string, attachments: Attachment[]) =>
+    !!runModels && run({ kind: 'send', text, attachments, baseLength: messages.length, models: runModels });
   const regenerate = (index: number, model: string | null) => {
     const list = model ? [model] : compareList;
     if (list) run({ kind: 'regenerate', parentId: messages[index].parentId!, baseLength: index, models: list });
   };
-  const edit = (index: number, text: string, attachments: Attachment[]) =>
-    runModels && run({ kind: 'edit', messageId: messages[index].id, text, attachments, baseLength: index, models: runModels });
+  const edit = async (index: number, text: string, attachments: Attachment[]) => {
+    const messageId = messages[index].id;
+    if (!runModels) return;
+    // The edited message is hidden while the request runs, so its edit box can't hold the draft; reopen it from here.
+    if (!(await run({ kind: 'edit', messageId, text, attachments, baseLength: index, models: runModels }))) {
+      setFailedEdit({ messageId, text, attachments });
+    }
+  };
   const retry = () => {
     const last = messages[messages.length - 1];
     if (!last || !runModels) return;
@@ -292,7 +307,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
               onSelectSibling={selectSibling}
               onRegenerate={(model) => regenerate(i, model)}
               replyModels={replyModels}
-              onEdit={(text, attachments) => edit(i, text, attachments)}
+              onEdit={(text, attachments) => { void edit(i, text, attachments); }}
+              restoredEdit={failedEdit?.messageId === m.id ? failedEdit : null}
               onCompareVersions={() => openVersions(i)}
             />
           ))}
