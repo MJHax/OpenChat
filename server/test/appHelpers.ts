@@ -24,7 +24,8 @@ export function makeApp(openrouter: Partial<OpenRouterClient> = {}, env: Env = {
   /** POSTs one file to /api/attachments as multipart form data. */
   const upload = (data: Uint8Array | string, filename: string) => {
     const form = new FormData();
-    form.append('file', new File([typeof data === 'string' ? new TextEncoder().encode(data) : data], filename));
+    const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+    form.append('file', new File([new Uint8Array(bytes)], filename));
     return app.request('/api/attachments', { method: 'POST', body: form });
   };
   return { db, app, call, upload };
