@@ -1,6 +1,6 @@
 import { parseSSE } from '../../shared/sse';
 import type {
-  CatalogResponse, ChatDetail, ChatSummary, CompareDone, CompareSlotDone, CompareSlotError, CompareStart, LibraryModel, Memory,
+  Attachment, CatalogResponse, ChatDetail, ChatSummary, CompareDone, CompareSlotDone, CompareSlotError, CompareStart, LibraryModel, Memory,
   Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle,
 } from '../../shared/types';
 
@@ -42,6 +42,31 @@ export const api = {
   deleteMemory: (id: number) => json<{ ok: true }>('DELETE', `/api/memories/${id}`),
   suggestMemory: (text: string) => json<{ suggestion: string }>('POST', '/api/memories/suggest', { text }).then((r) => r.suggestion),
 };
+
+/** Uploads one file, reporting progress from 0 to 1. Rejects with the server's error message. */
+export function uploadAttachment(file: File, onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<Attachment> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/attachments');
+    xhr.responseType = 'json';
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+    xhr.onload = () => {
+      const data = xhr.response as (Attachment & { error?: string }) | null;
+      if (xhr.status === 201 && data) resolve(data);
+      else reject(new Error(data?.error ?? `Upload failed (${xhr.status})`));
+    };
+    xhr.onerror = () => reject(new Error('Upload failed. Check that OpenChat is still running.'));
+    xhr.onabort = () => reject(Object.assign(new Error('Upload cancelled'), { name: 'AbortError' }));
+    signal?.addEventListener('abort', () => xhr.abort());
+    const form = new FormData();
+    form.append('file', file);
+    xhr.send(form);
+  });
+}
+
+export const deleteAttachment = (id: string) => json<{ ok: true }>('DELETE', `/api/attachments/${id}`).then(() => undefined);
+
+export const attachmentUrl = (id: string): string => `/api/attachments/${id}`;
 
 export interface StreamHandlers {
   onStart(e: StreamStart): void;
