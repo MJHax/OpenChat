@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Deps } from '../app';
 import { HttpError, readJson } from '../http';
 import { getCatalog } from '../catalog';
+import { withCatalogDefaults } from '../../../shared/types';
 import { addModel, listLibrary, removeModel, renameModel, requireLibraryModel, setDefaultModel } from '../library';
 
 const requireId = (id: unknown): string => {
@@ -20,7 +21,7 @@ export function modelRoutes({ db, openrouter }: Deps): Hono {
   r.post('/', async (c) => {
     const id = requireId((await readJson<{ id?: string }>(c)).id);
     const catalog = await getCatalog(db, openrouter, false).catch(() => null);
-    const meta = catalog?.models.find((m) => m.id === id) ?? { id, name: id, contextLength: null, promptPrice: null, completionPrice: null };
+    const meta = catalog?.models.find((m) => m.id === id) ?? withCatalogDefaults({ id });
     addModel(db, meta);
     return c.json(listLibrary(db), 201);
   });

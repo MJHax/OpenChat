@@ -43,10 +43,57 @@ export interface CatalogModel {
   /** USD per token; null if unknown, negative means "varies" (e.g. openrouter/auto). */
   promptPrice: number | null;
   completionPrice: number | null;
+  description: string;
+  /** Unix seconds when OpenRouter listed the model; null if unknown. */
+  created: number | null;
+  /** e.g. ['text', 'image', 'file']. */
+  inputModalities: string[];
+  supportsTools: boolean;
+  supportsReasoning: boolean;
+  maxOutput: number | null;
 }
+
+/** Fills the fields older cache rows and fallback lookups don't carry. */
+export function withCatalogDefaults(m: Partial<CatalogModel> & { id: string }): CatalogModel {
+  return {
+    name: m.id,
+    contextLength: null,
+    promptPrice: null,
+    completionPrice: null,
+    description: '',
+    created: null,
+    inputModalities: ['text'],
+    supportsTools: false,
+    supportsReasoning: false,
+    maxOutput: null,
+    ...m,
+  };
+}
+
+/** OpenRouter's `/models?category=` values. */
+export type Category =
+  | 'programming' | 'roleplay' | 'marketing' | 'marketing/seo' | 'technology' | 'science'
+  | 'translation' | 'legal' | 'finance' | 'health' | 'trivia' | 'academia';
+
+export const CATEGORIES: { id: Category; label: string }[] = [
+  { id: 'programming', label: 'Programming' },
+  { id: 'roleplay', label: 'Roleplay' },
+  { id: 'marketing', label: 'Marketing' },
+  { id: 'marketing/seo', label: 'SEO' },
+  { id: 'technology', label: 'Technology' },
+  { id: 'science', label: 'Science' },
+  { id: 'translation', label: 'Translation' },
+  { id: 'legal', label: 'Legal' },
+  { id: 'finance', label: 'Finance' },
+  { id: 'health', label: 'Health' },
+  { id: 'trivia', label: 'Trivia' },
+  { id: 'academia', label: 'Academia' },
+];
 
 export interface CatalogResponse {
   models: CatalogModel[];
+  /** Model ids per category, in OpenRouter's order; categories that failed to load are absent. */
+  rankings: Partial<Record<Category, string[]>>;
   fetchedAt: number;
   stale: boolean;
 }

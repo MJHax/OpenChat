@@ -8,6 +8,7 @@ export function makeApp(openrouter: Partial<OpenRouterClient> = {}, env: Env = {
   const db = openDb(':memory:');
   const client: OpenRouterClient = {
     listModels: async () => [],
+    listCategory: async () => [],
     checkKey: async () => {},
     complete: async () => 'A title',
     streamChat: async function* () {},

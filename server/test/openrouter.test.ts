@@ -27,11 +27,43 @@ describe('OpenRouter client', () => {
       ],
     }));
     const models = await createOpenRouterClient(fn).listModels();
-    expect(models).toEqual([
+    expect(models).toMatchObject([
       { id: 'openai/gpt-4o', name: 'GPT-4o', contextLength: 128000, promptPrice: 0.0000025, completionPrice: 0.00001 },
       { id: 'openrouter/auto', name: 'Auto', contextLength: 2000000, promptPrice: -1, completionPrice: -1 },
       { id: 'x/y', name: 'Y', contextLength: null, promptPrice: null, completionPrice: null },
     ]);
+  });
+
+  it('maps capability, description and date fields, with defaults when missing', async () => {
+    const { fn } = fakeFetch(() => Response.json({
+      data: [
+        {
+          id: 'a/full', name: 'Full', description: 'Does it all', created: 1792102385, context_length: 200000,
+          pricing: { prompt: '0', completion: '0' },
+          architecture: { input_modalities: ['text', 'image', 'file'] },
+          supported_parameters: ['tools', 'reasoning', 'temperature'],
+          top_provider: { max_completion_tokens: 8192 },
+        },
+        { id: 'a/bare', architecture: { input_modalities: 'nonsense' }, supported_parameters: null, top_provider: { max_completion_tokens: 0 } },
+      ],
+    }));
+    const models = await createOpenRouterClient(fn).listModels();
+    expect(models[0]).toEqual({
+      id: 'a/full', name: 'Full', contextLength: 200000, promptPrice: 0, completionPrice: 0,
+      description: 'Does it all', created: 1792102385, inputModalities: ['text', 'image', 'file'],
+      supportsTools: true, supportsReasoning: true, maxOutput: 8192,
+    });
+    expect(models[1]).toEqual({
+      id: 'a/bare', name: 'a/bare', contextLength: null, promptPrice: null, completionPrice: null,
+      description: '', created: null, inputModalities: ['text'],
+      supportsTools: false, supportsReasoning: false, maxOutput: null,
+    });
+  });
+
+  it('lists a category as ordered ids and encodes marketing/seo', async () => {
+    const { fn, calls } = fakeFetch(() => Response.json({ data: [{ id: 'b/two' }, { id: 'a/one' }] }));
+    expect(await createOpenRouterClient(fn).listCategory('marketing/seo')).toEqual(['b/two', 'a/one']);
+    expect(calls[0].url).toBe('https://openrouter.ai/api/v1/models?category=marketing%2Fseo');
   });
 
   it('streams deltas and usage, skipping comments and [DONE]', async () => {

@@ -10,7 +10,7 @@ export async function getCatalog(db: DB, openrouter: OpenRouterClient, refresh: 
     | { fetched_at: number; json: string }
     | undefined;
   if (cached && !refresh && Date.now() - cached.fetched_at < CATALOG_TTL_MS) {
-    return { models: JSON.parse(cached.json), fetchedAt: cached.fetched_at, stale: false };
+    return { models: JSON.parse(cached.json), rankings: {}, fetchedAt: cached.fetched_at, stale: false };
   }
   try {
     const models = (await openrouter.listModels()).sort((a, b) => a.name.localeCompare(b.name));
@@ -18,9 +18,9 @@ export async function getCatalog(db: DB, openrouter: OpenRouterClient, refresh: 
     db.prepare(
       'INSERT INTO model_catalog_cache (id, fetched_at, json) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET fetched_at = excluded.fetched_at, json = excluded.json',
     ).run(fetchedAt, JSON.stringify(models));
-    return { models, fetchedAt, stale: false };
+    return { models, rankings: {}, fetchedAt, stale: false };
   } catch (err) {
-    if (cached) return { models: JSON.parse(cached.json) as CatalogModel[], fetchedAt: cached.fetched_at, stale: true };
+    if (cached) return { models: JSON.parse(cached.json) as CatalogModel[], rankings: {}, fetchedAt: cached.fetched_at, stale: true };
     throw new HttpError(502, (err as Error).message);
   }
 }

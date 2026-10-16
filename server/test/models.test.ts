@@ -2,12 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { makeApp } from './appHelpers';
 import { OpenRouterError } from '../src/openrouter';
 import type { CatalogModel, CatalogResponse, LibraryModel } from '../../shared/types';
+import { withCatalogDefaults } from '../../shared/types';
 
 const CATALOG: CatalogModel[] = [
   { id: 'openai/gpt-4o:free', name: 'GPT-4o (free)', contextLength: 128000, promptPrice: 0, completionPrice: 0 },
   { id: '~anthropic/claude', name: 'Claude', contextLength: 200000, promptPrice: 0.000003, completionPrice: 0.000015 },
   { id: 'google/gemini', name: 'Gemini', contextLength: 1000000, promptPrice: 0.000001, completionPrice: 0.000004 },
-];
+].map(withCatalogDefaults);
 
 function setup(listModels?: () => Promise<CatalogModel[]>) {
   let calls = 0;

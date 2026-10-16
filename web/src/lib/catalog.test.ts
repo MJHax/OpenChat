@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { filterCatalog, providerOf } from './catalog';
 import type { CatalogModel } from '../../../shared/types';
+import { withCatalogDefaults } from '../../../shared/types';
 
-const m = (id: string, name: string): CatalogModel => ({ id, name, contextLength: null, promptPrice: null, completionPrice: null });
+const m = (id: string, name: string): CatalogModel => withCatalogDefaults({ id, name });
 const models = [m('openai/gpt-4o', 'OpenAI: GPT-4o'), m('anthropic/claude-sonnet', 'Anthropic: Claude Sonnet'), m('~anthropic/claude-latest', 'Claude Latest')];
 
 describe('catalog filtering', () => {

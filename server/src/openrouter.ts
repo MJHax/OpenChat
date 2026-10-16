@@ -1,5 +1,5 @@
 import { parseSSE } from '../../shared/sse';
-import type { CatalogModel } from '../../shared/types';
+import type { CatalogModel, Category } from '../../shared/types';
 import type { ChatMessage } from './prompt';
 
 export const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
@@ -41,6 +41,11 @@ const toPrice = (value: unknown): number | null => {
   return Number.isNaN(n) ? null : n;
 };
 
+const toCount = (value: unknown): number | null => (typeof value === 'number' && value > 0 ? value : null);
+
+const toStrings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+
 export interface Usage {
   promptTokens: number | null;
   completionTokens: number | null;
@@ -54,6 +59,7 @@ export type StreamEvent =
 
 export interface OpenRouterClient {
   listModels(): Promise<CatalogModel[]>;
+  listCategory(category: Category): Promise<string[]>;
   checkKey(apiKey: string): Promise<void>;
   complete(o: { apiKey: string; model: string; messages: ChatMessage[]; maxTokens?: number }): Promise<string>;
   streamChat(o: { apiKey: string; model: string; messages: ChatMessage[]; signal?: AbortSignal }): AsyncGenerator<StreamEvent>;
@@ -86,13 +92,29 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
     async listModels() {
       const res = await request('/models');
       const json = (await res.json()) as { data?: any[] };
-      return (json.data ?? []).map((m) => ({
-        id: String(m.id),
-        name: String(m.name ?? m.id),
-        contextLength: typeof m.context_length === 'number' ? m.context_length : null,
-        promptPrice: toPrice(m.pricing?.prompt),
-        completionPrice: toPrice(m.pricing?.completion),
-      }));
+      return (json.data ?? []).map((m) => {
+        const params = toStrings(m.supported_parameters);
+        const inputs = toStrings(m.architecture?.input_modalities);
+        return {
+          id: String(m.id),
+          name: String(m.name ?? m.id),
+          contextLength: typeof m.context_length === 'number' ? m.context_length : null,
+          promptPrice: toPrice(m.pricing?.prompt),
+          completionPrice: toPrice(m.pricing?.completion),
+          description: typeof m.description === 'string' ? m.description : '',
+          created: typeof m.created === 'number' ? m.created : null,
+          inputModalities: inputs.length ? inputs : ['text'],
+          supportsTools: params.includes('tools'),
+          supportsReasoning: params.includes('reasoning'),
+          maxOutput: toCount(m.top_provider?.max_completion_tokens),
+        };
+      });
+    },
+
+    async listCategory(category) {
+      const res = await request(`/models?category=${encodeURIComponent(category)}`);
+      const json = (await res.json()) as { data?: any[] };
+      return (json.data ?? []).map((m) => String(m.id));
     },
 
     async checkKey(apiKey) {
