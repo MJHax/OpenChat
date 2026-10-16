@@ -4,6 +4,7 @@ import { api, streamComparison, streamGeneration } from '../api';
 import { COMPARE_OFF, compareModels, loadCompare, saveCompare, type CompareState } from '../lib/compare';
 import { formatCost } from '../lib/format';
 import { initialModelId } from '../lib/models';
+import { loadSearch, saveSearch } from '../lib/search';
 import { navigate } from '../lib/route';
 import { AttachmentChips } from './AttachmentChips';
 import { CompareColumns, type Column } from './CompareColumns';
@@ -40,6 +41,8 @@ interface Pending {
   userText: string | null;
   userAttachments: Attachment[];
   startedAt: number;
+  /** Whether the reply may search the web. */
+  webSearch: boolean;
   /** One slot for a normal reply, 2–4 for a comparison. */
   slots: SlotState[];
 }
@@ -57,6 +60,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   const [failedEdit, setFailedEdit] = useState<{ messageId: string; text: string; attachments: Attachment[] } | null>(null);
   const [modelId, setModelId] = useState('');
   const [compare, setCompareState] = useState<CompareState>(COMPARE_OFF);
+  const [webSearch, setWebSearchState] = useState(false);
   /** "Compare versions" view: the path index of the reply being compared, and all its versions. */
   const [versions, setVersions] = useState<{ index: number; replies: Message[] } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -80,6 +84,11 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     if (chatId) saveCompare(chatId, next);
   }
 
+  function setWebSearch(on: boolean) {
+    setWebSearchState(on);
+    if (chatId) saveSearch(chatId, on);
+  }
+
   // Load the chat whenever the route (or an explicit reload request) changes.
   useEffect(() => {
     viewChatRef.current = chatId;
@@ -92,6 +101,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     setFailedEdit(null);
     setPending((p) => (p && p.chatId === chatId ? p : null));
     setCompareState(chatId ? loadCompare(chatId) : COMPARE_OFF);
+    setWebSearchState(chatId ? loadSearch(chatId) : false);
     if (!chatId) {
       setDetail(null);
       return;
@@ -121,6 +131,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       createdChatRef.current = id;
       viewChatRef.current = id;
       saveCompare(id, compare);
+      saveSearch(id, webSearch);
       navigate(`#/chat/${id}`);
       onChatsChanged();
       return id;
@@ -146,6 +157,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       userText: opts.kind === 'regenerate' ? null : opts.text,
       userAttachments: opts.kind === 'regenerate' ? [] : opts.attachments,
       startedAt: Date.now(),
+      // Regenerate searches again only if the message being answered asked for search.
+      webSearch: opts.kind === 'regenerate' ? messages.find((m) => m.id === opts.parentId)?.webSearch ?? false : webSearch,
       slots: opts.models.map((id) => ({ modelId: id, text: '', reasoning: '', error: null, message: null, done: false })),
     });
     const updateSlot = (slot: number, change: (s: SlotState) => SlotState) => {
@@ -156,9 +169,9 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     const url = `/api/chats/${streamChat}/${opts.kind === 'send' ? 'messages' : opts.kind}`;
     const modelField = opts.models.length === 1 ? { modelId: opts.models[0] } : { modelIds: opts.models };
     const body =
-      opts.kind === 'send' ? { content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), ...modelField }
+      opts.kind === 'send' ? { content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), webSearch, ...modelField }
       : opts.kind === 'regenerate' ? { parentId: opts.parentId, ...modelField }
-      : { messageId: opts.messageId, content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), ...modelField };
+      : { messageId: opts.messageId, content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), webSearch, ...modelField };
 
     let settled = false;
     // The server sends `start` before anything else, after the message is saved; an error before it means nothing was kept.
@@ -321,7 +334,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
           )}
           {pending && pending.slots.length === 1 && (
             <div className="msg assistant">
-              {!pending.slots[0].text && <ThinkingIndicator startedAt={pending.startedAt} reasoning={pending.slots[0].reasoning} />}
+              {!pending.slots[0].text && <ThinkingIndicator startedAt={pending.startedAt} reasoning={pending.slots[0].reasoning} webSearch={pending.webSearch} />}
               {pending.slots[0].text && <div className="msg-body"><Markdown text={pending.slots[0].text} /></div>}
               <div className="msg-meta"><span className="model-tag">{nameOf(pending.slots[0].modelId)}</span></div>
             </div>
@@ -330,7 +343,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
             <CompareColumns
               columns={pending.slots.map((s, i) => ({
                 key: String(i), modelName: nameOf(s.modelId), text: s.text, reasoning: s.reasoning,
-                startedAt: pending.startedAt, streaming: !s.done, error: s.error, message: s.message,
+                startedAt: pending.startedAt, streaming: !s.done, error: s.error, message: s.message, webSearch: pending.webSearch,
               }))}
             />
           )}
@@ -362,6 +375,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
         onModelChange={setModelId}
         compare={compare}
         onCompareChange={setCompare}
+        webSearch={webSearch}
+        onWebSearchChange={setWebSearch}
         replyModels={replyModels}
         path={messages}
         onSend={send}

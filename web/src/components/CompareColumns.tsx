@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import type { Message } from '../../../shared/types';
 import { formatCost, formatTokens } from '../lib/format';
 import { Markdown } from './Markdown';
+import { Sources } from './Sources';
 import { ThinkingIndicator } from './ThinkingIndicator';
 
 export interface Column {
@@ -14,6 +15,8 @@ export interface Column {
   error: string | null;
   /** The saved reply, once there is one (complete or stopped). */
   message: Message | null;
+  /** Whether this reply may search the web (for the thinking indicator). */
+  webSearch?: boolean;
 }
 
 interface Props {
@@ -39,7 +42,7 @@ export function CompareColumns({ title, columns, onContinue, onClose }: Props) {
           return (
             <div key={col.key} className="compare-col">
               <div className="compare-model">{col.modelName}</div>
-              {col.streaming && !col.text && <ThinkingIndicator startedAt={col.startedAt} reasoning={col.reasoning} />}
+              {col.streaming && !col.text && <ThinkingIndicator startedAt={col.startedAt} reasoning={col.reasoning} webSearch={col.webSearch} />}
               {col.text && <div className="msg-body"><Markdown text={col.text} /></div>}
               {col.error && <div className="error-text small">{col.error}</div>}
               {m?.status === 'stopped' && !col.error && <div className="muted small">Response stopped</div>}
@@ -47,8 +50,10 @@ export function CompareColumns({ title, columns, onContinue, onClose }: Props) {
                 <div className="msg-meta">
                   {tokens > 0 && <span>{formatTokens(tokens)} tok</span>}
                   {m.cost !== null && <span>· {formatCost(m.cost)}</span>}
+                  {(m.webSearches ?? 0) > 0 && <span>· searched {m.webSearches}×</span>}
                 </div>
               )}
+              {m && <Sources sources={m.sources} />}
               {onContinue && m && (
                 <button className="primary" onClick={() => onContinue(m.id)}>Continue with this one</button>
               )}

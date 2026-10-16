@@ -19,9 +19,14 @@ function CodeBlock({ node: _node, children, ...props }: ComponentProps<'pre'> & 
   );
 }
 
+/** Links open in a new tab so following one never navigates away from OpenChat. */
+function Link({ node: _node, ...props }: ComponentProps<'a'> & { node?: unknown }) {
+  return <a {...props} target="_blank" rel="noopener noreferrer" />;
+}
+
 export function Markdown({ text }: { text: string }) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ pre: CodeBlock }}>
+    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ pre: CodeBlock, a: Link }}>
       {text}
     </ReactMarkdown>
   );

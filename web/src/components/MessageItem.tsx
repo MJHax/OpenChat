@@ -7,6 +7,7 @@ import { AttachmentChips } from './AttachmentChips';
 import { toDraft, useAttachmentDraft } from './useAttachmentDraft';
 import { Markdown } from './Markdown';
 import { RememberBox } from './RememberBox';
+import { Sources } from './Sources';
 import { SiblingNav } from './SiblingNav';
 
 interface Props {
@@ -124,11 +125,13 @@ export function MessageItem({
     <div className="msg assistant">
       <div className="msg-body" ref={bodyRef}><Markdown text={message.content} /></div>
       {message.status === 'stopped' && <div className="muted small">Response stopped</div>}
+      <Sources sources={message.sources} />
       <div className="msg-meta">
         {nav}
         <span className="model-tag">{modelName}</span>
         {tokens > 0 && <span>{formatTokens(tokens)} tok</span>}
         {message.cost !== null && <span>· {formatCost(message.cost)}</span>}
+        {(message.webSearches ?? 0) > 0 && <span>· searched {message.webSearches}×</span>}
         <button className="link" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
         {rememberButton}
         {compareMode ? (

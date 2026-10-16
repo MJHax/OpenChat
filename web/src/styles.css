@@ -202,3 +202,9 @@ button.chip.more { border-style: dashed; color: var(--muted); }
 .attach-btn:hover { color: var(--text); }
 .composer-box.dragging, .edit-box.dragging { outline: 2px dashed var(--accent); outline-offset: 2px; }
 .spacer { flex: 1; }
+
+/* Web search sources */
+.sources { font-size: 13px; margin-top: 6px; }
+.sources summary { cursor: pointer; color: var(--muted); }
+.sources ol { margin: 6px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; }
+.sources a { color: var(--accent); word-break: break-word; }

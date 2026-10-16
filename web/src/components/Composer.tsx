@@ -15,6 +15,8 @@ interface Props {
   onModelChange(id: string): void;
   compare: CompareState;
   onCompareChange(next: CompareState): void;
+  webSearch: boolean;
+  onWebSearchChange(on: boolean): void;
   /** The model(s) the next send goes to, for the image checks. */
   replyModels: LibraryModel[];
   /** The chat's messages so far, to warn when earlier images will be skipped. */
@@ -25,7 +27,8 @@ interface Props {
 }
 
 export function Composer({
-  disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, replyModels, path, onSend, onStop,
+  disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, webSearch, onWebSearchChange, replyModels, path,
+  onSend, onStop,
 }: Props) {
   const [text, setText] = useState('');
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -74,6 +77,14 @@ export function Composer({
         <div className="composer-bar">
           <div className="composer-models">
             <AttachButton onFiles={draft.add} />
+            <button
+              className="toggle"
+              aria-pressed={webSearch}
+              title="Let the model search the web. Each search costs about $0.007 on top of the model's price, even with free models."
+              onClick={() => onWebSearchChange(!webSearch)}
+            >
+              Web search
+            </button>
             <button
               className="toggle"
               aria-pressed={compare.enabled}

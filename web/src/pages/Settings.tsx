@@ -158,6 +158,10 @@ export function Settings({ models, onChanged }: SettingsProps) {
 
         <h2>Other</h2>
         <div className="card">
+          <p className="muted small">
+            <strong>Web search</strong> — Searches are run by OpenRouter's search partners (Exa, or the model maker's own search),
+            so your search queries are sent to them. Each search costs about $0.007 on top of the model's price, even with free models.
+          </p>
           <label className="field">
             Model for chat titles
             <select value={view.titleModelId} onChange={(e) => update({ titleModelId: e.target.value })}>
