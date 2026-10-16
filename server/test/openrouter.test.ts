@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createOpenRouterClient, OpenRouterError } from '../src/openrouter';
+import { createOpenRouterClient, OpenRouterError, toSources } from '../src/openrouter';
 import { streamOf, collect } from '../../test/helpers';
 
 type Call = { url: string; init: RequestInit };
@@ -80,7 +80,7 @@ describe('OpenRouter client', () => {
     expect(events).toEqual([
       { type: 'delta', text: 'Hel' },
       { type: 'delta', text: 'lo' },
-      { type: 'usage', usage: { promptTokens: 12, completionTokens: 3, cost: 0.00042 } },
+      { type: 'usage', usage: { promptTokens: 12, completionTokens: 3, cost: 0.00042, webSearches: null } },
     ]);
     expect(calls[0].url).toBe('https://openrouter.ai/api/v1/chat/completions');
     expect((calls[0].init.headers as Record<string, string>).Authorization).toBe('Bearer sk-test');
@@ -148,5 +148,69 @@ describe('streamChat plugins', () => {
     await collect(client.streamChat({ apiKey: 'k', model: 'm', messages: [] }));
     expect(JSON.parse(String(calls[0].init.body)).plugins).toEqual([{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }]);
     expect(JSON.parse(String(calls[1].init.body))).not.toHaveProperty('plugins');
+  });
+});
+
+describe('streamChat web search', () => {
+  const bodyOf = async (o: Partial<Parameters<ReturnType<typeof createOpenRouterClient>['streamChat']>[0]>) => {
+    const { fn, calls } = fakeFetch(() => sse('data: [DONE]'));
+    await collect(createOpenRouterClient(fn).streamChat({ apiKey: 'k', model: 'm', messages: [], ...o }));
+    return JSON.parse(String(calls[0].init.body));
+  };
+
+  it('adds the search tool with a 3-call cap in tool mode', async () => {
+    const body = await bodyOf({ webSearch: 'tool' });
+    expect(body.tools).toEqual([{ type: 'openrouter:web_search', parameters: { max_results: 5 } }]);
+    expect(body.max_tool_calls).toBe(3);
+    expect(body).not.toHaveProperty('plugins');
+  });
+
+  it('adds the web plugin in plugin mode, merged after the PDF parser', async () => {
+    expect((await bodyOf({ webSearch: 'plugin' })).plugins).toEqual([{ id: 'web', max_results: 5 }]);
+    const merged = await bodyOf({ webSearch: 'plugin', plugins: [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }] });
+    expect(merged.plugins).toEqual([{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }, { id: 'web', max_results: 5 }]);
+    expect(merged).not.toHaveProperty('tools');
+  });
+
+  it('adds nothing without web search', async () => {
+    const body = await bodyOf({});
+    expect(body).not.toHaveProperty('tools');
+    expect(body).not.toHaveProperty('max_tool_calls');
+    expect(body).not.toHaveProperty('plugins');
+  });
+
+  it('turns streamed citations into sources and reads the search count', async () => {
+    const annotations = [
+      { type: 'url_citation', url_citation: { url: 'https://nodejs.org/en', title: 'Node.js', content: 'long text', start_index: 0, end_index: 0 } },
+      { type: 'file', file: { hash: 'x' } },
+      { type: 'url_citation', url_citation: { url: 'https://github.com/nodejs/node', title: 'GitHub', content: 'more' } },
+    ];
+    const { fn } = fakeFetch(() => sse(
+      `data: ${JSON.stringify({ choices: [{ delta: { content: 'Hi', annotations } }] })}`,
+      `data: ${JSON.stringify({ choices: [{ delta: {} }], usage: { prompt_tokens: 1, completion_tokens: 2, cost: 0.015, server_tool_use_details: { web_search_requests: 2 } } })}`,
+      'data: [DONE]',
+    ));
+    const events = await collect(createOpenRouterClient(fn).streamChat({ apiKey: 'k', model: 'm', messages: [], webSearch: 'tool' }));
+    expect(events).toContainEqual({
+      type: 'sources',
+      sources: [{ url: 'https://nodejs.org/en', title: 'Node.js' }, { url: 'https://github.com/nodejs/node', title: 'GitHub' }],
+    });
+    expect(events.at(-1)).toEqual({ type: 'usage', usage: { promptTokens: 1, completionTokens: 2, cost: 0.015, webSearches: 2 } });
+  });
+
+  it('reports no search count when usage lacks one', async () => {
+    const { fn } = fakeFetch(() => sse(`data: ${JSON.stringify({ choices: [{ delta: {} }], usage: { prompt_tokens: 1, completion_tokens: 1, cost: 0 } })}`));
+    const events = await collect(createOpenRouterClient(fn).streamChat({ apiKey: 'k', model: 'm', messages: [] }));
+    expect(events.at(-1)).toMatchObject({ type: 'usage', usage: { webSearches: null } });
+  });
+});
+
+describe('toSources', () => {
+  const cite = (url: string, title?: string) => ({ type: 'url_citation', url_citation: { url, title } });
+  it('keeps only http(s) citations, as url and title', () => {
+    expect(toSources([cite('javascript:alert(1)', 'x'), cite('data:text/html,x', 'y'), cite('/relative', 'z'), cite('http://a.example', 'A'), cite('https://b.example')]))
+      .toEqual([{ url: 'http://a.example', title: 'A' }, { url: 'https://b.example', title: '' }]);
+    expect(toSources('nope')).toEqual([]);
+    expect(toSources(undefined)).toEqual([]);
   });
 });

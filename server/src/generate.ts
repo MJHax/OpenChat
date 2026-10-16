@@ -99,7 +99,7 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
           await send('delta', { text: event.text });
         } else if (event.type === 'reasoning') {
           await send('reasoning', { text: event.text });
-        } else {
+        } else if (event.type === 'usage') {
           usage = event.usage;
         }
       }

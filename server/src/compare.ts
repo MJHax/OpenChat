@@ -108,7 +108,7 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
           await send('delta', { slot: i, text: event.text } satisfies CompareSlotText);
         } else if (event.type === 'reasoning') {
           await send('reasoning', { slot: i, text: event.text } satisfies CompareSlotText);
-        } else {
+        } else if (event.type === 'usage') {
           usage = event.usage;
         }
       }

@@ -1,5 +1,5 @@
 import { parseSSE } from '../../shared/sse';
-import type { CatalogModel, Category } from '../../shared/types';
+import type { CatalogModel, Category, Source } from '../../shared/types';
 import type { ChatMessage, Plugin } from './prompt';
 
 export const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
@@ -50,19 +50,60 @@ export interface Usage {
   promptTokens: number | null;
   completionTokens: number | null;
   cost: number | null;
+  /** Searches OpenRouter's web search tool ran; null when not reported (no search, or the plugin). */
+  webSearches: number | null;
 }
+
+/** 'tool': the model decides when to search (needs tool support). 'plugin': one search per reply, any model. */
+export type WebSearchMode = 'tool' | 'plugin';
 
 export type StreamEvent =
   | { type: 'delta'; text: string }
   | { type: 'reasoning'; text: string }
+  | { type: 'sources'; sources: Source[] }
   | { type: 'usage'; usage: Usage };
+
+const isWebUrl = (url: string): boolean => {
+  try {
+    const { protocol } = new URL(url);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+/** Streamed `url_citation` annotations as sources; anything that isn't an http(s) link is dropped, as are snippets. */
+export function toSources(annotations: unknown): Source[] {
+  if (!Array.isArray(annotations)) return [];
+  return annotations.flatMap((a) => {
+    const cite = a?.type === 'url_citation' ? a.url_citation : undefined;
+    if (typeof cite?.url !== 'string' || !isWebUrl(cite.url)) return [];
+    return [{ url: cite.url, title: typeof cite.title === 'string' ? cite.title : '' }];
+  });
+}
+
+/** Request fields for web search. The tool's 3-call cap bounds the cost of one reply. */
+function searchFields(mode: WebSearchMode | undefined, plugins: Plugin[] | undefined): Record<string, unknown> {
+  const all: object[] = [...(plugins ?? [])];
+  const fields: Record<string, unknown> = {};
+  if (mode === 'tool') {
+    fields.tools = [{ type: 'openrouter:web_search', parameters: { max_results: 5 } }];
+    fields.max_tool_calls = 3;
+  } else if (mode === 'plugin') {
+    all.push({ id: 'web', max_results: 5 });
+  }
+  if (all.length) fields.plugins = all;
+  return fields;
+}
 
 export interface OpenRouterClient {
   listModels(): Promise<CatalogModel[]>;
   listCategory(category: Category): Promise<string[]>;
   checkKey(apiKey: string): Promise<void>;
   complete(o: { apiKey: string; model: string; messages: ChatMessage[]; maxTokens?: number }): Promise<string>;
-  streamChat(o: { apiKey: string; model: string; messages: ChatMessage[]; plugins?: Plugin[]; signal?: AbortSignal }): AsyncGenerator<StreamEvent>;
+  streamChat(o: {
+    apiKey: string; model: string; messages: ChatMessage[]; plugins?: Plugin[]; webSearch?: WebSearchMode; signal?: AbortSignal;
+  }): AsyncGenerator<StreamEvent>;
 }
 
 export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = OPENROUTER_BASE): OpenRouterClient {
@@ -131,12 +172,12 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
       return String(json.choices?.[0]?.message?.content ?? '');
     },
 
-    async *streamChat({ apiKey, model, messages, plugins, signal }) {
+    async *streamChat({ apiKey, model, messages, plugins, webSearch, signal }) {
       const res = await request('/chat/completions', {
         method: 'POST',
         apiKey,
         signal,
-        body: JSON.stringify({ model, messages, stream: true, usage: { include: true }, ...(plugins ? { plugins } : {}) }),
+        body: JSON.stringify({ model, messages, stream: true, usage: { include: true }, ...searchFields(webSearch, plugins) }),
       });
       if (!res.body) throw new OpenRouterError('Empty response from OpenRouter.', 502);
       for await (const { data } of parseSSE(res.body)) {
@@ -154,6 +195,10 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
         const delta = chunk.choices?.[0]?.delta;
         if (delta?.reasoning) yield { type: 'reasoning', text: delta.reasoning };
         if (delta?.content) yield { type: 'delta', text: delta.content };
+        if (delta?.annotations) {
+          const sources = toSources(delta.annotations);
+          if (sources.length) yield { type: 'sources', sources };
+        }
         if (chunk.usage) {
           yield {
             type: 'usage',
@@ -161,6 +206,7 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
               promptTokens: chunk.usage.prompt_tokens ?? null,
               completionTokens: chunk.usage.completion_tokens ?? null,
               cost: typeof chunk.usage.cost === 'number' ? chunk.usage.cost : null,
+              webSearches: toCount(chunk.usage.server_tool_use_details?.web_search_requests),
             },
           };
         }
