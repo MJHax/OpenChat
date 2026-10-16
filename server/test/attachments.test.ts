@@ -146,6 +146,10 @@ describe('attachment routes', () => {
     const text = (await (await upload('hello', 'a.md')).json()) as Attachment;
     expect((await call('GET', `/api/attachments/${text.id}`)).headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
     expect((await call('GET', '/api/attachments/nope')).status).toBe(404);
+
+    const odd = (await (await upload('x', "it's (a)*.md")).json()) as Attachment;
+    expect((await call('GET', `/api/attachments/${odd.id}`)).headers.get('Content-Disposition'))
+      .toBe("inline; filename*=UTF-8''it%27s%20%28a%29%2A.md");
   });
 
   it('enforces the size limit for each kind', async () => {
@@ -168,6 +172,9 @@ describe('attachment routes', () => {
     const empty = await upload('', 'empty.txt');
     expect(empty.status).toBe(400);
     expect((await empty.json()).error).toBe('empty.txt is empty.');
+    const bomOnly = await upload(new Uint8Array([0xef, 0xbb, 0xbf]), 'bom.txt');
+    expect(bomOnly.status).toBe(400);
+    expect((await bomOnly.json()).error).toBe('bom.txt is empty.');
     const none = await app.request('/api/attachments', { method: 'POST', body: new FormData() });
     expect(none.status).toBe(400);
     expect((await none.json()).error).toBe('Attach a file.');

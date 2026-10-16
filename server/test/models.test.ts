@@ -199,6 +199,16 @@ describe('model library', () => {
     expect((db.prepare('SELECT input_modalities AS v FROM models').get() as { v: string | null }).v).not.toBeNull();
   });
 
+  it('does not backfill from a legacy array cache, which has no modalities', async () => {
+    const { call, db } = setup();
+    await call('POST', '/api/models', { id: 'google/gemini' });
+    db.prepare('UPDATE models SET input_modalities = NULL').run();
+    const legacy = { id: 'google/gemini', name: 'Gemini', contextLength: 8000, promptPrice: 0, completionPrice: 0 };
+    db.prepare('UPDATE model_catalog_cache SET json = ? WHERE id = 1').run(JSON.stringify([legacy]));
+    expect(modelModalities(db, 'google/gemini')).toEqual(['text']);
+    expect((db.prepare('SELECT input_modalities AS v FROM models').get() as { v: string | null }).v).toBeNull();
+  });
+
   it('treats unknown modalities as text-only', async () => {
     const { call, db } = setup();
     expect(modelModalities(db, 'not/in-library')).toEqual(['text']);

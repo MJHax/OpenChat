@@ -5,6 +5,9 @@ import { HttpError } from '../http';
 import { cleanFilename, cleanupPending, deletePending, detectKind, getAttachmentData, getAttachmentRow, insertPending } from '../attachments';
 import { ATTACHMENT_LIMITS, MB, UNSUPPORTED_TYPE, emptyFileMessage, tooLargeMessage } from '../../../shared/attachments';
 
+/** RFC 5987 value-chars: encodeURIComponent leaves `'()*` alone, but they are not allowed unencoded. */
+const rfc5987 = (value: string) => encodeURIComponent(value).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+
 export function attachmentRoutes({ db }: Deps): Hono {
   const r = new Hono();
 
@@ -21,6 +24,7 @@ export function attachmentRoutes({ db }: Deps): Hono {
       if (raw.length === 0) throw new HttpError(400, emptyFileMessage(filename));
       const detected = detectKind(raw);
       if (!detected) throw new HttpError(400, UNSUPPORTED_TYPE);
+      if (detected.bytes.length === 0) throw new HttpError(400, emptyFileMessage(filename)); // only a byte-order mark
       if (raw.length > ATTACHMENT_LIMITS[detected.kind]) throw new HttpError(413, tooLargeMessage(filename, detected.kind));
       cleanupPending(db);
       return c.json(insertPending(db, { filename, kind: detected.kind, mime: detected.mime, data: detected.bytes }), 201);
@@ -35,7 +39,7 @@ export function attachmentRoutes({ db }: Deps): Hono {
     return c.body(new Uint8Array(data), 200, {
       'Content-Type': row.kind === 'text' ? 'text/plain; charset=utf-8' : row.mime,
       'X-Content-Type-Options': 'nosniff',
-      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(row.filename)}`,
+      'Content-Disposition': `inline; filename*=UTF-8''${rfc5987(row.filename)}`,
       'Cache-Control': 'private, max-age=31536000, immutable',
     });
   });

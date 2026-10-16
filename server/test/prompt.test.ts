@@ -76,6 +76,15 @@ describe('buildMessages with attachments', () => {
     expect(msg.content).toEqual([{ type: 'text', text: '<file name="a.md">\n# A\n</file>' }]);
     expect(reply.content).toBe('ok');
   });
+
+  it('escapes quotes and ampersands in the file name', () => {
+    const [msg] = buildMessages(
+      empty,
+      [{ role: 'user', content: '', attachments: [file('t', 'text', 'say "hi" & bye.md', 'text/plain')] }],
+      { inputModalities: ['text'], loadData },
+    );
+    expect(msg.content).toEqual([{ type: 'text', text: '<file name="say &quot;hi&quot; &amp; bye.md">\n# A\n</file>' }]);
+  });
 });
 
 describe('pdfPlugins', () => {

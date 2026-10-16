@@ -37,6 +37,8 @@ export function buildSystemPrompt(p: Persona): string | null {
   return sections.length ? sections.join('\n\n') : null;
 }
 
+const attr = (value: string) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+
 const dataUrl = (mime: string, data: Buffer) => `data:${mime};base64,${data.toString('base64')}`;
 
 /** Text first, then text files, images and PDFs, each group in attachment order. */
@@ -44,7 +46,7 @@ function toParts(m: PathEntry, attachments: Attachment[], o: AttachmentOptions):
   const parts: ContentPart[] = m.content ? [{ type: 'text', text: m.content }] : [];
   const ofKind = (kind: Attachment['kind']) => attachments.filter((a) => a.kind === kind);
   for (const a of ofKind('text')) {
-    parts.push({ type: 'text', text: `<file name="${a.filename}">\n${o.loadData(a.id).toString('utf8')}\n</file>` });
+    parts.push({ type: 'text', text: `<file name="${attr(a.filename)}">\n${o.loadData(a.id).toString('utf8')}\n</file>` });
   }
   const images = canViewImages(o.inputModalities);
   for (const a of ofKind('image')) {

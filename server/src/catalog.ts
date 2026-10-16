@@ -22,9 +22,14 @@ function readCache(db: DB): Cached | undefined {
   return { models: parsed.models, rankings: parsed.rankings ?? {}, fetchedAt: row.fetched_at, legacy: false, partial: parsed.partial === true };
 }
 
-/** Input modalities per model id from the cached catalog, however old; empty when nothing is cached. */
+/**
+ * Input modalities per model id from the cached catalog, however old; empty when nothing is cached.
+ * A legacy cache predates modalities (its ['text'] is only a default), so it counts as knowing nothing.
+ */
 export function cachedModalities(db: DB): Map<string, string[]> {
-  return new Map((readCache(db)?.models ?? []).map((m) => [m.id, m.inputModalities]));
+  const cached = readCache(db);
+  if (!cached || cached.legacy) return new Map();
+  return new Map(cached.models.map((m) => [m.id, m.inputModalities]));
 }
 
 async function fetchRankings(openrouter: OpenRouterClient): Promise<Rankings> {
