@@ -104,6 +104,8 @@ export interface LibraryModel {
   promptPrice: number | null;
   completionPrice: number | null;
   isDefault: boolean;
+  /** e.g. ['text', 'image', 'file']; ['text'] when unknown. */
+  inputModalities: string[];
 }
 
 export interface Memory {

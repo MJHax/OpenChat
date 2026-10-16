@@ -3,11 +3,12 @@ import { makeApp } from './appHelpers';
 import { OpenRouterError } from '../src/openrouter';
 import type { CatalogModel, CatalogResponse, LibraryModel } from '../../shared/types';
 import { withCatalogDefaults } from '../../shared/types';
+import { modelModalities } from '../src/library';
 
 const CATALOG: CatalogModel[] = [
   { id: 'openai/gpt-4o:free', name: 'GPT-4o (free)', contextLength: 128000, promptPrice: 0, completionPrice: 0 },
   { id: '~anthropic/claude', name: 'Claude', contextLength: 200000, promptPrice: 0.000003, completionPrice: 0.000015 },
-  { id: 'google/gemini', name: 'Gemini', contextLength: 1000000, promptPrice: 0.000001, completionPrice: 0.000004 },
+  { id: 'google/gemini', name: 'Gemini', contextLength: 1000000, promptPrice: 0.000001, completionPrice: 0.000004, inputModalities: ['text', 'image', 'file'] },
 ].map(withCatalogDefaults);
 
 function setup(listModels?: () => Promise<CatalogModel[]>) {
@@ -154,7 +155,7 @@ describe('model library', () => {
     const { call } = setup();
     const added = (await (await call('POST', '/api/models', { id: 'openai/gpt-4o:free' })).json()) as LibraryModel[];
     expect(added).toEqual([
-      { id: 'openai/gpt-4o:free', displayName: 'GPT-4o (free)', contextLength: 128000, promptPrice: 0, completionPrice: 0, isDefault: true },
+      { id: 'openai/gpt-4o:free', displayName: 'GPT-4o (free)', contextLength: 128000, promptPrice: 0, completionPrice: 0, isDefault: true, inputModalities: ['text'] },
     ]);
 
     await call('POST', '/api/models', { id: '~anthropic/claude' });
@@ -181,5 +182,29 @@ describe('model library', () => {
     expect(list).toHaveLength(1);
     expect((await call('PATCH', '/api/models', { id: 'nope/x', isDefault: true })).status).toBe(404);
     expect((await call('POST', '/api/models', { id: '  ' })).status).toBe(400);
+  });
+
+  it('stores input modalities when a model is added', async () => {
+    const { call } = setup();
+    const list = (await (await call('POST', '/api/models', { id: 'google/gemini' })).json()) as LibraryModel[];
+    expect(list[0].inputModalities).toEqual(['text', 'image', 'file']);
+  });
+
+  it('backfills missing modalities from the cached catalog', async () => {
+    const { call, db } = setup();
+    await call('POST', '/api/models', { id: 'google/gemini' });
+    db.prepare('UPDATE models SET input_modalities = NULL').run();
+    const list = (await (await call('GET', '/api/models')).json()) as LibraryModel[];
+    expect(list[0].inputModalities).toEqual(['text', 'image', 'file']);
+    expect((db.prepare('SELECT input_modalities AS v FROM models').get() as { v: string | null }).v).not.toBeNull();
+  });
+
+  it('treats unknown modalities as text-only', async () => {
+    const { call, db } = setup();
+    expect(modelModalities(db, 'not/in-library')).toEqual(['text']);
+    await call('POST', '/api/models', { id: 'google/gemini' });
+    db.prepare('UPDATE models SET input_modalities = NULL').run();
+    db.prepare('DELETE FROM model_catalog_cache').run();
+    expect(modelModalities(db, 'google/gemini')).toEqual(['text']);
   });
 });

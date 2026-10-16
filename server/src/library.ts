@@ -2,6 +2,7 @@ import type { DB } from './db';
 import { now } from './db';
 import { HttpError } from './http';
 import { getSetting, setSetting } from './settings';
+import { cachedModalities } from './catalog';
 import type { CatalogModel, LibraryModel } from '../../shared/types';
 
 interface ModelRow {
@@ -10,11 +11,44 @@ interface ModelRow {
   context_length: number | null;
   prompt_price: number | null;
   completion_price: number | null;
+  input_modalities: string | null;
+}
+
+const TEXT_ONLY = ['text'];
+
+/** Rows added before modalities were stored are filled in from the cached catalog when it knows the model. */
+function backfillModalities(db: DB, rows: ModelRow[]): void {
+  const missing = rows.filter((r) => r.input_modalities === null);
+  if (missing.length === 0) return;
+  const cached = cachedModalities(db);
+  const update = db.prepare('UPDATE models SET input_modalities = ? WHERE id = ?');
+  for (const r of missing) {
+    const modalities = cached.get(r.id);
+    if (!modalities) continue;
+    r.input_modalities = JSON.stringify(modalities);
+    update.run(r.input_modalities, r.id);
+  }
+}
+
+const parseModalities = (value: string | null): string[] => (value ? (JSON.parse(value) as string[]) : TEXT_ONLY);
+
+/** What a model accepts as input; ['text'] when it isn't in the library or its capabilities are unknown. */
+export function modelModalities(db: DB, id: string): string[] {
+  const row = db.prepare('SELECT * FROM models WHERE id = ?').get(id) as ModelRow | undefined;
+  if (!row) return TEXT_ONLY;
+  backfillModalities(db, [row]);
+  return parseModalities(row.input_modalities);
+}
+
+export function displayNameOf(db: DB, id: string): string {
+  const row = db.prepare('SELECT display_name FROM models WHERE id = ?').get(id) as { display_name: string } | undefined;
+  return row?.display_name ?? id;
 }
 
 export function listLibrary(db: DB): LibraryModel[] {
   const defaultId = getSetting(db, 'default_model_id');
   const rows = db.prepare('SELECT * FROM models ORDER BY added_at').all() as ModelRow[];
+  backfillModalities(db, rows);
   return rows.map((r) => ({
     id: r.id,
     displayName: r.display_name,
@@ -22,6 +56,7 @@ export function listLibrary(db: DB): LibraryModel[] {
     promptPrice: r.prompt_price,
     completionPrice: r.completion_price,
     isDefault: r.id === defaultId,
+    inputModalities: parseModalities(r.input_modalities),
   }));
 }
 
@@ -31,8 +66,8 @@ export function requireLibraryModel(db: DB, id: string): void {
 
 export function addModel(db: DB, meta: CatalogModel): void {
   db.prepare(
-    'INSERT OR IGNORE INTO models (id, display_name, context_length, prompt_price, completion_price, added_at) VALUES (?, ?, ?, ?, ?, ?)',
-  ).run(meta.id, meta.name, meta.contextLength, meta.promptPrice, meta.completionPrice, now());
+    'INSERT OR IGNORE INTO models (id, display_name, context_length, prompt_price, completion_price, added_at, input_modalities) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  ).run(meta.id, meta.name, meta.contextLength, meta.promptPrice, meta.completionPrice, now(), JSON.stringify(meta.inputModalities));
   if (!getSetting(db, 'default_model_id')) setSetting(db, 'default_model_id', meta.id);
 }
 

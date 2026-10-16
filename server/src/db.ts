@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS models (
   context_length INTEGER,
   prompt_price REAL,
   completion_price REAL,
-  added_at INTEGER NOT NULL
+  added_at INTEGER NOT NULL,
+  input_modalities TEXT
 );
 
 CREATE TABLE IF NOT EXISTS memories (
@@ -82,6 +83,8 @@ export function openDb(file: string): DB {
 function migrate(db: DB): void {
   const chatColumns = (db.prepare('PRAGMA table_info(chats)').all() as { name: string }[]).map((c) => c.name);
   if (!chatColumns.includes('compare_parent_id')) db.exec('ALTER TABLE chats ADD COLUMN compare_parent_id TEXT');
+  const modelColumns = (db.prepare('PRAGMA table_info(models)').all() as { name: string }[]).map((c) => c.name);
+  if (!modelColumns.includes('input_modalities')) db.exec('ALTER TABLE models ADD COLUMN input_modalities TEXT');
 }
 
 export const newId = (): string => randomUUID();

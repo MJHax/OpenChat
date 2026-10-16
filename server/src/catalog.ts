@@ -22,6 +22,11 @@ function readCache(db: DB): Cached | undefined {
   return { models: parsed.models, rankings: parsed.rankings ?? {}, fetchedAt: row.fetched_at, legacy: false, partial: parsed.partial === true };
 }
 
+/** Input modalities per model id from the cached catalog, however old; empty when nothing is cached. */
+export function cachedModalities(db: DB): Map<string, string[]> {
+  return new Map((readCache(db)?.models ?? []).map((m) => [m.id, m.inputModalities]));
+}
+
 async function fetchRankings(openrouter: OpenRouterClient): Promise<Rankings> {
   const results = await Promise.allSettled(CATEGORIES.map((c) => openrouter.listCategory(c.id)));
   const rankings: Rankings = {};

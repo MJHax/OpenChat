@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { openDb, now } from '../src/db';
+import Database from 'better-sqlite3';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { insertMessage, getChatMessages, getMessage } from '../src/messages';
 import { createChat, listChats, deleteChat, getChatRow, touchChat, DEFAULT_TITLE } from '../src/chats';
 
@@ -64,5 +68,16 @@ describe('database', () => {
     expect(list.map((c) => c.id)).toEqual([newer.id, older.id]);
     expect(list[1].totalCost).toBeCloseTo(0.75);
     expect(list[0].totalCost).toBe(0);
+  });
+
+  it('adds input_modalities to an old models table', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'openchat-')), 'old.db');
+    const old = new Database(file);
+    old.exec('CREATE TABLE models (id TEXT PRIMARY KEY, display_name TEXT NOT NULL, context_length INTEGER, prompt_price REAL, completion_price REAL, added_at INTEGER NOT NULL)');
+    old.close();
+    const db = openDb(file);
+    const cols = (db.prepare('PRAGMA table_info(models)').all() as { name: string }[]).map((c) => c.name);
+    expect(cols).toContain('input_modalities');
+    db.close();
   });
 });
