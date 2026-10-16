@@ -40,7 +40,7 @@ Streamed requests against OpenRouter with DeepSeek V4.1 Flash and Claude Haiku 5
 ### The toggle
 
 - The composer gets a **Web search** toggle button next to **Compare**, styled the same way (`aria-pressed`).
-- Tooltip: "Let the model search the web. Each search costs about $0.007 on top of the model's price, even with free models."
+- Tooltip: "Let the model search the web. Each search costs about $0.007–$0.01 on top of the model's price, even with free models."
 - The state is remembered per chat in `localStorage` (key `openchat.search.<chatId>`, value `"1"` or `"0"`). A brand-new chat starts with it off; the state carries over when the first send creates the chat, as Compare's does.
 - It applies to the next **send** and **edit**. It works in Compare mode (every model in the comparison may search).
 
@@ -67,7 +67,7 @@ All links in rendered replies open in a new tab (`target="_blank" rel="noopener 
 
 Settings → Other gets a short note (text only, no setting):
 
-> **Web search** — Searches are run by OpenRouter's search partners (Exa, or the model maker's own search), so your search queries are sent to them. Each search costs about $0.007 on top of the model's price, even with free models.
+> **Web search** — Searches are run by OpenRouter's search partners (Exa, or the model maker's own search), so your search queries are sent to them. Each search costs about $0.007–$0.01 on top of the model's price, even with free models. Models that can't use tools search on every reply.
 
 ---
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { LibraryModel, Memory, SettingsUpdate, SettingsView, Theme } from '../../../shared/types';
 import { api } from '../api';
+import { SEARCH_NOTE } from '../lib/search';
 
 export interface SettingsProps {
   models: LibraryModel[];
@@ -159,8 +160,7 @@ export function Settings({ models, onChanged }: SettingsProps) {
         <h2>Other</h2>
         <div className="card">
           <p className="muted small">
-            <strong>Web search</strong> — Searches are run by OpenRouter's search partners (Exa, or the model maker's own search),
-            so your search queries are sent to them. Each search costs about $0.007 on top of the model's price, even with free models.
+            <strong>Web search</strong> — {SEARCH_NOTE}
           </p>
           <label className="field">
             Model for chat titles

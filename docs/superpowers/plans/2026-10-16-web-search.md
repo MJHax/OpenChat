@@ -19,11 +19,11 @@
 - Sources are `{ url, title }`, deduplicated by URL (first title wins), in arrival order; only `url_citation` annotations with `http:`/`https:` URLs are kept; the `content` snippet is never stored.
 - `web_searches`: the tool's reported `server_tool_use_details.web_search_requests`; for plugin mode, 1 when the reply has sources, else NULL.
 - Copy (exact):
-  - Toggle label `Web search`; tooltip `Let the model search the web. Each search costs about $0.007 on top of the model's price, even with free models.`
+  - Toggle label `Web search`; tooltip `Let the model search the web. Each search costs about $0.007–$0.01 on top of the model's price, even with free models.`
   - Thinking indicator: `Thinking… Ns · web search on`
   - Disclosure summary: `Sources (N)`; meta: `· searched N×`
   - Bad body value: `webSearch must be true or false.`
-  - Settings note: `Web search — Searches are run by OpenRouter's search partners (Exa, or the model maker's own search), so your search queries are sent to them. Each search costs about $0.007 on top of the model's price, even with free models.`
+  - Settings note: `Web search — Searches are run by OpenRouter's search partners (Exa, or the model maker's own search), so your search queries are sent to them. Each search costs about $0.007–$0.01 on top of the model's price, even with free models.`
 - `localStorage` key `openchat.search.<chatId>`, values `"1"`/`"0"`; every access wrapped in try/catch.
 - Keep each file's existing line endings (the repo mixes CRLF and LF per file); new files LF.
 - Work on branch `feat/web-search`.

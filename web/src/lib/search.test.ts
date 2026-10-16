@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect } from 'vitest';
-import { domainOf, loadSearch, saveSearch, sourceLabel } from './search';
+import { SEARCH_NOTE, SEARCH_TOOLTIP, domainOf, loadSearch, saveSearch, sourceLabel } from './search';
 
 function memoryStorage(): Storage {
   const data = new Map<string, string>();
@@ -36,6 +36,14 @@ describe('search toggle storage', () => {
     };
     expect(loadSearch('a')).toBe(false);
     expect(() => saveSearch('a', true)).not.toThrow();
+  });
+});
+
+describe('search cost copy', () => {
+  it('gives the measured price range and says when a model searches every reply', () => {
+    expect(SEARCH_TOOLTIP).toBe("Let the model search the web. Each search costs about $0.007–$0.01 on top of the model's price, even with free models.");
+    expect(SEARCH_NOTE).toContain('about $0.007–$0.01');
+    expect(SEARCH_NOTE).toContain("Models that can't use tools search on every reply.");
   });
 });
 

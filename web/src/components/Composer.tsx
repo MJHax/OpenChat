@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Attachment, LibraryModel } from '../../../shared/types';
 import { sendBlockReason, skippedImagesNotice } from '../lib/attachments';
 import { MAX_COMPARE, toggleModel, type CompareState } from '../lib/compare';
+import { SEARCH_TOOLTIP } from '../lib/search';
 import { AttachmentChips } from './AttachmentChips';
 import { AttachButton, useFileDrop } from './AttachButton';
 import { useAttachmentDraft } from './useAttachmentDraft';
@@ -80,7 +81,7 @@ export function Composer({
             <button
               className="toggle"
               aria-pressed={webSearch}
-              title="Let the model search the web. Each search costs about $0.007 on top of the model's price, even with free models."
+              title={SEARCH_TOOLTIP}
               onClick={() => onWebSearchChange(!webSearch)}
             >
               Web search
