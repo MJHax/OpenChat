@@ -1,26 +1,49 @@
 import type { DB } from './db';
 import { HttpError } from './http';
 import type { OpenRouterClient } from './openrouter';
+import { CATEGORIES, withCatalogDefaults } from '../../shared/types';
 import type { CatalogModel, CatalogResponse } from '../../shared/types';
 
 export const CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
 
-export async function getCatalog(db: DB, openrouter: OpenRouterClient, refresh: boolean): Promise<CatalogResponse> {
-  const cached = db.prepare('SELECT fetched_at, json FROM model_catalog_cache WHERE id = 1').get() as
+type Rankings = CatalogResponse['rankings'];
+interface Cached { models: CatalogModel[]; rankings: Rankings; fetchedAt: number; legacy: boolean }
+
+/** Rows written before rankings existed hold a bare model array; they're flagged legacy so they get refetched. */
+function readCache(db: DB): Cached | undefined {
+  const row = db.prepare('SELECT fetched_at, json FROM model_catalog_cache WHERE id = 1').get() as
     | { fetched_at: number; json: string }
     | undefined;
-  if (cached && !refresh && Date.now() - cached.fetched_at < CATALOG_TTL_MS) {
-    return { models: JSON.parse(cached.json), rankings: {}, fetchedAt: cached.fetched_at, stale: false };
+  if (!row) return undefined;
+  const parsed = JSON.parse(row.json);
+  if (Array.isArray(parsed)) return { models: parsed.map(withCatalogDefaults), rankings: {}, fetchedAt: row.fetched_at, legacy: true };
+  return { models: parsed.models, rankings: parsed.rankings ?? {}, fetchedAt: row.fetched_at, legacy: false };
+}
+
+async function fetchRankings(openrouter: OpenRouterClient): Promise<Rankings> {
+  const results = await Promise.allSettled(CATEGORIES.map((c) => openrouter.listCategory(c.id)));
+  const rankings: Rankings = {};
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled') rankings[CATEGORIES[i].id] = r.value;
+  });
+  return rankings;
+}
+
+export async function getCatalog(db: DB, openrouter: OpenRouterClient, refresh: boolean): Promise<CatalogResponse> {
+  const cached = readCache(db);
+  if (cached && !cached.legacy && !refresh && Date.now() - cached.fetchedAt < CATALOG_TTL_MS) {
+    return { models: cached.models, rankings: cached.rankings, fetchedAt: cached.fetchedAt, stale: false };
   }
   try {
-    const models = (await openrouter.listModels()).sort((a, b) => a.name.localeCompare(b.name));
+    const [list, rankings] = await Promise.all([openrouter.listModels(), fetchRankings(openrouter)]);
+    const models = list.sort((a, b) => a.name.localeCompare(b.name));
     const fetchedAt = Date.now();
     db.prepare(
       'INSERT INTO model_catalog_cache (id, fetched_at, json) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET fetched_at = excluded.fetched_at, json = excluded.json',
-    ).run(fetchedAt, JSON.stringify(models));
-    return { models, rankings: {}, fetchedAt, stale: false };
+    ).run(fetchedAt, JSON.stringify({ models, rankings }));
+    return { models, rankings, fetchedAt, stale: false };
   } catch (err) {
-    if (cached) return { models: JSON.parse(cached.json) as CatalogModel[], rankings: {}, fetchedAt: cached.fetched_at, stale: true };
+    if (cached) return { models: cached.models, rankings: cached.rankings, fetchedAt: cached.fetchedAt, stale: true };
     throw new HttpError(502, (err as Error).message);
   }
 }

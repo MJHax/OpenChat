@@ -40,6 +40,57 @@ describe('catalog', () => {
     expect(stale.stale).toBe(true);
     expect(stale.models).toHaveLength(3);
   });
+
+  it('bundles category rankings and leaves out categories that fail', async () => {
+    const { call } = makeApp({
+      listModels: async () => CATALOG,
+      listCategory: async (category) => {
+        if (category === 'roleplay') throw new OpenRouterError('boom', 502);
+        return category === 'programming' ? ['google/gemini', '~anthropic/claude'] : [];
+      },
+    });
+    const res = (await (await call('GET', '/api/models/catalog')).json()) as CatalogResponse;
+    expect(res.models).toHaveLength(3);
+    expect(res.rankings.programming).toEqual(['google/gemini', '~anthropic/claude']);
+    expect(res.rankings.legal).toEqual([]);
+    expect(res.rankings).not.toHaveProperty('roleplay');
+  });
+
+  it('caches rankings with the models', async () => {
+    let rankingCalls = 0;
+    const { call } = makeApp({ listModels: async () => CATALOG, listCategory: async () => { rankingCalls++; return ['google/gemini']; } });
+    await call('GET', '/api/models/catalog');
+    const second = (await (await call('GET', '/api/models/catalog')).json()) as CatalogResponse;
+    expect(rankingCalls).toBe(12);
+    expect(second.rankings.programming).toEqual(['google/gemini']);
+  });
+
+  it('refetches a legacy array cache even when it is fresh', async () => {
+    const { db, call, calls } = setup();
+    db.prepare('INSERT INTO model_catalog_cache (id, fetched_at, json) VALUES (1, ?, ?)')
+      .run(Date.now(), JSON.stringify([{ id: 'old/model', name: 'Old', contextLength: null, promptPrice: null, completionPrice: null }]));
+    const res = (await (await call('GET', '/api/models/catalog')).json()) as CatalogResponse;
+    expect(calls()).toBe(1);
+    expect(res.models).toHaveLength(3);
+  });
+
+  it('serves a legacy cache as stale with defaults when the refetch fails', async () => {
+    const { db, call } = makeApp({ listModels: async () => { throw new OpenRouterError('Could not reach OpenRouter.', 0); } });
+    const legacy = { id: 'old/model', name: 'Old', contextLength: 8000, promptPrice: 0, completionPrice: 0 };
+    db.prepare('INSERT INTO model_catalog_cache (id, fetched_at, json) VALUES (1, ?, ?)').run(Date.now(), JSON.stringify([legacy]));
+    const res = (await (await call('GET', '/api/models/catalog')).json()) as CatalogResponse;
+    expect(res.stale).toBe(true);
+    expect(res.rankings).toEqual({});
+    expect(res.models).toEqual([withCatalogDefaults(legacy)]);
+  });
+
+  it('treats a cache row without rankings as having none', async () => {
+    const { db, call } = makeApp({ listModels: async () => CATALOG });
+    db.prepare('INSERT INTO model_catalog_cache (id, fetched_at, json) VALUES (1, ?, ?)').run(Date.now(), JSON.stringify({ models: CATALOG }));
+    const res = (await (await call('GET', '/api/models/catalog')).json()) as CatalogResponse;
+    expect(res.rankings).toEqual({});
+    expect(res.models).toHaveLength(3);
+  });
 });
 
 describe('model library', () => {
