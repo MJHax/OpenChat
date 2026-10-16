@@ -169,7 +169,7 @@ button.chip.more { border-style: dashed; color: var(--muted); }
 .pills { display: flex; flex-wrap: wrap; gap: 4px; }
 .pill { font-size: 12px; border: 1px solid var(--border); border-radius: 999px; padding: 0 8px; }
 .model-card-desc { margin: 0; font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.model-card-add { margin-top: auto; align-self: flex-start; }
+.model-card-actions { margin-top: auto; display: flex; align-items: center; gap: 6px; }
 .shelf { margin-bottom: 20px; }
 .shelf-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .shelf-head h3 { font-size: 15px; margin: 0; }

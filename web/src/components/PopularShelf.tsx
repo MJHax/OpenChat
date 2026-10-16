@@ -11,9 +11,10 @@ export interface PopularShelfProps {
   added: Set<string>;
   busy: string | null;
   onAdd(id: string): void;
+  onRemove(id: string): void;
 }
 
-export function PopularShelf({ category, onCategory, available, models, added, busy, onAdd }: PopularShelfProps) {
+export function PopularShelf({ category, onCategory, available, models, added, busy, onAdd, onRemove }: PopularShelfProps) {
   const label = CATEGORIES.find((c) => c.id === category)?.label ?? category;
   return (
     <section className="shelf">
@@ -28,7 +29,7 @@ export function PopularShelf({ category, onCategory, available, models, added, b
       ) : (
         <ul className="shelf-strip">
           {models.map((m) => (
-            <ModelCard key={m.id} model={m} compact added={added.has(m.id)} busy={busy === m.id} onAdd={() => onAdd(m.id)} />
+            <ModelCard key={m.id} model={m} compact added={added.has(m.id)} busy={busy === m.id} onAdd={() => onAdd(m.id)} onRemove={() => onRemove(m.id)} />
           ))}
         </ul>
       )}

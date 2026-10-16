@@ -7,6 +7,7 @@ export interface ModelCardProps {
   added: boolean;
   busy: boolean;
   onAdd(): void;
+  onRemove(): void;
   /** Shelf variant: no description. */
   compact?: boolean;
 }
@@ -14,7 +15,7 @@ export interface ModelCardProps {
 /** Free and long context already show in the price and context line, so they get no pill. */
 const PILLS = CAPABILITIES.filter((c) => c.id !== 'free' && c.id !== 'longContext');
 
-export function ModelCard({ model: m, added, busy, onAdd, compact = false }: ModelCardProps) {
+export function ModelCard({ model: m, added, busy, onAdd, onRemove, compact = false }: ModelCardProps) {
   const caps = capabilitiesOf(m);
   const pills = PILLS.filter((c) => caps.includes(c.id));
   return (
@@ -38,9 +39,16 @@ export function ModelCard({ model: m, added, busy, onAdd, compact = false }: Mod
         </div>
       )}
       {!compact && m.description && <p className="model-card-desc" title={m.description}>{m.description}</p>}
-      <button className="primary model-card-add" disabled={added || busy} onClick={onAdd}>
-        {added ? 'Added' : 'Add'}
-      </button>
+      <div className="model-card-actions">
+        <button className="primary" disabled={added || busy} onClick={onAdd}>
+          {added ? 'Added' : 'Add'}
+        </button>
+        {added && (
+          <button className="link danger" disabled={busy} onClick={onRemove}>
+            Remove
+          </button>
+        )}
+      </div>
     </li>
   );
 }

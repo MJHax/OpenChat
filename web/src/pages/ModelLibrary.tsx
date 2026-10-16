@@ -132,6 +132,7 @@ export function ModelLibrary({ models, onChanged }: ModelLibraryProps) {
             added={added}
             busy={busy}
             onAdd={(id) => act(id, () => api.addModel(id))}
+            onRemove={(id) => act(id, () => api.removeModel(id))}
           />
         )}
 
@@ -144,7 +145,14 @@ export function ModelLibrary({ models, onChanged }: ModelLibraryProps) {
         ) : (
           <ul className="model-grid">
             {results.slice(0, limit).map((m) => (
-              <ModelCard key={m.id} model={m} added={added.has(m.id)} busy={busy === m.id} onAdd={() => act(m.id, () => api.addModel(m.id))} />
+              <ModelCard
+                key={m.id}
+                model={m}
+                added={added.has(m.id)}
+                busy={busy === m.id}
+                onAdd={() => act(m.id, () => api.addModel(m.id))}
+                onRemove={() => act(m.id, () => api.removeModel(m.id))}
+              />
             ))}
           </ul>
         )}
