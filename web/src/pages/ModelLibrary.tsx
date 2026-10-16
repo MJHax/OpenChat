@@ -32,7 +32,10 @@ export function ModelLibrary({ models, onChanged }: ModelLibraryProps) {
 
   const added = new Set(models.map((m) => m.id));
   const providers = useMemo(() => [...new Set((catalog?.models ?? []).map((m) => providerOf(m.id)))].sort(), [catalog]);
-  const filtered = useMemo(() => filterCatalog(catalog?.models ?? [], query, provider), [catalog, query, provider]);
+  const filtered = useMemo(
+    () => filterCatalog(catalog?.models ?? [], { query, capabilities: [], providers: provider ? [provider] : [] }),
+    [catalog, query, provider],
+  );
 
   async function act(key: string, fn: () => Promise<unknown>) {
     setBusy(key);
