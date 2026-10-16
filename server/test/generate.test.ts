@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { makeApp, readEvents } from './appHelpers';
-import { OpenRouterError, type OpenRouterClient, type StreamEvent, type Usage } from '../src/openrouter';
+import { OpenRouterError, type OpenRouterClient, type StreamEvent, type Usage, type WebSearchMode } from '../src/openrouter';
+import { mergeSources } from '../src/generate';
 import type { ChatMessage } from '../src/prompt';
-import { getChatMessages } from '../src/messages';
+import { getChatMessages, insertMessage } from '../src/messages';
 import { getChatRow } from '../src/chats';
 import { cleanTitle } from '../src/title';
 import { updateSettings } from '../src/settings';
-import { withCatalogDefaults, type Attachment, type ChatDetail, type ChatSummary, type Message } from '../../shared/types';
+import { withCatalogDefaults, type Attachment, type ChatDetail, type ChatSummary, type Message, type Source } from '../../shared/types';
 import { addModel } from '../src/library';
 
 const USAGE: Usage = { promptTokens: 10, completionTokens: 5, cost: 0.0004, webSearches: null };
@@ -348,5 +349,117 @@ describe('attachments in prompts', () => {
     const pdf = (await (await upload('%PDF-1.4\n', 'report.pdf')).json()) as Attachment;
     await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: '', modelId: 'm/x', attachmentIds: [pdf.id] }));
     expect(titlePrompts[0][1].content).toContain('user:  [attached: report.pdf]');
+  });
+});
+
+describe('web search', () => {
+  type Reply = { sources?: Source[][]; webSearches?: number | null; failWith?: Error };
+  /** Records each call's model and search mode; plays sources events, text, then usage (or a failure). */
+  function searching(reply: Reply = {}) {
+    const calls: { model: string; webSearch: WebSearchMode | undefined }[] = [];
+    const streamChat: OpenRouterClient['streamChat'] = async function* ({ model, webSearch }): AsyncGenerator<StreamEvent> {
+      calls.push({ model, webSearch });
+      yield { type: 'delta', text: 'Answer' };
+      for (const sources of reply.sources ?? []) yield { type: 'sources', sources };
+      if (reply.failWith) throw reply.failWith;
+      yield { type: 'usage', usage: { ...USAGE, webSearches: reply.webSearches ?? null } };
+    };
+    const ctx = makeApp({ streamChat });
+    addModel(ctx.db, withCatalogDefaults({ id: 't/tools', name: 'Tools', supportsTools: true }));
+    addModel(ctx.db, withCatalogDefaults({ id: 'n/none', name: 'No tools' }));
+    addModel(ctx.db, withCatalogDefaults({ id: 'u/unknown', name: 'Unknown' }));
+    ctx.db.prepare("UPDATE models SET supports_tools = NULL WHERE id = 'u/unknown'").run();
+    return { ...ctx, calls };
+  }
+  const A = { url: 'https://a.example', title: 'A' };
+  const B = { url: 'https://b.example', title: 'B' };
+
+  it('stores the flag and picks the tool or the plugin from the model', async () => {
+    const { call, calls, db } = searching();
+    const chatId = await newChat(call);
+    for (const modelId of ['t/tools', 'n/none', 'u/unknown', 'gone/model']) {
+      await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: `Q ${modelId}`, modelId, webSearch: true }));
+    }
+    expect(calls.map((c) => c.webSearch)).toEqual(['tool', 'plugin', 'plugin', 'plugin']);
+    expect(getChatMessages(db, chatId).filter((m) => m.role === 'user').every((m) => m.webSearch)).toBe(true);
+  });
+
+  it('does not search unless asked, and rejects a non-boolean flag', async () => {
+    const { call, calls } = searching();
+    const chatId = await newChat(call);
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: 't/tools' }));
+    expect(calls[0].webSearch).toBeUndefined();
+    for (const path of ['messages', 'edit']) {
+      const res = await call('POST', `/api/chats/${chatId}/${path}`, { content: 'x', modelId: 't/tools', messageId: 'whatever', webSearch: 'yes' });
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe('webSearch must be true or false.');
+    }
+  });
+
+  it('saves deduplicated sources and the search count', async () => {
+    const { call, db } = searching({ sources: [[A, B], [{ ...A, title: 'A again' }]], webSearches: 2 });
+    const chatId = await newChat(call);
+    const events = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 't/tools', webSearch: true }));
+    const done = events.find((e) => e.event === 'done')!.data.message as Message;
+    expect(done.sources).toEqual([A, B]);
+    expect(done.webSearches).toBe(2);
+    expect(getChatMessages(db, chatId)[1].sources).toEqual([A, B]);
+  });
+
+  it('counts one search for the plugin when sources arrived, none otherwise', async () => {
+    const withSources = searching({ sources: [[A]] });
+    let chatId = await newChat(withSources.call);
+    let events = await readEvents(await withSources.call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'n/none', webSearch: true }));
+    expect((events.find((e) => e.event === 'done')!.data.message as Message).webSearches).toBe(1);
+    const without = searching();
+    chatId = await newChat(without.call);
+    events = await readEvents(await without.call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'n/none', webSearch: true }));
+    expect((events.find((e) => e.event === 'done')!.data.message as Message).webSearches).toBeNull();
+  });
+
+  it('keeps the sources of a reply that fails part-way', async () => {
+    const { call } = searching({ sources: [[A]], failWith: new OpenRouterError('The model provider returned an error.', 502) });
+    const chatId = await newChat(call);
+    const events = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 't/tools', webSearch: true }));
+    const error = events.find((e) => e.event === 'error')!.data;
+    expect(error.partial).toMatchObject({ status: 'stopped', sources: [A] });
+  });
+
+  it('regenerate reuses the flag saved on the user message', async () => {
+    const { call, calls, db } = searching();
+    const chatId = await newChat(call);
+    const first = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 't/tools', webSearch: true }));
+    await readEvents(await call('POST', `/api/chats/${chatId}/regenerate`, { parentId: first[0].data.userMessageId, modelId: 't/tools' }));
+    expect(calls[1].webSearch).toBe('tool');
+
+    const old = insertMessage(db, { chatId, parentId: null, role: 'user', content: 'from before web search' });
+    await readEvents(await call('POST', `/api/chats/${chatId}/regenerate`, { parentId: old.id, modelId: 't/tools' }));
+    expect(calls[2].webSearch).toBeUndefined();
+  });
+
+  it('edit stores the flag on the new version', async () => {
+    const { call, calls, db } = searching();
+    const chatId = await newChat(call);
+    const first = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'v1', modelId: 't/tools' }));
+    await readEvents(await call('POST', `/api/chats/${chatId}/edit`, { messageId: first[0].data.userMessageId, content: 'v2', modelId: 't/tools', webSearch: true }));
+    expect(getChatMessages(db, chatId).find((m) => m.content === 'v2')?.webSearch).toBe(true);
+    expect(calls[1].webSearch).toBe('tool');
+  });
+
+  it('compares a tool model and a plugin model, each with its own sources', async () => {
+    const { call, calls, db } = searching({ sources: [[A]] });
+    const chatId = await newChat(call);
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelIds: ['t/tools', 'n/none'], webSearch: true }));
+    expect(Object.fromEntries(calls.map((c) => [c.model, c.webSearch]))).toEqual({ 't/tools': 'tool', 'n/none': 'plugin' });
+    const replies = getChatMessages(db, chatId).filter((m) => m.role === 'assistant');
+    expect(replies.map((m) => m.sources)).toEqual([[A], [A]]);
+  });
+});
+
+describe('mergeSources', () => {
+  it('appends new URLs in order and keeps the first title', () => {
+    const A = { url: 'https://a.example', title: 'A' };
+    expect(mergeSources([A], [{ url: 'https://a.example', title: 'Other' }, { url: 'https://b.example', title: 'B' }]))
+      .toEqual([A, { url: 'https://b.example', title: 'B' }]);
   });
 });

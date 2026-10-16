@@ -3,13 +3,13 @@ import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 import type { Deps } from './app';
 import { newId } from './db';
 import { getChatRow, setActiveLeaf, setCompareParent, touchChat } from './chats';
-import { promptFor, replyErrorMessage } from './generate';
+import { mergeSources, promptFor, replyErrorMessage, searchCount } from './generate';
 import { insertMessage } from './messages';
 import { OpenRouterError, type Usage } from './openrouter';
 import { resolveApiKey } from './settings';
 import { maybeGenerateTitle } from './title';
 import type {
-  CompareDone, CompareSlot, CompareSlotDone, CompareSlotError, CompareSlotText, CompareStart, Message, MessageStatus, StreamTitle,
+  CompareDone, CompareSlot, CompareSlotDone, CompareSlotError, CompareSlotText, CompareStart, Message, MessageStatus, Source, StreamTitle,
 } from '../../shared/types';
 
 interface CompareOptions {
@@ -84,6 +84,9 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
   async function runSlot(i: number, slot: CompareSlot, send: (event: string, data: unknown) => Promise<unknown>): Promise<Message | null> {
     let text = '';
     let usage: Usage | null = null;
+    let sources: Source[] = [];
+    // Each model gets its own prompt: one may see an image another can only read a note about, and search differently.
+    const prompt = promptFor(deps, o.chatId, o.parentId, slot.modelId);
     const save = (status: MessageStatus): Message =>
       insertMessage(db, {
         id: slot.assistantMessageId,
@@ -96,10 +99,10 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
         completionTokens: usage?.completionTokens ?? null,
         cost: usage?.cost ?? null,
         status,
+        sources,
+        webSearches: searchCount(prompt.webSearch, usage, sources),
       });
 
-    // Each model gets its own prompt: one may see an image another can only read a note about.
-    const prompt = promptFor(deps, o.chatId, o.parentId, slot.modelId);
     try {
       if (!key) throw new OpenRouterError('No OpenRouter API key set. Add one in Settings.', 401);
       for await (const event of openrouter.streamChat({ apiKey: key, model: slot.modelId, ...prompt, signal: abort.signal })) {
@@ -108,6 +111,8 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
           await send('delta', { slot: i, text: event.text } satisfies CompareSlotText);
         } else if (event.type === 'reasoning') {
           await send('reasoning', { slot: i, text: event.text } satisfies CompareSlotText);
+        } else if (event.type === 'sources') {
+          sources = mergeSources(sources, event.sources);
         } else if (event.type === 'usage') {
           usage = event.usage;
         }

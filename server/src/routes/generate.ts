@@ -14,6 +14,12 @@ const requireText = (value: unknown, error: string): string => {
   return value;
 };
 
+const requireFlag = (value: unknown): boolean => {
+  if (value === undefined) return false;
+  if (typeof value !== 'boolean') throw new HttpError(400, 'webSearch must be true or false.');
+  return value;
+};
+
 /** Message text, which may be empty when the message has attachments. */
 const requireContent = (value: unknown, attachments: AttachmentRow[]): string => {
   if (attachments.length > 0 && (value === undefined || value === '' || (typeof value === 'string' && !value.trim()))) return '';
@@ -67,8 +73,8 @@ export function generationRoutes(deps: Deps): Hono {
   }
 
   /** Saves a user message and its attachments together. */
-  const saveUserMessage = db.transaction((chatId: string, parentId: string | null, content: string, attachments: AttachmentRow[]) => {
-    const user = insertMessage(db, { chatId, parentId, role: 'user', content });
+  const saveUserMessage = db.transaction((chatId: string, parentId: string | null, content: string, attachments: AttachmentRow[], webSearch: boolean) => {
+    const user = insertMessage(db, { chatId, parentId, role: 'user', content, webSearch });
     attachToMessage(db, user.id, attachments);
     return user;
   });
@@ -76,13 +82,14 @@ export function generationRoutes(deps: Deps): Hono {
   r.post('/:id/messages', async (c) => {
     const chatId = c.req.param('id');
     const chat = requireChat(db, chatId);
-    const body = await readJson<{ content?: string; modelId?: unknown; modelIds?: unknown; attachmentIds?: unknown }>(c);
+    const body = await readJson<{ content?: string; modelId?: unknown; modelIds?: unknown; attachmentIds?: unknown; webSearch?: unknown }>(c);
+    const webSearch = requireFlag(body.webSearch);
     const attachments = resolveAttachmentIds(db, body.attachmentIds, { editedMessageId: null });
     const content = requireContent(body.content, attachments);
     const modelIds = requireModels(body);
     requireViewable(db, modelIds, attachments);
     claim(chat);
-    const user = saveUserMessage(chatId, chat.active_leaf_id, content, attachments);
+    const user = saveUserMessage(chatId, chat.active_leaf_id, content, attachments, webSearch);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
     return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id });
@@ -101,7 +108,8 @@ export function generationRoutes(deps: Deps): Hono {
   r.post('/:id/edit', async (c) => {
     const chatId = c.req.param('id');
     const chat = requireChat(db, chatId);
-    const body = await readJson<{ messageId?: string; content?: string; modelId?: unknown; modelIds?: unknown; attachmentIds?: unknown }>(c);
+    const body = await readJson<{ messageId?: string; content?: string; modelId?: unknown; modelIds?: unknown; attachmentIds?: unknown; webSearch?: unknown }>(c);
+    const webSearch = requireFlag(body.webSearch);
     const original = requireUserMessage(db, chatId, body.messageId);
     const attachments = resolveAttachmentIds(db, body.attachmentIds, { editedMessageId: original.id });
     const content = requireContent(body.content, attachments);
@@ -109,7 +117,7 @@ export function generationRoutes(deps: Deps): Hono {
     // Only images added in this edit are blocked; kept ones reach a text-only model as a note, like any earlier image.
     requireViewable(db, modelIds, attachments.filter((a) => a.messageId === null));
     claim(chat);
-    const user = saveUserMessage(chatId, original.parentId, content, attachments);
+    const user = saveUserMessage(chatId, original.parentId, content, attachments, webSearch);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
     return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id });
