@@ -87,6 +87,34 @@ export function topProviders(models: CatalogModel[], n: number): { top: string[]
   return { top: ranked.slice(0, n), rest: ranked.slice(n).sort() };
 }
 
+/**
+ * The provider chips to show. Collapsed, selected providers from the long tail stay visible so they can be
+ * turned off, as does a selected provider a refresh dropped from the catalog.
+ */
+export function providerChips(
+  providers: { top: string[]; rest: string[] },
+  selected: string[],
+  expanded: boolean,
+): { chips: string[]; hiddenCount: number } {
+  const extra = expanded ? providers.rest : providers.rest.filter((p) => selected.includes(p));
+  const known = new Set([...providers.top, ...providers.rest]);
+  return {
+    chips: [...providers.top, ...extra, ...selected.filter((p) => !known.has(p))],
+    hiddenCount: providers.rest.length - extra.length,
+  };
+}
+
+export const countLabel = (n: number): string => `${n.toLocaleString('en-US')} ${n === 1 ? 'model' : 'models'}`;
+
+/** Each call starts a request and returns a check that stays true until a newer request starts. */
+export function latestOnly(): () => () => boolean {
+  let current = 0;
+  return () => {
+    const id = ++current;
+    return () => id === current;
+  };
+}
+
 export const SHELF_SIZE = 10;
 
 /** A category's ranked models that are in the catalog and pass the chips, in OpenRouter's order. */

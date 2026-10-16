@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  capabilitiesOf, filterCatalog, isFiltering, isNew, NO_FILTER, popularFor, providerOf, sortCatalog, topProviders,
-  type Capability,
+  capabilitiesOf, countLabel, filterCatalog, isFiltering, isNew, latestOnly, NO_FILTER, popularFor, providerChips, providerOf,
+  sortCatalog, topProviders, type Capability,
 } from './catalog';
 import { withCatalogDefaults, type CatalogModel } from '../../../shared/types';
 
@@ -109,6 +109,44 @@ describe('topProviders', () => {
   it('ranks by model count, ties alphabetical, rest alphabetical', () => {
     const list = ['openai/a', 'openai/b', 'openai/c', 'google/a', 'google/b', 'anthropic/a', 'anthropic/b', 'x/a', 'b/a'].map((id) => m(id));
     expect(topProviders(list, 3)).toEqual({ top: ['openai', 'anthropic', 'google'], rest: ['b', 'x'] });
+  });
+});
+
+describe('providerChips', () => {
+  const providers = { top: ['openai', 'google'], rest: ['b', 'x'] };
+
+  it('collapsed: top plus selected long-tail providers, counting the hidden rest', () => {
+    expect(providerChips(providers, ['x'], false)).toEqual({ chips: ['openai', 'google', 'x'], hiddenCount: 1 });
+    expect(providerChips(providers, [], false)).toEqual({ chips: ['openai', 'google'], hiddenCount: 2 });
+  });
+
+  it('expanded: every provider, none hidden', () => {
+    expect(providerChips(providers, [], true)).toEqual({ chips: ['openai', 'google', 'b', 'x'], hiddenCount: 0 });
+  });
+
+  it('keeps a selected provider that is no longer in the catalog so it can be turned off', () => {
+    expect(providerChips(providers, ['gone', 'openai'], false).chips).toEqual(['openai', 'google', 'gone']);
+    expect(providerChips(providers, ['gone'], true).chips).toEqual(['openai', 'google', 'b', 'x', 'gone']);
+  });
+});
+
+describe('countLabel', () => {
+  it('pluralizes', () => {
+    expect(countLabel(0)).toBe('0 models');
+    expect(countLabel(1)).toBe('1 model');
+    expect(countLabel(2)).toBe('2 models');
+    expect(countLabel(1234)).toBe('1,234 models');
+  });
+});
+
+describe('latestOnly', () => {
+  it('treats only the most recently started request as current', () => {
+    const latest = latestOnly();
+    const first = latest();
+    expect(first()).toBe(true);
+    const second = latest();
+    expect(first()).toBe(false);
+    expect(second()).toBe(true);
   });
 });
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CAPABILITIES, SORTS, UNUSED_HINT, type CatalogFilter, type SortKey } from '../lib/catalog';
+import { CAPABILITIES, providerChips, SORTS, UNUSED_HINT, type CatalogFilter, type SortKey } from '../lib/catalog';
 
 export interface CatalogFiltersProps {
   filter: CatalogFilter;
@@ -15,9 +15,7 @@ const toggle = <T,>(list: T[], item: T): T[] => (list.includes(item) ? list.filt
 
 export function CatalogFilters({ filter, onFilter, sort, onSort, providers, loading, onRefresh }: CatalogFiltersProps) {
   const [allProviders, setAllProviders] = useState(false);
-  // Collapsed, selected providers from the long tail stay visible so they can be turned off.
-  const extra = allProviders ? providers.rest : providers.rest.filter((p) => filter.providers.includes(p));
-  const hiddenCount = providers.rest.length - extra.length;
+  const { chips, hiddenCount } = providerChips(providers, filter.providers, allProviders);
 
   return (
     <div className="catalog-filters">
@@ -50,7 +48,7 @@ export function CatalogFilters({ filter, onFilter, sort, onSort, providers, load
 
       <div className="chip-row" role="group" aria-label="Providers">
         <span className="chip-label">Provider</span>
-        {[...providers.top, ...extra].map((p) => {
+        {chips.map((p) => {
           const on = filter.providers.includes(p);
           return (
             <button key={p} className={`chip${on ? ' on' : ''}`} aria-pressed={on} onClick={() => onFilter({ ...filter, providers: toggle(filter.providers, p) })}>
@@ -58,8 +56,17 @@ export function CatalogFilters({ filter, onFilter, sort, onSort, providers, load
             </button>
           );
         })}
-        {hiddenCount > 0 && <button className="chip more" onClick={() => setAllProviders(true)}>+{hiddenCount}</button>}
-        {allProviders && providers.rest.length > 0 && <button className="chip more" onClick={() => setAllProviders(false)}>Fewer</button>}
+        {/* One button that changes label, so keyboard focus stays on it when it's toggled. */}
+        {(allProviders ? providers.rest.length > 0 : hiddenCount > 0) && (
+          <button
+            className="chip more"
+            aria-expanded={allProviders}
+            aria-label={allProviders ? 'Fewer providers' : `+${hiddenCount} more providers`}
+            onClick={() => setAllProviders((v) => !v)}
+          >
+            {allProviders ? 'Fewer' : `+${hiddenCount}`}
+          </button>
+        )}
       </div>
     </div>
   );

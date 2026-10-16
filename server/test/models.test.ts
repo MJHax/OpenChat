@@ -41,6 +41,25 @@ describe('catalog', () => {
     expect(stale.models).toHaveLength(3);
   });
 
+  it('falls back to stale without waiting for category lists once the model list fails', async () => {
+    let fail = false;
+    let hang = false;
+    const { call } = makeApp({
+      listModels: async () => { if (fail) throw new OpenRouterError('Could not reach OpenRouter.', 0); return CATALOG; },
+      listCategory: (category) => (hang ? new Promise<string[]>(() => {}) : Promise.resolve(category === 'programming' ? ['google/gemini'] : [])),
+    });
+    await call('GET', '/api/models/catalog');
+    fail = true;
+    hang = true;
+    const res = await Promise.race([
+      Promise.resolve(call('GET', '/api/models/catalog?refresh=1')).then((r) => r.json() as Promise<CatalogResponse>),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 500)),
+    ]);
+    expect(res).not.toBe('timeout');
+    expect((res as CatalogResponse).stale).toBe(true);
+    expect((res as CatalogResponse).rankings.programming).toEqual(['google/gemini']);
+  });
+
   it('bundles category rankings and leaves out categories that fail', async () => {
     const { call } = makeApp({
       listModels: async () => CATALOG,

@@ -38,6 +38,7 @@ export async function getCatalog(db: DB, openrouter: OpenRouterClient, refresh: 
     return { models: cached.models, rankings: cached.rankings, fetchedAt: cached.fetchedAt, stale: false };
   }
   try {
+    // Promise.all rejects as soon as listModels does, so a failure falls back without waiting on the category lists.
     const [list, rankings] = await Promise.all([openrouter.listModels(), fetchRankings(openrouter)]);
     const models = list.sort((a, b) => a.name.localeCompare(b.name));
     const fetchedAt = Date.now();

@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CATEGORIES, type CatalogResponse, type Category, type LibraryModel } from '../../../shared/types';
 import { api } from '../api';
 import { CatalogFilters } from '../components/CatalogFilters';
 import { ModelCard } from '../components/ModelCard';
 import { PopularShelf } from '../components/PopularShelf';
 import {
-  filterCatalog, isFiltering, NO_FILTER, popularFor, sortCatalog, topProviders, type CatalogFilter, type SortKey,
+  countLabel, filterCatalog, isFiltering, latestOnly, NO_FILTER, popularFor, sortCatalog, topProviders, type CatalogFilter,
+  type SortKey,
 } from '../lib/catalog';
 
 export interface ModelLibraryProps {
@@ -27,13 +28,16 @@ export function ModelLibrary({ models, onChanged }: ModelLibraryProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // A slow first load must not overwrite the result of a Refresh started after it.
+  const latest = useRef(latestOnly());
   const load = (refresh = false) => {
+    const isCurrent = latest.current();
     setLoading(true);
     setCatalogError(null);
     api.catalog(refresh)
-      .then(setCatalog)
-      .catch((e: Error) => setCatalogError(e.message))
-      .finally(() => setLoading(false));
+      .then((c) => { if (isCurrent()) setCatalog(c); })
+      .catch((e: Error) => { if (isCurrent()) setCatalogError(e.message); })
+      .finally(() => { if (isCurrent()) setLoading(false); });
   };
   useEffect(() => load(), []);
   useEffect(() => setLimit(PAGE_SIZE), [filter, sort]);
@@ -136,7 +140,7 @@ export function ModelLibrary({ models, onChanged }: ModelLibraryProps) {
           />
         )}
 
-        {catalog && <p className="muted small">{results.length} models</p>}
+        {catalog && <p className="muted small">{countLabel(results.length)}</p>}
         {catalog && results.length === 0 ? (
           <p className="muted">
             No models match.{' '}

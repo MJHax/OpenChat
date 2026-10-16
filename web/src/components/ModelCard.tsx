@@ -34,6 +34,7 @@ export function ModelCard({ model: m, added, busy, onAdd, onRemove, compact = fa
           {pills.map((c) => (
             <span key={c.id} className={`pill${c.usedByOpenChat ? '' : ' unused'}`} title={c.usedByOpenChat ? undefined : UNUSED_HINT}>
               {c.label}
+              {!c.usedByOpenChat && <span className="visually-hidden"> ({UNUSED_HINT})</span>}
             </span>
           ))}
         </div>
