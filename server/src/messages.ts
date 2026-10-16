@@ -1,4 +1,5 @@
 import type { DB } from './db';
+import { attachmentsFor } from './attachments';
 import { newId, now } from './db';
 import type { Message, MessageStatus, Role } from '../../shared/types';
 
@@ -16,7 +17,7 @@ interface MessageRow {
   created_at: number;
 }
 
-const toMessage = (r: MessageRow): Message => ({
+const toMessage = (r: MessageRow, attachments: Map<string, Message['attachments']>): Message => ({
   id: r.id,
   chatId: r.chat_id,
   parentId: r.parent_id,
@@ -28,6 +29,7 @@ const toMessage = (r: MessageRow): Message => ({
   cost: r.cost,
   status: r.status as MessageStatus,
   createdAt: r.created_at,
+  attachments: attachments.get(r.id) ?? [],
 });
 
 export type NewMessage = Pick<Message, 'chatId' | 'parentId' | 'role' | 'content'> &
@@ -47,11 +49,12 @@ export function insertMessage(db: DB, m: NewMessage): Message {
 
 export function getMessage(db: DB, id: string): Message | undefined {
   const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow | undefined;
-  return row && toMessage(row);
+  return row && toMessage(row, attachmentsFor(db, [row.id]));
 }
 
 /** All messages in a chat, oldest first. */
 export function getChatMessages(db: DB, chatId: string): Message[] {
   const rows = db.prepare('SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at, seq').all(chatId) as MessageRow[];
-  return rows.map(toMessage);
+  const attachments = attachmentsFor(db, rows.map((r) => r.id));
+  return rows.map((r) => toMessage(r, attachments));
 }

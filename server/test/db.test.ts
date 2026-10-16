@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { openDb, now } from '../src/db';
+import { insertPending } from '../src/attachments';
 import Database from 'better-sqlite3';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -79,5 +80,24 @@ describe('database', () => {
     const cols = (db.prepare('PRAGMA table_info(models)').all() as { name: string }[]).map((c) => c.name);
     expect(cols).toContain('input_modalities');
     db.close();
+  });
+
+  it('messages include their attachments in order', () => {
+    const db = openDb(':memory:');
+    const chat = createChat(db);
+    const u = insertMessage(db, { chatId: chat.id, parentId: null, role: 'user', content: 'see files' });
+    const a = insertMessage(db, { chatId: chat.id, parentId: u.id, role: 'assistant', content: 'ok' });
+    const add = (name: string, position: number) => {
+      const att = insertPending(db, { filename: name, kind: 'text', mime: 'text/plain', data: new TextEncoder().encode(name) });
+      db.prepare('UPDATE attachments SET message_id = ?, position = ? WHERE id = ?').run(u.id, position, att.id);
+    };
+    add('second.txt', 1);
+    add('first.txt', 0);
+    const [user, reply] = getChatMessages(db, chat.id);
+    expect(user.attachments.map((x) => x.filename)).toEqual(['first.txt', 'second.txt']);
+    expect(user.attachments[0]).not.toHaveProperty('data');
+    expect(reply.attachments).toEqual([]);
+    expect(getMessage(db, u.id)?.attachments.map((x) => x.filename)).toEqual(['first.txt', 'second.txt']);
+    expect(getMessage(db, a.id)?.attachments).toEqual([]);
   });
 });

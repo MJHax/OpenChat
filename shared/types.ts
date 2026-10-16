@@ -24,6 +24,8 @@ export interface Message {
   cost: number | null;
   status: MessageStatus;
   createdAt: number;
+  /** Files attached to a user message, in order; [] for assistant messages and plain text. */
+  attachments: Attachment[];
 }
 
 /** A message on the active path, with its sibling versions (same parent), oldest first. */
