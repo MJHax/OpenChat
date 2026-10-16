@@ -21,7 +21,13 @@ export function makeApp(openrouter: Partial<OpenRouterClient> = {}, env: Env = {
       headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-  return { db, app, call };
+  /** POSTs one file to /api/attachments as multipart form data. */
+  const upload = (data: Uint8Array | string, filename: string) => {
+    const form = new FormData();
+    form.append('file', new File([typeof data === 'string' ? new TextEncoder().encode(data) : data], filename));
+    return app.request('/api/attachments', { method: 'POST', body: form });
+  };
+  return { db, app, call, upload };
 }
 
 export async function readEvents(res: Response): Promise<{ event: string; data: any }[]> {

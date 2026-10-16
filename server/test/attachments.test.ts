@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { openDb, now } from '../src/db';
+import { makeApp } from './appHelpers';
+import { MB, UNSUPPORTED_TYPE } from '../../shared/attachments';
+import type { Attachment } from '../../shared/types';
 import { createChat, deleteChat } from '../src/chats';
 import { insertMessage } from '../src/messages';
 import {
@@ -110,5 +113,84 @@ describe('attachment storage', () => {
     claim(a.id);
     deleteChat(db, chat.id);
     expect(getAttachmentRow(db, a.id)).toBeUndefined();
+  });
+});
+
+describe('attachment routes', () => {
+  it('uploads a text file', async () => {
+    const { upload } = makeApp();
+    const res = await upload('# Hi', 'notes.md');
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ kind: 'text', mime: 'text/plain', filename: 'notes.md', size: 4 });
+  });
+
+  it('decides the kind from the content, not the name', async () => {
+    const { upload } = makeApp();
+    expect(await (await upload(PNG, 'photo.txt')).json()).toMatchObject({ kind: 'image', mime: 'image/png' });
+  });
+
+  it('serves the bytes back with safe headers', async () => {
+    const { upload, call } = makeApp();
+    const image = (await (await upload(PNG, 'photo.txt')).json()) as Attachment;
+    const res = await call('GET', `/api/attachments/${image.id}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('image/png');
+    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(res.headers.get('Content-Disposition')).toContain("inline; filename*=UTF-8''photo.txt");
+    expect(res.headers.get('Cache-Control')).toBe('private, max-age=31536000, immutable');
+    expect([...new Uint8Array(await res.arrayBuffer())]).toEqual([...PNG]);
+
+    const text = (await (await upload('hello', 'a.md')).json()) as Attachment;
+    expect((await call('GET', `/api/attachments/${text.id}`)).headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
+    expect((await call('GET', '/api/attachments/nope')).status).toBe(404);
+  });
+
+  it('enforces the size limit for each kind', async () => {
+    const { upload } = makeApp();
+    const bigText = await upload('a'.repeat(MB + 1), 'notes.txt');
+    expect(bigText.status).toBe(413);
+    expect((await bigText.json()).error).toBe('notes.txt is too large. The limit for text files is 1 MB.');
+    const bigImage = new Uint8Array(5 * MB + 1);
+    bigImage.set(PNG);
+    const res = await upload(bigImage, 'big.png');
+    expect(res.status).toBe(413);
+    expect((await res.json()).error).toBe('big.png is too large. The limit for image files is 5 MB.');
+  });
+
+  it('rejects unreadable and empty files, and requests without a file', async () => {
+    const { upload, app } = makeApp();
+    const binary = await upload(new Uint8Array([0, 1, 2, 255]), 'x.bin');
+    expect(binary.status).toBe(400);
+    expect((await binary.json()).error).toBe(UNSUPPORTED_TYPE);
+    const empty = await upload('', 'empty.txt');
+    expect(empty.status).toBe(400);
+    expect((await empty.json()).error).toBe('empty.txt is empty.');
+    const none = await app.request('/api/attachments', { method: 'POST', body: new FormData() });
+    expect(none.status).toBe(400);
+    expect((await none.json()).error).toBe('Attach a file.');
+  });
+
+  it('deletes pending attachments but not sent ones', async () => {
+    const { upload, call, db } = makeApp();
+    const a = (await (await upload('a', 'a.txt')).json()) as Attachment;
+    expect((await call('DELETE', `/api/attachments/${a.id}`)).status).toBe(200);
+    expect((await call('GET', `/api/attachments/${a.id}`)).status).toBe(404);
+    expect((await call('DELETE', `/api/attachments/${a.id}`)).status).toBe(404);
+
+    const b = (await (await upload('b', 'b.txt')).json()) as Attachment;
+    const chat = createChat(db);
+    const message = insertMessage(db, { chatId: chat.id, parentId: null, role: 'user', content: 'hi' });
+    db.prepare('UPDATE attachments SET message_id = ? WHERE id = ?').run(message.id, b.id);
+    const res = await call('DELETE', `/api/attachments/${b.id}`);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('This file is already part of a message.');
+  });
+
+  it('cleans up stale pending uploads when a new file is uploaded', async () => {
+    const { upload, db } = makeApp();
+    const stale = (await (await upload('old', 'old.txt')).json()) as Attachment;
+    db.prepare('UPDATE attachments SET created_at = ? WHERE id = ?').run(now() - 25 * 60 * 60 * 1000, stale.id);
+    await upload('new', 'new.txt');
+    expect(getAttachmentRow(db, stale.id)).toBeUndefined();
   });
 });
