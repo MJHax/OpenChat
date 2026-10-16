@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { addError, guessKind, sendBlockReason, skippedImagesNotice } from './attachments';
-import { MB, TOO_MANY_FILES, TOO_MUCH_TOTAL } from '../../../shared/attachments';
+import { MB, TOO_MANY_FILES, TOO_MUCH_TOTAL, UNSUPPORTED_TYPE } from '../../../shared/attachments';
 import type { Attachment, LibraryModel } from '../../../shared/types';
 
 const model = (id: string, displayName: string, inputModalities: string[]): LibraryModel => ({
@@ -29,6 +29,25 @@ describe('addError', () => {
     expect(addError(ten, { name: 'a.txt', size: 1, type: 'text/plain' })).toBe(TOO_MANY_FILES);
     const heavy = [{ size: 20 * MB }, { size: 9 * MB }];
     expect(addError(heavy, { name: 'b.pdf', size: 2 * MB, type: 'application/pdf' })).toBe(TOO_MUCH_TOTAL);
+  });
+});
+
+describe('addError for files that may not be text', () => {
+  it('reports unsupported image formats instead of a text-size error', () => {
+    expect(addError([], { name: 'photo.heic', size: 3 * MB, type: 'image/heic' })).toBe(UNSUPPORTED_TYPE);
+    expect(addError([], { name: 'small.heic', size: 100, type: 'image/heic' })).toBe(UNSUPPORTED_TYPE);
+  });
+
+  it('applies the text limit only to files that look like text', () => {
+    expect(addError([], { name: 'app.log', size: 2 * MB, type: 'text/plain' })).toBe('app.log is too large. The limit for text files is 1 MB.');
+    expect(addError([], { name: 'data.json', size: 2 * MB, type: 'application/json' })).toBe('data.json is too large. The limit for text files is 1 MB.');
+    expect(addError([], { name: 'main.rs', size: 2 * MB, type: '' })).toBe('main.rs is too large. The limit for text files is 1 MB.');
+  });
+
+  it('lets the server decide other types, up to the largest upload', () => {
+    expect(addError([], { name: 'report.docx', size: 4 * MB, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })).toBeNull();
+    expect(addError([], { name: 'types.ts', size: 2 * MB, type: 'video/mp2t' })).toBeNull();
+    expect(addError([], { name: 'huge.zip', size: 25 * MB, type: 'application/zip' })).toBe('huge.zip is too large. The limit is 20 MB.');
   });
 });
 

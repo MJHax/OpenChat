@@ -301,6 +301,21 @@ describe('sending with attachments', () => {
     expect(versions.find((m) => m.content === 'v1')!.attachments.map((x) => x.id)).toEqual([keep.id, drop.id]);
   });
 
+  it('edit keeps an existing image for a text-only model, but blocks adding a new one', async () => {
+    const { newChat, up, send, call, userMessages } = setup();
+    const chatId = await newChat();
+    const image = await up(PNG, 'photo.png');
+    await readEvents(await send(chatId, { content: 'v1', attachmentIds: [image.id] }));
+    const [original] = userMessages(chatId);
+    const kept = await call('POST', `/api/chats/${chatId}/edit`, { messageId: original.id, content: 'v2', modelId: 't/text', attachmentIds: [image.id] });
+    expect(kept.status).toBe(200);
+    await readEvents(kept);
+    const another = await up(PNG, 'second.png');
+    const added = await call('POST', `/api/chats/${chatId}/edit`, { messageId: original.id, content: 'v3', modelId: 't/text', attachmentIds: [image.id, another.id] });
+    expect(added.status).toBe(400);
+    expect((await added.json()).error).toBe("Text Model can't view images.");
+  });
+
   it('edit rejects attachments that belong to a different message', async () => {
     const { newChat, up, send, call, userMessages } = setup();
     const chatId = await newChat();

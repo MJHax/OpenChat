@@ -1,5 +1,5 @@
 import {
-  ATTACHMENT_LIMITS, MAX_ATTACHMENTS, MAX_TOTAL_BYTES, TOO_MANY_FILES, TOO_MUCH_TOTAL, canViewImages, tooLargeMessage,
+  ATTACHMENT_LIMITS, MAX_ATTACHMENTS, MAX_TOTAL_BYTES, MB, TOO_MANY_FILES, TOO_MUCH_TOTAL, UNSUPPORTED_TYPE, canViewImages, tooLargeMessage,
 } from '../../../shared/attachments';
 import type { Attachment, AttachmentKind, LibraryModel } from '../../../shared/types';
 
@@ -12,10 +12,28 @@ export function guessKind(file: { name: string; type: string }): AttachmentKind 
   return 'text';
 }
 
+/** Browsers report code files under all sorts of types (.ts is video/mp2t), so only these clearly mean text. */
+const TEXT_SUBTYPES = ['json', 'xml', 'javascript', 'ecmascript', 'x-yaml', 'yaml', 'toml', 'sql', 'x-sh', 'x-python', 'x-httpd-php'];
+const looksLikeText = (type: string): boolean => {
+  if (type === '' || type.startsWith('text/')) return true;
+  const subtype = type.split('/')[1] ?? '';
+  return TEXT_SUBTYPES.includes(subtype) || subtype.endsWith('+json') || subtype.endsWith('+xml');
+};
+
+/** The largest upload of any kind; past it the server refuses before reading the file. */
+const MAX_UPLOAD = Math.max(...Object.values(ATTACHMENT_LIMITS));
+
 /** Why `file` can't be added to a draft that already holds `existing`, or null if it can. */
 export function addError(existing: { size: number }[], file: { name: string; size: number; type: string }): string | null {
   const kind = guessKind(file);
-  if (file.size > ATTACHMENT_LIMITS[kind]) return tooLargeMessage(file.name, kind);
+  // Image formats other than PNG, JPEG, WebP and GIF (e.g. iPhone HEIC photos) are never readable.
+  if (file.type.startsWith('image/') && kind !== 'image') return UNSUPPORTED_TYPE;
+  if (kind !== 'text' || looksLikeText(file.type)) {
+    if (file.size > ATTACHMENT_LIMITS[kind]) return tooLargeMessage(file.name, kind);
+  } else if (file.size > MAX_UPLOAD) {
+    // Might be text or might be unreadable; the server decides, so only stop uploads it would refuse outright.
+    return `${file.name} is too large. The limit is ${MAX_UPLOAD / MB} MB.`;
+  }
   if (existing.length >= MAX_ATTACHMENTS) return TOO_MANY_FILES;
   if (existing.reduce((sum, a) => sum + a.size, file.size) > MAX_TOTAL_BYTES) return TOO_MUCH_TOTAL;
   return null;

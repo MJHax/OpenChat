@@ -106,7 +106,8 @@ export function generationRoutes(deps: Deps): Hono {
     const attachments = resolveAttachmentIds(db, body.attachmentIds, { editedMessageId: original.id });
     const content = requireContent(body.content, attachments);
     const modelIds = requireModels(body);
-    requireViewable(db, modelIds, attachments);
+    // Only images added in this edit are blocked; kept ones reach a text-only model as a note, like any earlier image.
+    requireViewable(db, modelIds, attachments.filter((a) => a.messageId === null));
     claim(chat);
     const user = saveUserMessage(chatId, original.parentId, content, attachments);
     setActiveLeaf(db, chatId, user.id);
