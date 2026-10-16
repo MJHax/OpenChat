@@ -4,7 +4,8 @@ import { OpenRouterError, type OpenRouterClient, type StreamEvent } from '../src
 import type { ChatMessage } from '../src/prompt';
 import { getChatMessages } from '../src/messages';
 import { getChatRow } from '../src/chats';
-import type { ChatDetail, ChatSummary, Message } from '../../shared/types';
+import { withCatalogDefaults, type Attachment, type ChatDetail, type ChatSummary, type Message } from '../../shared/types';
+import { addModel } from '../src/library';
 
 type Script = { chunks: string[]; failWith?: Error; hang?: boolean };
 
@@ -195,7 +196,7 @@ describe('comparisons', () => {
     const { streamChat } = byModel({ 'm/a': { chunks: [], failWith: new OpenRouterError('Rate limited.', 429) } });
     let transcript = '';
     const complete: OpenRouterClient['complete'] = async ({ messages }) => {
-      transcript = messages.at(-1)!.content;
+      transcript = String(messages.at(-1)!.content);
       return 'Compared chat';
     };
     const { call, db } = makeApp({ streamChat, complete });
@@ -204,5 +205,21 @@ describe('comparisons', () => {
     expect(events.at(-1)).toEqual({ event: 'title', data: { title: 'Compared chat' } });
     expect(transcript).toBe('user: Question\n\nassistant: reply from m/b');
     expect(getChatRow(db, chatId)?.title).toBe('Compared chat');
+  });
+});
+
+describe('comparisons with attachments', () => {
+  it('builds each model its own prompt for the same image', async () => {
+    const { streamChat, calls } = byModel({});
+    const { call, db, upload } = makeApp({ streamChat });
+    addModel(db, withCatalogDefaults({ id: 'v/vision', name: 'Vision', inputModalities: ['text', 'image'] }));
+    addModel(db, withCatalogDefaults({ id: 't/text', name: 'Text' }));
+    const chatId = await newChat(call);
+    const image = (await (await upload(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1]), 'photo.png')).json()) as Attachment;
+    const first = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'What?', modelId: 'v/vision', attachmentIds: [image.id] }));
+    await readEvents(await call('POST', `/api/chats/${chatId}/regenerate`, { parentId: first[0].data.userMessageId, modelIds: ['v/vision', 't/text'] }));
+    const parts = (model: string) => calls.filter((c) => c.model === model).at(-1)!.messages.at(-1)!.content as { type: string }[];
+    expect(parts('v/vision').map((p) => p.type)).toEqual(['text', 'image_url']);
+    expect(parts('t/text').map((p) => p.type)).toEqual(['text', 'text']);
   });
 });

@@ -5,7 +5,9 @@ import { newId } from './db';
 import { setActiveLeaf, touchChat } from './chats';
 import { getChatMessages, insertMessage } from './messages';
 import { OpenRouterError, type Usage } from './openrouter';
-import { buildMessages } from './prompt';
+import { getAttachmentData } from './attachments';
+import { modelModalities } from './library';
+import { buildMessages, pdfPlugins, type ChatMessage, type Plugin } from './prompt';
 import { getPersona, resolveApiKey } from './settings';
 import { maybeGenerateTitle } from './title';
 import { activePath } from './tree';
@@ -15,6 +17,15 @@ export function replyErrorMessage(err: unknown): string {
   if (err instanceof OpenRouterError) return err.message;
   console.error(err);
   return 'Something went wrong while generating the reply.';
+}
+
+/** The prompt for `modelId` replying to `parentId`: images it can't view become notes, PDFs get an engine it can use. */
+export function promptFor(deps: Deps, chatId: string, parentId: string, modelId: string): { messages: ChatMessage[]; plugins?: Plugin[] } {
+  const { db } = deps;
+  const path = activePath(getChatMessages(db, chatId), parentId);
+  const inputModalities = modelModalities(db, modelId);
+  const loadData = (id: string) => getAttachmentData(db, id) ?? Buffer.alloc(0);
+  return { messages: buildMessages(getPersona(db), path, { inputModalities, loadData }), plugins: pdfPlugins(path, inputModalities) };
 }
 
 interface ReplyOptions {
@@ -34,7 +45,7 @@ interface ReplyOptions {
  */
 export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
   const { db, openrouter, env } = deps;
-  const messages = buildMessages(getPersona(db), activePath(getChatMessages(db, o.chatId), o.parentId));
+  const { messages, plugins } = promptFor(deps, o.chatId, o.parentId, o.modelId);
   const { key } = resolveApiKey(db, env);
   const assistantId = newId();
   const abort = new AbortController();
@@ -82,7 +93,7 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
     await send('start', { userMessageId: o.userMessageId, assistantMessageId: assistantId } satisfies StreamStart);
     try {
       if (!key) throw new OpenRouterError('No OpenRouter API key set. Add one in Settings.', 401);
-      for await (const event of openrouter.streamChat({ apiKey: key, model: o.modelId, messages, signal: abort.signal })) {
+      for await (const event of openrouter.streamChat({ apiKey: key, model: o.modelId, messages, plugins, signal: abort.signal })) {
         if (event.type === 'delta') {
           text += event.text;
           await send('delta', { text: event.text });

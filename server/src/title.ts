@@ -41,7 +41,7 @@ async function generateTitle(deps: Deps, chatId: string, apiKey: string, fallbac
     if (reply) path.push(reply);
   }
   const transcript = path
-    .map((m) => `${m.role}: ${m.content}`)
+    .map((m) => `${m.role}: ${m.content}${m.attachments.length ? ` [attached: ${m.attachments.map((a) => a.filename).join(', ')}]` : ''}`)
     .join('\n\n')
     .slice(0, 4000);
   try {

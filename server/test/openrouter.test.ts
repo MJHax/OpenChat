@@ -139,3 +139,14 @@ describe('OpenRouter client', () => {
     expect(calls[0].url).toBe('https://openrouter.ai/api/v1/key');
   });
 });
+
+describe('streamChat plugins', () => {
+  it('sends plugins only when given', async () => {
+    const { fn, calls } = fakeFetch(() => sse('data: [DONE]'));
+    const client = createOpenRouterClient(fn);
+    await collect(client.streamChat({ apiKey: 'k', model: 'm', messages: [], plugins: [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }] }));
+    await collect(client.streamChat({ apiKey: 'k', model: 'm', messages: [] }));
+    expect(JSON.parse(String(calls[0].init.body)).plugins).toEqual([{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }]);
+    expect(JSON.parse(String(calls[1].init.body))).not.toHaveProperty('plugins');
+  });
+});

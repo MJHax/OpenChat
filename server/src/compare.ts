@@ -3,13 +3,11 @@ import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 import type { Deps } from './app';
 import { newId } from './db';
 import { getChatRow, setActiveLeaf, setCompareParent, touchChat } from './chats';
-import { replyErrorMessage } from './generate';
-import { getChatMessages, insertMessage } from './messages';
+import { promptFor, replyErrorMessage } from './generate';
+import { insertMessage } from './messages';
 import { OpenRouterError, type Usage } from './openrouter';
-import { buildMessages } from './prompt';
-import { getPersona, resolveApiKey } from './settings';
+import { resolveApiKey } from './settings';
 import { maybeGenerateTitle } from './title';
-import { activePath } from './tree';
 import type {
   CompareDone, CompareSlot, CompareSlotDone, CompareSlotError, CompareSlotText, CompareStart, Message, MessageStatus, StreamTitle,
 } from '../../shared/types';
@@ -32,7 +30,6 @@ interface CompareOptions {
  */
 export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Response {
   const { db, openrouter, env } = deps;
-  const prompt = buildMessages(getPersona(db), activePath(getChatMessages(db, o.chatId), o.parentId));
   const { key } = resolveApiKey(db, env);
   const slots: CompareSlot[] = o.modelIds.map((modelId) => ({ assistantMessageId: newId(), modelId }));
   const abort = new AbortController();
@@ -101,9 +98,11 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
         status,
       });
 
+    // Each model gets its own prompt: one may see an image another can only read a note about.
+    const prompt = promptFor(deps, o.chatId, o.parentId, slot.modelId);
     try {
       if (!key) throw new OpenRouterError('No OpenRouter API key set. Add one in Settings.', 401);
-      for await (const event of openrouter.streamChat({ apiKey: key, model: slot.modelId, messages: prompt, signal: abort.signal })) {
+      for await (const event of openrouter.streamChat({ apiKey: key, model: slot.modelId, ...prompt, signal: abort.signal })) {
         if (event.type === 'delta') {
           text += event.text;
           await send('delta', { slot: i, text: event.text } satisfies CompareSlotText);

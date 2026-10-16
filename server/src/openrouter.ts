@@ -1,6 +1,6 @@
 import { parseSSE } from '../../shared/sse';
 import type { CatalogModel, Category } from '../../shared/types';
-import type { ChatMessage } from './prompt';
+import type { ChatMessage, Plugin } from './prompt';
 
 export const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
@@ -62,7 +62,7 @@ export interface OpenRouterClient {
   listCategory(category: Category): Promise<string[]>;
   checkKey(apiKey: string): Promise<void>;
   complete(o: { apiKey: string; model: string; messages: ChatMessage[]; maxTokens?: number }): Promise<string>;
-  streamChat(o: { apiKey: string; model: string; messages: ChatMessage[]; signal?: AbortSignal }): AsyncGenerator<StreamEvent>;
+  streamChat(o: { apiKey: string; model: string; messages: ChatMessage[]; plugins?: Plugin[]; signal?: AbortSignal }): AsyncGenerator<StreamEvent>;
 }
 
 export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = OPENROUTER_BASE): OpenRouterClient {
@@ -131,12 +131,12 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
       return String(json.choices?.[0]?.message?.content ?? '');
     },
 
-    async *streamChat({ apiKey, model, messages, signal }) {
+    async *streamChat({ apiKey, model, messages, plugins, signal }) {
       const res = await request('/chat/completions', {
         method: 'POST',
         apiKey,
         signal,
-        body: JSON.stringify({ model, messages, stream: true, usage: { include: true } }),
+        body: JSON.stringify({ model, messages, stream: true, usage: { include: true }, ...(plugins ? { plugins } : {}) }),
       });
       if (!res.body) throw new OpenRouterError('Empty response from OpenRouter.', 502);
       for await (const { data } of parseSSE(res.body)) {

@@ -6,7 +6,8 @@ import { getChatMessages } from '../src/messages';
 import { getChatRow } from '../src/chats';
 import { cleanTitle } from '../src/title';
 import { updateSettings } from '../src/settings';
-import type { ChatDetail, ChatSummary, Message } from '../../shared/types';
+import { withCatalogDefaults, type Attachment, type ChatDetail, type ChatSummary, type Message } from '../../shared/types';
+import { addModel } from '../src/library';
 
 const USAGE: Usage = { promptTokens: 10, completionTokens: 5, cost: 0.0004 };
 
@@ -298,5 +299,54 @@ describe('cleanTitle', () => {
     expect(cleanTitle('"Trip planning ideas."')).toBe('Trip planning ideas');
     expect(cleanTitle('## **Rust lifetimes**\nextra')).toBe('Rust lifetimes');
     expect(cleanTitle('   ')).toBe('');
+  });
+});
+
+describe('attachments in prompts', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1]);
+  const hasImagePart = (messages: ChatMessage[]) =>
+    messages.some((m) => Array.isArray(m.content) && m.content.some((p) => p.type === 'image_url'));
+  const hasNote = (messages: ChatMessage[]) =>
+    messages.some((m) => Array.isArray(m.content) && m.content.some((p) => p.type === 'text' && p.text.includes("can't view images")));
+
+  async function imageChat() {
+    const { streamChat, calls } = scripted([{ chunks: ['ok'] }]);
+    const ctx = makeApp({ streamChat });
+    addModel(ctx.db, withCatalogDefaults({ id: 'v/vision', name: 'Vision', inputModalities: ['text', 'image'] }));
+    addModel(ctx.db, withCatalogDefaults({ id: 't/text', name: 'Text' }));
+    const chatId = await newChat(ctx.call);
+    const image = (await (await ctx.upload(PNG, 'photo.png')).json()) as Attachment;
+    const events = await readEvents(await ctx.call('POST', `/api/chats/${chatId}/messages`, { content: 'What is this?', modelId: 'v/vision', attachmentIds: [image.id] }));
+    return { ...ctx, calls, chatId, userId: events[0].data.userMessageId as string };
+  }
+
+  it('sends the image to a model that can view it', async () => {
+    const { calls } = await imageChat();
+    expect(hasImagePart(calls[0])).toBe(true);
+  });
+
+  it('regenerates with a text-only model using a note instead of the image', async () => {
+    const { call, calls, chatId, userId } = await imageChat();
+    const res = await call('POST', `/api/chats/${chatId}/regenerate`, { parentId: userId, modelId: 't/text' });
+    expect(res.status).toBe(200);
+    await readEvents(res);
+    expect(hasImagePart(calls[1])).toBe(false);
+    expect(hasNote(calls[1])).toBe(true);
+  });
+
+  it('treats a model that is not in the library as text-only', async () => {
+    const { call, calls, chatId, userId } = await imageChat();
+    await readEvents(await call('POST', `/api/chats/${chatId}/regenerate`, { parentId: userId, modelId: 'gone/model' }));
+    expect(hasNote(calls[1])).toBe(true);
+  });
+
+  it('names attachments in the title transcript', async () => {
+    const { streamChat } = scripted([{ chunks: ['ok'] }]);
+    const titlePrompts: ChatMessage[][] = [];
+    const { call, upload } = makeApp({ streamChat, complete: async ({ messages }) => { titlePrompts.push(messages); return 'Report'; } });
+    const chatId = await newChat(call);
+    const pdf = (await (await upload('%PDF-1.4\n', 'report.pdf')).json()) as Attachment;
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: '', modelId: 'm/x', attachmentIds: [pdf.id] }));
+    expect(titlePrompts[0][1].content).toContain('user:  [attached: report.pdf]');
   });
 });
