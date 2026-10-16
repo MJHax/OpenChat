@@ -1,22 +1,29 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { CatalogResponse, LibraryModel } from '../../../shared/types';
+import { CATEGORIES, type CatalogResponse, type Category, type LibraryModel } from '../../../shared/types';
 import { api } from '../api';
-import { filterCatalog, providerOf } from '../lib/catalog';
-import { formatContext, formatPricePerM } from '../lib/format';
+import { CatalogFilters } from '../components/CatalogFilters';
+import { ModelCard } from '../components/ModelCard';
+import { PopularShelf } from '../components/PopularShelf';
+import {
+  filterCatalog, isFiltering, NO_FILTER, popularFor, sortCatalog, topProviders, type CatalogFilter, type SortKey,
+} from '../lib/catalog';
 
 export interface ModelLibraryProps {
   models: LibraryModel[];
   onChanged(): void;
 }
 
-const MAX_ROWS = 200;
+const PAGE_SIZE = 60;
+const TOP_PROVIDERS = 8;
 
 export function ModelLibrary({ models, onChanged }: ModelLibraryProps) {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [query, setQuery] = useState('');
-  const [provider, setProvider] = useState('');
+  const [filter, setFilter] = useState<CatalogFilter>(NO_FILTER);
+  const [sort, setSort] = useState<SortKey>('cheapest');
+  const [category, setCategory] = useState<Category>('programming');
+  const [limit, setLimit] = useState(PAGE_SIZE);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -29,13 +36,20 @@ export function ModelLibrary({ models, onChanged }: ModelLibraryProps) {
       .finally(() => setLoading(false));
   };
   useEffect(() => load(), []);
+  useEffect(() => setLimit(PAGE_SIZE), [filter, sort]);
 
   const added = new Set(models.map((m) => m.id));
-  const providers = useMemo(() => [...new Set((catalog?.models ?? []).map((m) => providerOf(m.id)))].sort(), [catalog]);
-  const filtered = useMemo(
-    () => filterCatalog(catalog?.models ?? [], { query, capabilities: [], providers: provider ? [provider] : [] }),
-    [catalog, query, provider],
+  const all = catalog?.models ?? [];
+  const rankings = catalog?.rankings ?? {};
+  const providers = useMemo(() => topProviders(all, TOP_PROVIDERS), [catalog]);
+  const results = useMemo(() => sortCatalog(filterCatalog(all, filter), sort), [catalog, filter, sort]);
+  const available = useMemo(() => CATEGORIES.map((c) => c.id).filter((id) => (rankings[id]?.length ?? 0) > 0), [catalog]);
+  const shelfCategory: Category | undefined = available.includes(category) ? category : available[0];
+  const popular = useMemo(
+    () => (shelfCategory ? popularFor(all, rankings, shelfCategory, filter) : []),
+    [catalog, shelfCategory, filter],
   );
+  const showShelf = shelfCategory !== undefined && filter.query.trim() === '';
 
   async function act(key: string, fn: () => Promise<unknown>) {
     setBusy(key);
@@ -93,43 +107,50 @@ export function ModelLibrary({ models, onChanged }: ModelLibraryProps) {
         )}
 
         <h2>Browse OpenRouter</h2>
-        <div className="filters">
-          <input type="search" placeholder="Search models" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <select value={provider} onChange={(e) => setProvider(e.target.value)} aria-label="Provider">
-            <option value="">All providers</option>
-            {providers.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <button onClick={() => load(true)} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
-        </div>
+        <CatalogFilters
+          filter={filter}
+          onFilter={setFilter}
+          sort={sort}
+          onSort={setSort}
+          providers={providers}
+          loading={loading}
+          onRefresh={() => load(true)}
+        />
         {catalogError && (
           <p className="error-text">
             Couldn't load the catalog: {catalogError} <button className="link" onClick={() => load(true)}>Retry</button>
           </p>
         )}
         {catalog?.stale && <p className="muted small">Showing a cached catalog — OpenRouter couldn't be reached.</p>}
-        {catalog && (
-          <p className="muted small">
-            {filtered.length} models{filtered.length > MAX_ROWS ? ` (showing first ${MAX_ROWS}; refine your search)` : ''}
-          </p>
+
+        {catalog && showShelf && shelfCategory && (
+          <PopularShelf
+            category={shelfCategory}
+            onCategory={setCategory}
+            available={available}
+            models={popular}
+            added={added}
+            busy={busy}
+            onAdd={(id) => act(id, () => api.addModel(id))}
+          />
         )}
-        <ul className="model-list">
-          {filtered.slice(0, MAX_ROWS).map((m) => (
-            <li key={m.id} className="model-row">
-              <div className="model-main">
-                <span>{m.name}</span>
-                <code>{m.id}</code>
-              </div>
-              <div className="model-side">
-                {m.contextLength !== null && <span>{formatContext(m.contextLength)} ctx</span>}
-                <span>in {formatPricePerM(m.promptPrice)}</span>
-                <span>out {formatPricePerM(m.completionPrice)}</span>
-                <button className="primary" disabled={added.has(m.id) || busy === m.id} onClick={() => act(m.id, () => api.addModel(m.id))}>
-                  {added.has(m.id) ? 'Added' : 'Add'}
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+
+        {catalog && <p className="muted small">{results.length} models</p>}
+        {catalog && results.length === 0 ? (
+          <p className="muted">
+            No models match.{' '}
+            {isFiltering(filter) && <button className="link" onClick={() => setFilter(NO_FILTER)}>Clear filters</button>}
+          </p>
+        ) : (
+          <ul className="model-grid">
+            {results.slice(0, limit).map((m) => (
+              <ModelCard key={m.id} model={m} added={added.has(m.id)} busy={busy === m.id} onAdd={() => act(m.id, () => api.addModel(m.id))} />
+            ))}
+          </ul>
+        )}
+        {results.length > limit && (
+          <button className="show-more" onClick={() => setLimit((n) => n + PAGE_SIZE)}>Show more</button>
+        )}
       </div>
     </div>
   );
