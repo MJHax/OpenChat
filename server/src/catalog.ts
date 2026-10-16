@@ -26,10 +26,10 @@ function readCache(db: DB): Cached | undefined {
  * Input modalities per model id from the cached catalog, however old; empty when nothing is cached.
  * A legacy cache predates modalities (its ['text'] is only a default), so it counts as knowing nothing.
  */
-export function cachedModalities(db: DB): Map<string, string[]> {
+export function cachedCapabilities(db: DB): Map<string, { inputModalities: string[]; supportsTools: boolean }> {
   const cached = readCache(db);
   if (!cached || cached.legacy) return new Map();
-  return new Map(cached.models.map((m) => [m.id, m.inputModalities]));
+  return new Map(cached.models.map((m) => [m.id, { inputModalities: m.inputModalities, supportsTools: m.supportsTools }]));
 }
 
 async function fetchRankings(openrouter: OpenRouterClient): Promise<Rankings> {

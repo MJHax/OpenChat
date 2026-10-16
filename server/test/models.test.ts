@@ -3,12 +3,12 @@ import { makeApp } from './appHelpers';
 import { OpenRouterError } from '../src/openrouter';
 import type { CatalogModel, CatalogResponse, LibraryModel } from '../../shared/types';
 import { withCatalogDefaults } from '../../shared/types';
-import { modelModalities } from '../src/library';
+import { modelModalities, modelSupportsTools } from '../src/library';
 
 const CATALOG: CatalogModel[] = [
   { id: 'openai/gpt-4o:free', name: 'GPT-4o (free)', contextLength: 128000, promptPrice: 0, completionPrice: 0 },
   { id: '~anthropic/claude', name: 'Claude', contextLength: 200000, promptPrice: 0.000003, completionPrice: 0.000015 },
-  { id: 'google/gemini', name: 'Gemini', contextLength: 1000000, promptPrice: 0.000001, completionPrice: 0.000004, inputModalities: ['text', 'image', 'file'] },
+  { id: 'google/gemini', name: 'Gemini', contextLength: 1000000, promptPrice: 0.000001, completionPrice: 0.000004, inputModalities: ['text', 'image', 'file'], supportsTools: true },
 ].map(withCatalogDefaults);
 
 function setup(listModels?: () => Promise<CatalogModel[]>) {
@@ -216,5 +216,24 @@ describe('model library', () => {
     db.prepare('UPDATE models SET input_modalities = NULL').run();
     db.prepare('DELETE FROM model_catalog_cache').run();
     expect(modelModalities(db, 'google/gemini')).toEqual(['text']);
+  });
+});
+
+describe('tool support', () => {
+  it('stores tool support, backfills it from the catalog, and treats unknown as none', async () => {
+    const { call, db } = setup();
+    await call('POST', '/api/models', { id: 'google/gemini' });
+    await call('POST', '/api/models', { id: '~anthropic/claude' });
+    expect(modelSupportsTools(db, 'google/gemini')).toBe(true);
+    expect(modelSupportsTools(db, '~anthropic/claude')).toBe(false);
+    expect(modelSupportsTools(db, 'not/in-library')).toBe(false);
+
+    db.prepare('UPDATE models SET supports_tools = NULL').run();
+    expect(modelSupportsTools(db, 'google/gemini')).toBe(true);
+    expect((db.prepare("SELECT supports_tools AS v FROM models WHERE id = 'google/gemini'").get() as { v: number | null }).v).toBe(1);
+
+    db.prepare('UPDATE models SET supports_tools = NULL').run();
+    db.prepare('DELETE FROM model_catalog_cache').run();
+    expect(modelSupportsTools(db, 'google/gemini')).toBe(false);
   });
 });

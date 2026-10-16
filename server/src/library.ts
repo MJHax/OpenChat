@@ -2,7 +2,7 @@ import type { DB } from './db';
 import { now } from './db';
 import { HttpError } from './http';
 import { getSetting, setSetting } from './settings';
-import { cachedModalities } from './catalog';
+import { cachedCapabilities } from './catalog';
 import type { CatalogModel, LibraryModel } from '../../shared/types';
 
 interface ModelRow {
@@ -12,21 +12,23 @@ interface ModelRow {
   prompt_price: number | null;
   completion_price: number | null;
   input_modalities: string | null;
+  supports_tools: number | null;
 }
 
 const TEXT_ONLY = ['text'];
 
-/** Rows added before modalities were stored are filled in from the cached catalog when it knows the model. */
-function backfillModalities(db: DB, rows: ModelRow[]): void {
-  const missing = rows.filter((r) => r.input_modalities === null);
+/** Rows added before capabilities were stored are filled in from the cached catalog when it knows the model. */
+function backfillCapabilities(db: DB, rows: ModelRow[]): void {
+  const missing = rows.filter((r) => r.input_modalities === null || r.supports_tools === null);
   if (missing.length === 0) return;
-  const cached = cachedModalities(db);
-  const update = db.prepare('UPDATE models SET input_modalities = ? WHERE id = ?');
+  const cached = cachedCapabilities(db);
+  const update = db.prepare('UPDATE models SET input_modalities = ?, supports_tools = ? WHERE id = ?');
   for (const r of missing) {
-    const modalities = cached.get(r.id);
-    if (!modalities) continue;
-    r.input_modalities = JSON.stringify(modalities);
-    update.run(r.input_modalities, r.id);
+    const caps = cached.get(r.id);
+    if (!caps) continue;
+    r.input_modalities ??= JSON.stringify(caps.inputModalities);
+    r.supports_tools ??= caps.supportsTools ? 1 : 0;
+    update.run(r.input_modalities, r.supports_tools, r.id);
   }
 }
 
@@ -36,8 +38,16 @@ const parseModalities = (value: string | null): string[] => (value ? (JSON.parse
 export function modelModalities(db: DB, id: string): string[] {
   const row = db.prepare('SELECT * FROM models WHERE id = ?').get(id) as ModelRow | undefined;
   if (!row) return TEXT_ONLY;
-  backfillModalities(db, [row]);
+  backfillCapabilities(db, [row]);
   return parseModalities(row.input_modalities);
+}
+
+/** Whether a model can use tools (and so OpenRouter's web search tool); false when unknown. */
+export function modelSupportsTools(db: DB, id: string): boolean {
+  const row = db.prepare('SELECT * FROM models WHERE id = ?').get(id) as ModelRow | undefined;
+  if (!row) return false;
+  backfillCapabilities(db, [row]);
+  return row.supports_tools === 1;
 }
 
 export function displayNameOf(db: DB, id: string): string {
@@ -48,7 +58,7 @@ export function displayNameOf(db: DB, id: string): string {
 export function listLibrary(db: DB): LibraryModel[] {
   const defaultId = getSetting(db, 'default_model_id');
   const rows = db.prepare('SELECT * FROM models ORDER BY added_at').all() as ModelRow[];
-  backfillModalities(db, rows);
+  backfillCapabilities(db, rows);
   return rows.map((r) => ({
     id: r.id,
     displayName: r.display_name,
@@ -66,8 +76,8 @@ export function requireLibraryModel(db: DB, id: string): void {
 
 export function addModel(db: DB, meta: CatalogModel): void {
   db.prepare(
-    'INSERT OR IGNORE INTO models (id, display_name, context_length, prompt_price, completion_price, added_at, input_modalities) VALUES (?, ?, ?, ?, ?, ?, ?)',
-  ).run(meta.id, meta.name, meta.contextLength, meta.promptPrice, meta.completionPrice, now(), JSON.stringify(meta.inputModalities));
+    'INSERT OR IGNORE INTO models (id, display_name, context_length, prompt_price, completion_price, added_at, input_modalities, supports_tools) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+  ).run(meta.id, meta.name, meta.contextLength, meta.promptPrice, meta.completionPrice, now(), JSON.stringify(meta.inputModalities), meta.supportsTools ? 1 : 0);
   if (!getSetting(db, 'default_model_id')) setSetting(db, 'default_model_id', meta.id);
 }
 

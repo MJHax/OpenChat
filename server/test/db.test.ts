@@ -101,3 +101,43 @@ describe('database', () => {
     expect(getMessage(db, a.id)?.attachments).toEqual([]);
   });
 });
+
+describe('web search storage', () => {
+  it('stores the search flag and sources on messages', () => {
+    const db = openDb(':memory:');
+    const chat = createChat(db);
+    const u = insertMessage(db, { chatId: chat.id, parentId: null, role: 'user', content: 'news?', webSearch: true });
+    const a = insertMessage(db, {
+      chatId: chat.id, parentId: u.id, role: 'assistant', content: 'ok',
+      sources: [{ url: 'https://a.example', title: 'A' }], webSearches: 2,
+    });
+    const plain = insertMessage(db, { chatId: chat.id, parentId: a.id, role: 'user', content: 'thanks' });
+    const [user, reply, last] = getChatMessages(db, chat.id);
+    expect(user.webSearch).toBe(true);
+    expect(reply).toMatchObject({ webSearch: false, sources: [{ url: 'https://a.example', title: 'A' }], webSearches: 2 });
+    expect(last).toMatchObject({ webSearch: false, sources: [], webSearches: null });
+    expect(getMessage(db, a.id)?.sources).toEqual([{ url: 'https://a.example', title: 'A' }]);
+    expect(getMessage(db, plain.id)?.sources).toEqual([]);
+  });
+
+  it('adds the web search columns to old databases', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'openchat-')), 'old.db');
+    const old = new Database(file);
+    old.exec(`
+      CREATE TABLE models (id TEXT PRIMARY KEY, display_name TEXT NOT NULL, context_length INTEGER, prompt_price REAL, completion_price REAL, added_at INTEGER NOT NULL);
+      CREATE TABLE chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, active_leaf_id TEXT);
+      CREATE TABLE messages (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, chat_id TEXT NOT NULL, parent_id TEXT,
+        role TEXT NOT NULL, content TEXT NOT NULL, model_id TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, cost REAL,
+        status TEXT NOT NULL DEFAULT 'complete', created_at INTEGER NOT NULL);
+      INSERT INTO chats VALUES ('c1', 'Old', 1, 1, 'm1');
+      INSERT INTO messages (id, chat_id, parent_id, role, content, created_at) VALUES ('m1', 'c1', NULL, 'user', 'hi', 1);
+    `);
+    old.close();
+    const db = openDb(file);
+    const cols = (table: string) => (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+    expect(cols('messages')).toEqual(expect.arrayContaining(['web_search', 'sources', 'web_searches']));
+    expect(cols('models')).toContain('supports_tools');
+    expect(getMessage(db, 'm1')).toMatchObject({ webSearch: false, sources: [], webSearches: null });
+    db.close();
+  });
+});

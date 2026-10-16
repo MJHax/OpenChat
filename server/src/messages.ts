@@ -1,7 +1,7 @@
 import type { DB } from './db';
 import { attachmentsFor } from './attachments';
 import { newId, now } from './db';
-import type { Message, MessageStatus, Role } from '../../shared/types';
+import type { Message, MessageStatus, Role, Source } from '../../shared/types';
 
 interface MessageRow {
   id: string;
@@ -15,6 +15,9 @@ interface MessageRow {
   cost: number | null;
   status: string;
   created_at: number;
+  web_search: number;
+  sources: string | null;
+  web_searches: number | null;
 }
 
 const toMessage = (r: MessageRow, attachments: Map<string, Message['attachments']>): Message => ({
@@ -30,19 +33,24 @@ const toMessage = (r: MessageRow, attachments: Map<string, Message['attachments'
   status: r.status as MessageStatus,
   createdAt: r.created_at,
   attachments: attachments.get(r.id) ?? [],
+  webSearch: r.web_search === 1,
+  sources: r.sources ? (JSON.parse(r.sources) as Source[]) : [],
+  webSearches: r.web_searches,
 });
 
 export type NewMessage = Pick<Message, 'chatId' | 'parentId' | 'role' | 'content'> &
-  Partial<Pick<Message, 'id' | 'modelId' | 'promptTokens' | 'completionTokens' | 'cost' | 'status'>>;
+  Partial<Pick<Message, 'id' | 'modelId' | 'promptTokens' | 'completionTokens' | 'cost' | 'status' | 'webSearch' | 'sources' | 'webSearches'>>;
 
 export function insertMessage(db: DB, m: NewMessage): Message {
   const id = m.id ?? newId();
   db.prepare(
-    `INSERT INTO messages (id, chat_id, parent_id, role, content, model_id, prompt_tokens, completion_tokens, cost, status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO messages (id, chat_id, parent_id, role, content, model_id, prompt_tokens, completion_tokens, cost, status, created_at,
+       web_search, sources, web_searches)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id, m.chatId, m.parentId, m.role, m.content, m.modelId ?? null,
     m.promptTokens ?? null, m.completionTokens ?? null, m.cost ?? null, m.status ?? 'complete', now(),
+    m.webSearch ? 1 : 0, m.sources?.length ? JSON.stringify(m.sources) : null, m.webSearches ?? null,
   );
   return getMessage(db, id)!;
 }

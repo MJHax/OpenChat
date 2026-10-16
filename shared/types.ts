@@ -12,6 +12,12 @@ export interface Attachment {
   size: number;
 }
 
+/** A web page a reply's search drew on. */
+export interface Source {
+  url: string;
+  title: string;
+}
+
 export interface Message {
   id: string;
   chatId: string;
@@ -26,6 +32,12 @@ export interface Message {
   createdAt: number;
   /** Files attached to a user message, in order; [] for assistant messages and plain text. */
   attachments: Attachment[];
+  /** User messages: whether web search was on when sent. Always false for assistant messages. */
+  webSearch: boolean;
+  /** Assistant messages: pages the reply's searches drew on, deduplicated by URL; [] otherwise. */
+  sources: Source[];
+  /** Assistant messages: how many searches ran, when known. */
+  webSearches: number | null;
 }
 
 /** A message on the active path, with its sibling versions (same parent), oldest first. */

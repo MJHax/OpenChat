@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS models (
   prompt_price REAL,
   completion_price REAL,
   added_at INTEGER NOT NULL,
-  input_modalities TEXT
+  input_modalities TEXT,
+  supports_tools INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS memories (
@@ -46,7 +47,10 @@ CREATE TABLE IF NOT EXISTS messages (
   completion_tokens INTEGER,
   cost REAL,
   status TEXT NOT NULL DEFAULT 'complete',
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  web_search INTEGER NOT NULL DEFAULT 0,
+  sources TEXT,
+  web_searches INTEGER
 );
 CREATE INDEX IF NOT EXISTS messages_chat ON messages(chat_id, created_at);
 
@@ -98,6 +102,11 @@ function migrate(db: DB): void {
   if (!chatColumns.includes('compare_parent_id')) db.exec('ALTER TABLE chats ADD COLUMN compare_parent_id TEXT');
   const modelColumns = (db.prepare('PRAGMA table_info(models)').all() as { name: string }[]).map((c) => c.name);
   if (!modelColumns.includes('input_modalities')) db.exec('ALTER TABLE models ADD COLUMN input_modalities TEXT');
+  if (!modelColumns.includes('supports_tools')) db.exec('ALTER TABLE models ADD COLUMN supports_tools INTEGER');
+  const messageColumns = (db.prepare('PRAGMA table_info(messages)').all() as { name: string }[]).map((c) => c.name);
+  if (!messageColumns.includes('web_search')) db.exec('ALTER TABLE messages ADD COLUMN web_search INTEGER NOT NULL DEFAULT 0');
+  if (!messageColumns.includes('sources')) db.exec('ALTER TABLE messages ADD COLUMN sources TEXT');
+  if (!messageColumns.includes('web_searches')) db.exec('ALTER TABLE messages ADD COLUMN web_searches INTEGER');
 }
 
 export const newId = (): string => randomUUID();
