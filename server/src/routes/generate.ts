@@ -3,6 +3,7 @@ import type { Deps } from '../app';
 import { HttpError, readJson } from '../http';
 import { pendingChoice, requireChat, setActiveLeaf, touchChat, type ChatRow } from '../chats';
 import { getMessage, insertMessage } from '../messages';
+import { attachToMessage, requireViewable, resolveAttachmentIds, type AttachmentRow } from '../attachments';
 import { streamReply } from '../generate';
 import { streamComparison } from '../compare';
 import type { DB } from '../db';
@@ -11,6 +12,12 @@ import type { Message } from '../../../shared/types';
 const requireText = (value: unknown, error: string): string => {
   if (typeof value !== 'string' || !value.trim()) throw new HttpError(400, error);
   return value;
+};
+
+/** Message text, which may be empty when the message has attachments. */
+const requireContent = (value: unknown, attachments: AttachmentRow[]): string => {
+  if (attachments.length > 0 && (value === undefined || value === '' || (typeof value === 'string' && !value.trim()))) return '';
+  return requireText(value, 'Message is empty.');
 };
 
 /** One model (`modelId`) or a comparison of 2–4 distinct models (`modelIds`). */
@@ -59,14 +66,23 @@ export function generationRoutes(deps: Deps): Hono {
     }
   }
 
+  /** Saves a user message and its attachments together. */
+  const saveUserMessage = db.transaction((chatId: string, parentId: string | null, content: string, attachments: AttachmentRow[]) => {
+    const user = insertMessage(db, { chatId, parentId, role: 'user', content });
+    attachToMessage(db, user.id, attachments);
+    return user;
+  });
+
   r.post('/:id/messages', async (c) => {
     const chatId = c.req.param('id');
     const chat = requireChat(db, chatId);
-    const body = await readJson<{ content?: string; modelId?: unknown; modelIds?: unknown }>(c);
-    const content = requireText(body.content, 'Message is empty.');
+    const body = await readJson<{ content?: string; modelId?: unknown; modelIds?: unknown; attachmentIds?: unknown }>(c);
+    const attachments = resolveAttachmentIds(db, body.attachmentIds, { editedMessageId: null });
+    const content = requireContent(body.content, attachments);
     const modelIds = requireModels(body);
+    requireViewable(db, modelIds, attachments);
     claim(chat);
-    const user = insertMessage(db, { chatId, parentId: chat.active_leaf_id, role: 'user', content });
+    const user = saveUserMessage(chatId, chat.active_leaf_id, content, attachments);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
     return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id });
@@ -85,12 +101,14 @@ export function generationRoutes(deps: Deps): Hono {
   r.post('/:id/edit', async (c) => {
     const chatId = c.req.param('id');
     const chat = requireChat(db, chatId);
-    const body = await readJson<{ messageId?: string; content?: string; modelId?: unknown; modelIds?: unknown }>(c);
+    const body = await readJson<{ messageId?: string; content?: string; modelId?: unknown; modelIds?: unknown; attachmentIds?: unknown }>(c);
     const original = requireUserMessage(db, chatId, body.messageId);
-    const content = requireText(body.content, 'Message is empty.');
+    const attachments = resolveAttachmentIds(db, body.attachmentIds, { editedMessageId: original.id });
+    const content = requireContent(body.content, attachments);
     const modelIds = requireModels(body);
+    requireViewable(db, modelIds, attachments);
     claim(chat);
-    const user = insertMessage(db, { chatId, parentId: original.parentId, role: 'user', content });
+    const user = saveUserMessage(chatId, original.parentId, content, attachments);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
     return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id });

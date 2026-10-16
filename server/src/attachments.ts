@@ -1,6 +1,10 @@
 import type { DB } from './db';
 import { newId, now } from './db';
-import { PENDING_TTL_MS } from '../../shared/attachments';
+import { HttpError } from './http';
+import { displayNameOf, modelModalities } from './library';
+import {
+  BAD_ATTACHMENT, MAX_ATTACHMENTS, MAX_TOTAL_BYTES, PENDING_TTL_MS, TOO_MANY_FILES, TOO_MUCH_TOTAL, canViewImages,
+} from '../../shared/attachments';
 import type { Attachment, AttachmentKind } from '../../shared/types';
 
 export type AttachmentRow = Attachment & { messageId: string | null };
@@ -78,6 +82,44 @@ export function deletePending(db: DB, id: string): 'deleted' | 'sent' | 'missing
 /** Deletes uploads that were never sent; returns how many were removed. */
 export function cleanupPending(db: DB, olderThanMs = PENDING_TTL_MS): number {
   return db.prepare('DELETE FROM attachments WHERE message_id IS NULL AND created_at < ?').run(now() - olderThanMs).changes;
+}
+
+/**
+ * Looks up the attachments a send or edit refers to, in request order. Each must be pending, or (for an edit)
+ * belong to the message being edited. Throws a 400 for anything else.
+ */
+export function resolveAttachmentIds(db: DB, ids: unknown, opts: { editedMessageId: string | null }): AttachmentRow[] {
+  if (ids === undefined) return [];
+  if (!Array.isArray(ids) || new Set(ids).size !== ids.length) throw new HttpError(400, BAD_ATTACHMENT);
+  if (ids.length > MAX_ATTACHMENTS) throw new HttpError(400, TOO_MANY_FILES);
+  const rows = ids.map((id) => {
+    const row = typeof id === 'string' ? getAttachmentRow(db, id) : undefined;
+    const allowed = row && (row.messageId === null || (opts.editedMessageId !== null && row.messageId === opts.editedMessageId));
+    if (!allowed) throw new HttpError(400, BAD_ATTACHMENT);
+    return row;
+  });
+  if (rows.reduce((sum, r) => sum + r.size, 0) > MAX_TOTAL_BYTES) throw new HttpError(400, TOO_MUCH_TOTAL);
+  return rows;
+}
+
+/** Gives `messageId` the attachments in order: pending ones are claimed, ones owned by another message are copied. */
+export function attachToMessage(db: DB, messageId: string, list: AttachmentRow[]): void {
+  const claim = db.prepare('UPDATE attachments SET message_id = ?, position = ? WHERE id = ?');
+  const copy = db.prepare(
+    `INSERT INTO attachments (id, message_id, position, kind, filename, mime, size, data, created_at)
+     SELECT ?, ?, ?, kind, filename, mime, size, data, ? FROM attachments WHERE id = ?`,
+  );
+  list.forEach((a, position) => {
+    if (a.messageId === null) claim.run(messageId, position, a.id);
+    else copy.run(newId(), messageId, position, now(), a.id);
+  });
+}
+
+/** Rejects new images for any model that can't view them; older images are handled by the prompt builder. */
+export function requireViewable(db: DB, modelIds: string[], list: Attachment[]): void {
+  if (!list.some((a) => a.kind === 'image')) return;
+  const blind = modelIds.find((id) => !canViewImages(modelModalities(db, id)));
+  if (blind) throw new HttpError(400, `${displayNameOf(db, blind)} can't view images.`);
 }
 
 /** Attachment metadata for each of `messageIds` that has any, in position order. */

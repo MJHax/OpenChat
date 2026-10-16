@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { openDb, now } from '../src/db';
-import { makeApp } from './appHelpers';
-import { MB, UNSUPPORTED_TYPE } from '../../shared/attachments';
-import type { Attachment } from '../../shared/types';
+import { makeApp, readEvents } from './appHelpers';
+import { BAD_ATTACHMENT, MB, TOO_MANY_FILES, UNSUPPORTED_TYPE } from '../../shared/attachments';
+import { withCatalogDefaults, type Attachment, type ChatSummary } from '../../shared/types';
+import { addModel } from '../src/library';
+import { getChatMessages } from '../src/messages';
+import type { OpenRouterClient } from '../src/openrouter';
 import { createChat, deleteChat } from '../src/chats';
 import { insertMessage } from '../src/messages';
 import {
@@ -192,5 +195,121 @@ describe('attachment routes', () => {
     db.prepare('UPDATE attachments SET created_at = ? WHERE id = ?').run(now() - 25 * 60 * 60 * 1000, stale.id);
     await upload('new', 'new.txt');
     expect(getAttachmentRow(db, stale.id)).toBeUndefined();
+  });
+});
+
+describe('sending with attachments', () => {
+  const setup = () => {
+    const ctx = makeApp({ streamChat: async function* () { yield { type: 'delta', text: 'ok' }; } });
+    addModel(ctx.db, withCatalogDefaults({ id: 't/text', name: 'Text Model' }));
+    addModel(ctx.db, withCatalogDefaults({ id: 'v/vision', name: 'Vision Model', inputModalities: ['text', 'image'] }));
+    const newChat = async () => ((await (await ctx.call('POST', '/api/chats')).json()) as ChatSummary).id;
+    const up = async (data: Uint8Array | string, name: string) => (await (await ctx.upload(data, name)).json()) as Attachment;
+    const send = (chatId: string, body: object) => ctx.call('POST', `/api/chats/${chatId}/messages`, { modelId: 'v/vision', ...body });
+    const userMessages = (chatId: string) => getChatMessages(ctx.db, chatId).filter((m) => m.role === 'user');
+    return { ...ctx, newChat, up, send, userMessages };
+  };
+
+  it('claims the attachments in request order', async () => {
+    const { newChat, up, send, userMessages, db } = setup();
+    const chatId = await newChat();
+    const a = await up('a', 'a.txt');
+    const b = await up(PNG, 'b.png');
+    await readEvents(await send(chatId, { content: 'Look', attachmentIds: [b.id, a.id] }));
+    const [user] = userMessages(chatId);
+    expect(user.attachments.map((x) => x.id)).toEqual([b.id, a.id]);
+    expect(getAttachmentRow(db, a.id)?.messageId).toBe(user.id);
+  });
+
+  it('allows a message with attachments and no text, but not an empty one', async () => {
+    const { newChat, up, send } = setup();
+    const chatId = await newChat();
+    const a = await up('a', 'a.txt');
+    const ok = await send(chatId, { content: '', attachmentIds: [a.id] });
+    expect(ok.status).toBe(200);
+    await readEvents(ok);
+    const empty = await send(chatId, { content: '' });
+    expect(empty.status).toBe(400);
+    expect((await empty.json()).error).toBe('Message is empty.');
+  });
+
+  it('rejects unknown, duplicate, already-used and too many attachment ids', async () => {
+    const { newChat, up, send } = setup();
+    const chatId = await newChat();
+    const a = await up('a', 'a.txt');
+    for (const attachmentIds of [['nope'], [a.id, a.id]]) {
+      const res = await send(chatId, { content: 'x', attachmentIds });
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe(BAD_ATTACHMENT);
+    }
+    await readEvents(await send(chatId, { content: 'x', attachmentIds: [a.id] }));
+    const reused = await send(chatId, { content: 'y', attachmentIds: [a.id] });
+    expect((await reused.json()).error).toBe(BAD_ATTACHMENT);
+    const many = await Promise.all(Array.from({ length: 11 }, (_, i) => up(String(i), `${i}.txt`)));
+    const tooMany = await send(chatId, { content: 'z', attachmentIds: many.map((m) => m.id) });
+    expect(tooMany.status).toBe(400);
+    expect((await tooMany.json()).error).toBe(TOO_MANY_FILES);
+  });
+
+  it('rejects a new image for a model that cannot view images, but allows PDFs and text', async () => {
+    const { newChat, up, send, call } = setup();
+    const chatId = await newChat();
+    const image = await up(PNG, 'photo.png');
+    const res = await send(chatId, { content: 'x', modelId: 't/text', attachmentIds: [image.id] });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Text Model can't view images.");
+    const compare = await call('POST', `/api/chats/${chatId}/messages`, { content: 'x', modelIds: ['v/vision', 't/text'], attachmentIds: [image.id] });
+    expect(compare.status).toBe(400);
+    const pdf = await up(PDF, 'doc.pdf');
+    const text = await up('notes', 'n.md');
+    const ok = await send(chatId, { content: 'x', modelId: 't/text', attachmentIds: [pdf.id, text.id] });
+    expect(ok.status).toBe(200);
+    await readEvents(ok);
+  });
+
+  it('leaves attachments pending when the chat is busy', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const streamChat: OpenRouterClient['streamChat'] = async function* () { yield { type: 'delta', text: 'Working' }; await gate; };
+    const { call, upload, db } = makeApp({ streamChat });
+    const chatId = ((await (await call('POST', '/api/chats')).json()) as ChatSummary).id;
+    const first = await call('POST', `/api/chats/${chatId}/messages`, { content: 'Long', modelId: 'm/a' });
+    const a = (await (await upload('a', 'a.txt')).json()) as Attachment;
+    const busy = await call('POST', `/api/chats/${chatId}/messages`, { content: 'Next', modelId: 'm/a', attachmentIds: [a.id] });
+    expect(busy.status).toBe(409);
+    expect(getAttachmentRow(db, a.id)?.messageId).toBeNull();
+    release();
+    await readEvents(first);
+  });
+
+  it('edit copies kept attachments, claims new ones and leaves the original alone', async () => {
+    const { newChat, up, send, call, userMessages } = setup();
+    const chatId = await newChat();
+    const keep = await up('keep', 'keep.txt');
+    const drop = await up('drop', 'drop.txt');
+    await readEvents(await send(chatId, { content: 'v1', attachmentIds: [keep.id, drop.id] }));
+    const [original] = userMessages(chatId);
+    const added = await up('new', 'new.txt');
+    const res = await call('POST', `/api/chats/${chatId}/edit`, { messageId: original.id, content: 'v2', modelId: 'v/vision', attachmentIds: [keep.id, added.id] });
+    expect(res.status).toBe(200);
+    await readEvents(res);
+    const versions = userMessages(chatId);
+    const edited = versions.find((m) => m.content === 'v2')!;
+    expect(edited.attachments.map((x) => x.filename)).toEqual(['keep.txt', 'new.txt']);
+    expect(edited.attachments[0].id).not.toBe(keep.id);
+    expect(edited.attachments[1].id).toBe(added.id);
+    expect(versions.find((m) => m.content === 'v1')!.attachments.map((x) => x.id)).toEqual([keep.id, drop.id]);
+  });
+
+  it('edit rejects attachments that belong to a different message', async () => {
+    const { newChat, up, send, call, userMessages } = setup();
+    const chatId = await newChat();
+    const other = await up('other', 'other.txt');
+    await readEvents(await send(chatId, { content: 'first', attachmentIds: [other.id] }));
+    await readEvents(await send(chatId, { content: 'second' }));
+    const second = userMessages(chatId).find((m) => m.content === 'second')!;
+    const res = await call('POST', `/api/chats/${chatId}/edit`, { messageId: second.id, content: 'x', modelId: 'v/vision', attachmentIds: [other.id] });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe(BAD_ATTACHMENT);
   });
 });
