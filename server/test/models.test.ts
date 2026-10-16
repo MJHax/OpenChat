@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { makeApp } from './appHelpers';
 import { OpenRouterError } from '../src/openrouter';
 import type { CatalogModel, CatalogResponse, LibraryModel } from '../../shared/types';
@@ -82,6 +82,34 @@ describe('catalog', () => {
     expect(res.stale).toBe(true);
     expect(res.rankings).toEqual({});
     expect(res.models).toEqual([withCatalogDefaults(legacy)]);
+  });
+
+  it('retries rankings after a few minutes when a category failed, instead of caching the gap for a day', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const t0 = Date.UTC(2026, 9, 15, 12);
+      vi.setSystemTime(t0);
+      let fail = true;
+      let modelCalls = 0;
+      const { call } = makeApp({
+        listModels: async () => { modelCalls++; return CATALOG; },
+        listCategory: async (category) => {
+          if (fail && category === 'roleplay') throw new OpenRouterError('Rate limited', 429);
+          return ['google/gemini'];
+        },
+      });
+      await call('GET', '/api/models/catalog');
+      fail = false;
+      vi.setSystemTime(t0 + 60_000);
+      await call('GET', '/api/models/catalog');
+      expect(modelCalls).toBe(1);
+      vi.setSystemTime(t0 + 6 * 60_000);
+      const res = (await (await call('GET', '/api/models/catalog')).json()) as CatalogResponse;
+      expect(modelCalls).toBe(2);
+      expect(res.rankings.roleplay).toEqual(['google/gemini']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('treats a cache row without rankings as having none', async () => {

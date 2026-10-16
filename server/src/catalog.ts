@@ -5,9 +5,11 @@ import { CATEGORIES, withCatalogDefaults } from '../../shared/types';
 import type { CatalogModel, CatalogResponse } from '../../shared/types';
 
 export const CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
+/** A refresh where some category lists failed (e.g. rate limits) is retried soon rather than kept for a day. */
+export const PARTIAL_TTL_MS = 5 * 60 * 1000;
 
 type Rankings = CatalogResponse['rankings'];
-interface Cached { models: CatalogModel[]; rankings: Rankings; fetchedAt: number; legacy: boolean }
+interface Cached { models: CatalogModel[]; rankings: Rankings; fetchedAt: number; legacy: boolean; partial: boolean }
 
 /** Rows written before rankings existed hold a bare model array; they're flagged legacy so they get refetched. */
 function readCache(db: DB): Cached | undefined {
@@ -16,8 +18,8 @@ function readCache(db: DB): Cached | undefined {
     | undefined;
   if (!row) return undefined;
   const parsed = JSON.parse(row.json);
-  if (Array.isArray(parsed)) return { models: parsed.map(withCatalogDefaults), rankings: {}, fetchedAt: row.fetched_at, legacy: true };
-  return { models: parsed.models, rankings: parsed.rankings ?? {}, fetchedAt: row.fetched_at, legacy: false };
+  if (Array.isArray(parsed)) return { models: parsed.map(withCatalogDefaults), rankings: {}, fetchedAt: row.fetched_at, legacy: true, partial: true };
+  return { models: parsed.models, rankings: parsed.rankings ?? {}, fetchedAt: row.fetched_at, legacy: false, partial: parsed.partial === true };
 }
 
 async function fetchRankings(openrouter: OpenRouterClient): Promise<Rankings> {
@@ -31,16 +33,18 @@ async function fetchRankings(openrouter: OpenRouterClient): Promise<Rankings> {
 
 export async function getCatalog(db: DB, openrouter: OpenRouterClient, refresh: boolean): Promise<CatalogResponse> {
   const cached = readCache(db);
-  if (cached && !cached.legacy && !refresh && Date.now() - cached.fetchedAt < CATALOG_TTL_MS) {
+  const ttl = cached?.partial ? PARTIAL_TTL_MS : CATALOG_TTL_MS;
+  if (cached && !cached.legacy && !refresh && Date.now() - cached.fetchedAt < ttl) {
     return { models: cached.models, rankings: cached.rankings, fetchedAt: cached.fetchedAt, stale: false };
   }
   try {
     const [list, rankings] = await Promise.all([openrouter.listModels(), fetchRankings(openrouter)]);
     const models = list.sort((a, b) => a.name.localeCompare(b.name));
     const fetchedAt = Date.now();
+    const partial = Object.keys(rankings).length < CATEGORIES.length;
     db.prepare(
       'INSERT INTO model_catalog_cache (id, fetched_at, json) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET fetched_at = excluded.fetched_at, json = excluded.json',
-    ).run(fetchedAt, JSON.stringify({ models, rankings }));
+    ).run(fetchedAt, JSON.stringify({ models, rankings, partial }));
     return { models, rankings, fetchedAt, stale: false };
   } catch (err) {
     if (cached) return { models: cached.models, rankings: cached.rankings, fetchedAt: cached.fetchedAt, stale: true };
