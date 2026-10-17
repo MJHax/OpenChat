@@ -10,7 +10,7 @@ import { ChatStatsPopover } from './ChatStatsPopover';
 import { ContextPopover } from './ContextPopover';
 import { CompareColumns, type Column } from './CompareColumns';
 import { Composer } from './Composer';
-import { Markdown } from './Markdown';
+import { MessageBody } from './MessageBody';
 import { MessageItem } from './MessageItem';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { toDraft } from './useAttachmentDraft';
@@ -339,7 +339,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
           {pending && pending.slots.length === 1 && (
             <div className="msg assistant">
               {!pending.slots[0].text && <ThinkingIndicator startedAt={pending.startedAt} reasoning={pending.slots[0].reasoning} webSearch={pending.webSearch} />}
-              {pending.slots[0].text && <div className="msg-body"><Markdown text={pending.slots[0].text} /></div>}
+              {pending.slots[0].text && <div className="msg-body"><MessageBody text={pending.slots[0].text} messageId={null} streaming /></div>}
               <div className="msg-meta"><span className="model-tag">{nameOf(pending.slots[0].modelId)}</span></div>
             </div>
           )}

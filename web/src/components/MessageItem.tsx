@@ -5,7 +5,8 @@ import { formatCost, formatTokens } from '../lib/format';
 import { AttachButton, useFileDrop } from './AttachButton';
 import { AttachmentChips } from './AttachmentChips';
 import { toDraft, useAttachmentDraft } from './useAttachmentDraft';
-import { Markdown } from './Markdown';
+import { MessageBody } from './MessageBody';
+import { copyText } from '../../../shared/files';
 import { RememberBox } from './RememberBox';
 import { Sources } from './Sources';
 import { SiblingNav } from './SiblingNav';
@@ -72,7 +73,7 @@ export function MessageItem({
   );
 
   const copy = async () => {
-    await navigator.clipboard.writeText(message.content);
+    await navigator.clipboard.writeText(message.role === 'assistant' ? copyText(message.content) : message.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -123,7 +124,7 @@ export function MessageItem({
 
   return (
     <div className="msg assistant">
-      <div className="msg-body" ref={bodyRef}><Markdown text={message.content} /></div>
+      <div className="msg-body" ref={bodyRef}><MessageBody text={message.content} messageId={message.id} streaming={false} /></div>
       {message.status === 'stopped' && <div className="muted small">Response stopped</div>}
       <Sources sources={message.sources} />
       <div className="msg-meta">

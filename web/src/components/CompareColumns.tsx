@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { Message } from '../../../shared/types';
 import { formatCost, formatTokens } from '../lib/format';
-import { Markdown } from './Markdown';
+import { MessageBody } from './MessageBody';
 import { Sources } from './Sources';
 import { ThinkingIndicator } from './ThinkingIndicator';
 
@@ -43,7 +43,7 @@ export function CompareColumns({ title, columns, onContinue, onClose }: Props) {
             <div key={col.key} className="compare-col">
               <div className="compare-model">{col.modelName}</div>
               {col.streaming && !col.text && <ThinkingIndicator startedAt={col.startedAt} reasoning={col.reasoning} webSearch={col.webSearch} />}
-              {col.text && <div className="msg-body"><Markdown text={col.text} /></div>}
+              {col.text && <div className="msg-body"><MessageBody text={col.text} messageId={m?.id ?? null} streaming={col.streaming} /></div>}
               {col.error && <div className="error-text small">{col.error}</div>}
               {m?.status === 'stopped' && !col.error && <div className="muted small">Response stopped</div>}
               {m && (

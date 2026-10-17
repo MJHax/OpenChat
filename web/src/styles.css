@@ -98,6 +98,17 @@ mark { background: var(--mark); color: inherit; border-radius: 2px; }
 .code-block pre { background: var(--code-bg); color: #e6e6e6; border-radius: 10px; padding: 14px; overflow-x: auto; font-size: 13.5px; }
 .code-block pre code.hljs { background: transparent; padding: 0; }
 .copy-code { position: absolute; top: 6px; right: 6px; font-size: 12px; padding: 2px 8px; background: #333; color: #ddd; border-color: #444; }
+.file-card { display: flex; align-items: center; gap: 10px; width: fit-content; max-width: 100%; margin: 8px 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.file-card.clickable { cursor: pointer; }
+.file-card.clickable:hover, .file-card.clickable:focus-visible { border-color: var(--accent); outline: none; }
+.file-icon { flex-shrink: 0; width: 40px; height: 40px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; background: var(--hover); color: var(--muted); }
+.file-icon.kind-html { background: #e8663d; color: #fff; }
+.file-icon.kind-svg { background: #7b5ea7; color: #fff; }
+.file-icon.kind-md { background: #4b6b8a; color: #fff; }
+.file-icon.kind-csv { background: #3e8a5b; color: #fff; }
+.file-card > button { flex-shrink: 0; white-space: nowrap; }
+.file-info { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-body code { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; }
 .msg-body :not(pre) > code { background: var(--user-bubble); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
 .msg-body table { border-collapse: collapse; }
