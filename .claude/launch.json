@@ -6,6 +6,16 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "openchat-stats-check",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsx", "server/src/index.ts"],
+      "env": {
+        "OPENCHAT_DB": "C:/Users/caleb/AppData/Local/Temp/claude/C--Users-caleb-OpenChat/a8776faf-c15e-4a90-b3ad-eeb8ec936674/scratchpad/stats-check.db",
+        "OPENCHAT_PORT": "3100"
+      },
+      "port": 3100
     }
   ]
 }

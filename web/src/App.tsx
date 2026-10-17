@@ -6,6 +6,7 @@ import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { ModelLibrary } from './pages/ModelLibrary';
 import { Settings } from './pages/Settings';
+import { Stats } from './pages/Stats';
 
 export function App() {
   const route = useRoute();
@@ -49,6 +50,7 @@ export function App() {
           <ChatView chatId={route.chatId} title={title} reloadToken={chatReload} models={models} settings={settings} onChatsChanged={refreshChats} />
         )}
         {route.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} />}
+        {route.page === 'stats' && <Stats />}
         {route.page === 'settings' && <Settings models={models} onChanged={refreshSettings} />}
       </main>
     </div>
