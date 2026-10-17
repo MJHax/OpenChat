@@ -187,7 +187,7 @@ My call on shapes; the builder may adjust names.
 - `GET /api/stats?range=all|year|month|week|today&tz=<IANA zone>` → everything the page needs in one response: tiles (with previous-period cost), heatmap days (always 12 months), chart buckets, model rows (with expanded fields), feature counts, biggest chats, and the tracking-since date.
 - `GET /api/chats/:id/stats` → the popover numbers. 404 for an unknown chat.
 
-Aggregation happens in SQL on the server.
+SQL selects the rows the response needs (by time); grouping by local day, hour and month happens in TypeScript on the server, because SQLite can't convert to a named time zone. The data is one person's usage, so this is cheap.
 
 ## Testing
 
