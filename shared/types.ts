@@ -187,3 +187,6 @@ export interface CompareSlotText { slot: number; text: string }
 export interface CompareSlotDone { slot: number; message: Message }
 export interface CompareSlotError { slot: number; message: string; partial: Message | null }
 export interface CompareDone { compareParentId: string | null }
+
+/** Time range the Stats page shows. */
+export type StatsRange = 'all' | 'year' | 'month' | 'week' | 'today';
