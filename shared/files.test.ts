@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fileKind, mapFileBlocks, mimeFor, parseFileBlocks, safeFileName } from './files';
+import { collapseSuperseded, copyText, fileKind, fileVersions, mapFileBlocks, mimeFor, parseFileBlocks, safeFileName } from './files';
 
 const fileAt = (text: string, i: number) => {
   const seg = parseFileBlocks(text)[i];
@@ -108,5 +108,56 @@ describe('safeFileName', () => {
     expect(safeFileName('a\\b:c*?.txt')).toBe('b_c__.txt');
     expect(safeFileName('   ')).toBe('file.txt');
     expect(safeFileName('report.html')).toBe('report.html');
+  });
+});
+
+const a = (id: string, content: string) => ({ id, role: 'assistant' as const, content });
+const u = (id: string, content: string) => ({ id, role: 'user' as const, content });
+const f = (name: string, body: string) => `<file name="${name}">\n${body}\n</file>`;
+
+describe('fileVersions', () => {
+  it('numbers same-name files across the path', () => {
+    const v = fileVersions([u('1', 'make'), a('2', f('p.html', 'v1')), u('3', 'blue'), a('4', f('p.html', 'v2'))]);
+    expect(v.get('p.html')!.map((x) => [x.messageId, x.version, x.file.content])).toEqual([['2', 1, 'v1'], ['4', 2, 'v2']]);
+  });
+
+  it('keeps different names apart', () => {
+    const v = fileVersions([a('2', `${f('a.css', '1')}\n${f('b.js', '2')}`)]);
+    expect([...v.keys()]).toEqual(['a.css', 'b.js']);
+    expect(v.get('b.js')![0].version).toBe(1);
+  });
+
+  it('skips user messages', () => {
+    expect(fileVersions([u('1', f('p.html', 'x'))]).size).toBe(0);
+  });
+
+  it('ignores other branches', () => {
+    // The caller passes only the active path; a stopped sibling holding p.html is simply not in it.
+    const path = [u('1', 'make'), a('3', f('p.html', 'regenerated'))];
+    expect(fileVersions(path).get('p.html')!.map((x) => [x.messageId, x.version])).toEqual([['3', 1]]);
+  });
+});
+
+describe('copyText', () => {
+  it('replaces blocks with markers', () => {
+    expect(copyText(`Hi\n${f('a.csv', '1,2')}`)).toBe('Hi\n[file: a.csv]');
+  });
+});
+
+describe('collapseSuperseded', () => {
+  it('keeps only the latest version in full', () => {
+    const out = collapseSuperseded([u('1', 'x'), a('2', f('p.html', 'old')), a('4', `${f('p.html', 'new')}\n${f('q.md', 'q')}`)]);
+    expect(out[1]).toBe('<file name="p.html" superseded="true" />');
+    expect(out[2]).toBe(`${f('p.html', 'new')}\n${f('q.md', 'q')}`);
+  });
+
+  it('leaves user messages untouched', () => {
+    const out = collapseSuperseded([u('1', f('p.html', 'pasted')), a('2', f('p.html', 'made'))]);
+    expect(out[0]).toBe(f('p.html', 'pasted'));
+  });
+
+  it('escapes quotes in the name', () => {
+    const block = (n: string) => `<file name="a &quot;b&quot;.txt">\n${n}\n</file>`;
+    expect(collapseSuperseded([a('1', block('1')), a('2', block('2'))])[0]).toBe('<file name="a &quot;b&quot;.txt" superseded="true" />');
   });
 });

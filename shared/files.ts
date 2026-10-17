@@ -73,7 +73,54 @@ export function mapFileBlocks(text: string, fn: (file: FileBlock) => string): st
   return parseFileBlocks(text).map((s) => (s.type === 'text' ? s.text : fn(s.file))).join('');
 }
 
-export type FileKind = 'html' | 'svg' | 'md' | 'csv' | 'code' | 'other';
+export interface FileVersion {
+  name: string;
+  messageId: string;
+  /** 1-based, in path order. */
+  version: number;
+  file: FileBlock;
+}
+
+type PathEntry = { role: 'user' | 'assistant'; content: string };
+
+const fileSegments = (content: string) => parseFileBlocks(content).flatMap((s) => (s.type === 'file' ? [s.file] : []));
+
+/** Same-name files in assistant messages on `path` (the active path, oldest first), as versions keyed by name. */
+export function fileVersions(path: (PathEntry & { id: string })[]): Map<string, FileVersion[]> {
+  const out = new Map<string, FileVersion[]>();
+  for (const m of path) {
+    if (m.role !== 'assistant') continue;
+    for (const file of fileSegments(m.content)) {
+      const list = out.get(file.name) ?? [];
+      list.push({ name: file.name, messageId: m.id, version: list.length + 1, file });
+      out.set(file.name, list);
+    }
+  }
+  return out;
+}
+
+/** A message as copied to the clipboard: files are downloaded, not copied. */
+export const copyText = (content: string): string => mapFileBlocks(content, (f) => `[file: ${f.name}]`);
+
+const attr = (value: string) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+
+/** Each message's content as sent to the model: an assistant file with a later same-name version is reduced to a stub. */
+export function collapseSuperseded(path: PathEntry[]): string[] {
+  const lastIndex = new Map<string, number>();
+  path.forEach((m, i) => {
+    if (m.role === 'assistant') for (const file of fileSegments(m.content)) lastIndex.set(file.name, i);
+  });
+  return path.map((m, i) => {
+    if (m.role !== 'assistant' || !fileSegments(m.content).some((f) => lastIndex.get(f.name)! > i)) return m.content;
+    return mapFileBlocks(m.content, (f) =>
+      lastIndex.get(f.name)! > i
+        ? `<file name="${attr(f.name)}" superseded="true" />`
+        : `<file name="${attr(f.name)}">\n${f.content}${f.complete ? '\n</file>' : ''}`,
+    );
+  });
+}
+
+export type FileKind ='html' | 'svg' | 'md' | 'csv' | 'code' | 'other';
 
 const CODE_EXTENSIONS = new Set([
   'ts', 'tsx', 'js', 'jsx', 'mjs', 'py', 'json', 'css', 'sh', 'sql', 'yaml', 'yml', 'xml', 'java', 'c', 'cpp', 'h', 'go', 'rs',
