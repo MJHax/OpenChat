@@ -79,6 +79,36 @@ CREATE TABLE IF NOT EXISTS attachments (
 );
 CREATE INDEX IF NOT EXISTS attachments_message ON attachments(message_id, position);
 
+-- One row per OpenRouter generation call. Never deleted; chat_id deliberately has no foreign key.
+CREATE TABLE IF NOT EXISTS usage_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at INTEGER NOT NULL,
+  purpose TEXT NOT NULL CHECK (purpose IN ('reply', 'title', 'memory')),
+  chat_id TEXT,
+  message_id TEXT,
+  run_id TEXT,
+  kind TEXT CHECK (kind IN ('send', 'edit', 'regenerate')),
+  compare INTEGER NOT NULL DEFAULT 0,
+  model_id TEXT NOT NULL,
+  prompt_tokens INTEGER,
+  completion_tokens INTEGER,
+  cached_tokens INTEGER,
+  cache_write_tokens INTEGER,
+  reasoning_tokens INTEGER,
+  cost REAL,
+  cache_savings REAL,
+  web_search INTEGER NOT NULL DEFAULT 0,
+  web_searches INTEGER,
+  attachments INTEGER NOT NULL DEFAULT 0,
+  first_token_ms INTEGER,
+  duration_ms INTEGER,
+  status TEXT NOT NULL CHECK (status IN ('complete', 'stopped', 'error')),
+  backfilled INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS usage_events_time ON usage_events(created_at);
+CREATE INDEX IF NOT EXISTS usage_events_chat ON usage_events(chat_id);
+CREATE INDEX IF NOT EXISTS usage_events_model ON usage_events(model_id);
+
 CREATE TABLE IF NOT EXISTS model_catalog_cache (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   fetched_at INTEGER NOT NULL,
@@ -107,6 +137,27 @@ function migrate(db: DB): void {
   if (!messageColumns.includes('web_search')) db.exec('ALTER TABLE messages ADD COLUMN web_search INTEGER NOT NULL DEFAULT 0');
   if (!messageColumns.includes('sources')) db.exec('ALTER TABLE messages ADD COLUMN sources TEXT');
   if (!messageColumns.includes('web_searches')) db.exec('ALTER TABLE messages ADD COLUMN web_searches INTEGER');
+  backfillUsage(db);
+}
+
+/**
+ * Copies replies saved before the usage log existed into it, once. Each becomes its own run; what old rows
+ * never recorded (kind, cache, reasoning, timing) stays null.
+ */
+function backfillUsage(db: DB): void {
+  if (db.prepare("SELECT 1 FROM settings WHERE key = 'usage_backfill_done'").get()) return;
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO usage_events (created_at, purpose, chat_id, message_id, run_id, model_id, prompt_tokens, completion_tokens,
+         cost, web_search, web_searches, status, backfilled)
+       SELECT m.created_at, 'reply', m.chat_id, m.id, lower(hex(randomblob(16))), COALESCE(m.model_id, ''), m.prompt_tokens,
+         m.completion_tokens, m.cost, COALESCE(p.web_search, 0), m.web_searches, m.status, 1
+       FROM messages m LEFT JOIN messages p ON p.id = m.parent_id
+       WHERE m.role = 'assistant'
+       ORDER BY m.seq`,
+    ).run();
+    db.prepare("INSERT INTO settings (key, value) VALUES ('usage_backfill_done', '1')").run();
+  })();
 }
 
 export const newId = (): string => randomUUID();
