@@ -39,6 +39,12 @@ export function cachedPrices(db: DB): Map<string, { prompt: number | null; cache
   return new Map(cached.models.map((m) => [m.id, { prompt: m.promptPrice, cacheRead: m.cacheReadPrice ?? null }]));
 }
 
+/** Model names from the cached catalog, however old. */
+export function cachedCatalogNames(db: DB): Map<string, string> {
+  const cached = readCache(db);
+  return new Map((cached?.models ?? []).map((m) => [m.id, m.name]));
+}
+
 async function fetchRankings(openrouter: OpenRouterClient): Promise<Rankings> {
   const results = await Promise.allSettled(CATEGORIES.map((c) => openrouter.listCategory(c.id)));
   const rankings: Rankings = {};

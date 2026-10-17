@@ -1,3 +1,5 @@
+import type { DB } from './db';
+import { cachedCatalogNames } from './catalog';
 import type { UsageRow } from './usage';
 import { bucketKeys, dayKey, heatmapDays, hourKey, monthKey, rangeWindow, streaks } from './statsTime';
 import type { BigChat, ChatStats, FeatureStats, ModelStats, StatsRange, StatsResponse, UsageBucket } from '../../shared/types';
@@ -186,4 +188,18 @@ export function computeChatStats(rows: UsageRow[]): ChatStats {
     webSearches: sum(rows, (r) => r.webSearches),
     avgPromptTokens: ratio(sum(prompted, (r) => r.promptTokens), prompted.length),
   };
+}
+
+/** Display names: the library's name, else the catalog's; models in neither fall back to their id at use. */
+export function modelNames(db: DB): Map<string, string> {
+  const names = cachedCatalogNames(db);
+  const library = db.prepare('SELECT id, display_name FROM models').all() as { id: string; display_name: string }[];
+  for (const m of library) names.set(m.id, m.display_name);
+  return names;
+}
+
+/** Titles of chats that still exist. */
+export function chatTitles(db: DB): Map<string, string> {
+  const rows = db.prepare('SELECT id, title FROM chats').all() as { id: string; title: string }[];
+  return new Map(rows.map((r) => [r.id, r.title]));
 }

@@ -35,8 +35,8 @@ export function requireChat(db: DB, id: string): ChatRow {
 
 export function listChats(db: DB): ChatSummary[] {
   return db.prepare(
-    `SELECT c.id, c.title, c.updated_at AS updatedAt, COALESCE(SUM(m.cost), 0) AS totalCost
-     FROM chats c LEFT JOIN messages m ON m.chat_id = c.id
+    `SELECT c.id, c.title, c.updated_at AS updatedAt, COALESCE(SUM(u.cost), 0) AS totalCost
+     FROM chats c LEFT JOIN usage_events u ON u.chat_id = c.id
      GROUP BY c.id ORDER BY c.updated_at DESC`,
   ).all() as ChatSummary[];
 }
@@ -71,10 +71,15 @@ export function deleteChat(db: DB, id: string): void {
   db.prepare('DELETE FROM chats WHERE id = ?').run(id);
 }
 
+/** Everything the chat's calls cost, replies on every branch plus its title, from the usage log. */
+export function chatCost(db: DB, id: string): number {
+  return (db.prepare('SELECT COALESCE(SUM(cost), 0) AS total FROM usage_events WHERE chat_id = ?').get(id) as { total: number }).total;
+}
+
 export function getChatDetail(db: DB, id: string): ChatDetail {
   const row = requireChat(db, id);
   const all = getChatMessages(db, id);
-  const totalCost = all.reduce((sum, m) => sum + (m.cost ?? 0), 0);
+  const totalCost = chatCost(db, id);
   const choiceParent = pendingChoice(db, row);
   return {
     chat: { id: row.id, title: row.title, updatedAt: row.updated_at, totalCost, activeLeafId: row.active_leaf_id },

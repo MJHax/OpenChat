@@ -11,6 +11,7 @@ import { chatRoutes } from './routes/chats';
 import { searchRoutes } from './routes/search';
 import { generationRoutes } from './routes/generate';
 import { attachmentRoutes } from './routes/attachments';
+import { statsRoutes } from './routes/stats';
 
 export interface Deps {
   db: DB;
@@ -34,6 +35,7 @@ export function createApp(deps: Deps): Hono {
   app.route('/api/chats', generationRoutes(deps));
   app.route('/api/search', searchRoutes(deps));
   app.route('/api/attachments', attachmentRoutes(deps));
+  app.route('/api/stats', statsRoutes(deps));
 
   return app;
 }

@@ -3,6 +3,7 @@ import { makeApp } from './appHelpers';
 import { insertMessage } from '../src/messages';
 import { setActiveLeaf } from '../src/chats';
 import { toFtsQuery } from '../src/search';
+import { logReply } from './usageHelpers';
 import type { ChatDetail, ChatSummary, SearchHit } from '../../shared/types';
 
 async function seed() {
@@ -12,6 +13,8 @@ async function seed() {
   const a1 = insertMessage(ctx.db, { chatId: chat.id, parentId: u1.id, role: 'assistant', content: 'Bananas are berries.', modelId: 'm/a', cost: 0.001 });
   const a2 = insertMessage(ctx.db, { chatId: chat.id, parentId: u1.id, role: 'assistant', content: 'Bananas grow in clusters.', modelId: 'm/b', cost: 0.002 });
   const u2 = insertMessage(ctx.db, { chatId: chat.id, parentId: a1.id, role: 'user', content: 'More please' });
+  logReply(ctx.db, { chatId: chat.id, messageId: a1.id, cost: 0.001 });
+  logReply(ctx.db, { chatId: chat.id, messageId: a2.id, cost: 0.002 });
   setActiveLeaf(ctx.db, chat.id, a2.id);
   return { ...ctx, chat, u1, a1, a2, u2 };
 }

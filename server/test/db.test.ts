@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { insertMessage, getChatMessages, getMessage } from '../src/messages';
 import { createChat, listChats, deleteChat, getChatRow, touchChat, DEFAULT_TITLE } from '../src/chats';
+import { logReply } from './usageHelpers';
 
 const ftsCount = (db: ReturnType<typeof openDb>, q: string) =>
   (db.prepare('SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH ?').get(q) as { n: number }).n;
@@ -62,8 +63,10 @@ describe('database', () => {
     const older = createChat(db);
     const newer = createChat(db);
     const u = insertMessage(db, { chatId: older.id, parentId: null, role: 'user', content: 'q' });
-    insertMessage(db, { chatId: older.id, parentId: u.id, role: 'assistant', content: 'a', cost: 0.25 });
-    insertMessage(db, { chatId: older.id, parentId: u.id, role: 'assistant', content: 'b', cost: 0.5 });
+    const a = insertMessage(db, { chatId: older.id, parentId: u.id, role: 'assistant', content: 'a', cost: 0.25 });
+    const b = insertMessage(db, { chatId: older.id, parentId: u.id, role: 'assistant', content: 'b', cost: 0.5 });
+    logReply(db, { chatId: older.id, messageId: a.id, cost: 0.25 });
+    logReply(db, { chatId: older.id, messageId: b.id, cost: 0.5 });
     touchChat(db, newer.id);
     const list = listChats(db);
     expect(list.map((c) => c.id)).toEqual([newer.id, older.id]);

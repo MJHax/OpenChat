@@ -4,6 +4,8 @@ import { HttpError, readJson } from '../http';
 import { createChat, deleteChat, getChatDetail, listChats, renameChat, requireChat, setActiveLeaf, setCompareParent } from '../chats';
 import { getChatMessages, getMessage } from '../messages';
 import { newestLeafFrom, repliesTo } from '../tree';
+import { computeChatStats } from '../stats';
+import { loadChatUsageRows } from '../usage';
 
 export function chatRoutes({ db }: Deps): Hono {
   const r = new Hono();
@@ -13,6 +15,12 @@ export function chatRoutes({ db }: Deps): Hono {
   r.post('/', (c) => c.json(createChat(db), 201));
 
   r.get('/:id', (c) => c.json(getChatDetail(db, c.req.param('id'))));
+
+  r.get('/:id/stats', (c) => {
+    const id = c.req.param('id');
+    requireChat(db, id);
+    return c.json(computeChatStats(loadChatUsageRows(db, id)));
+  });
 
   r.patch('/:id', async (c) => {
     const id = c.req.param('id');
