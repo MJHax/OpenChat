@@ -32,16 +32,24 @@ export function inlineImages(html: string, images: Map<string, string>): string 
   return out;
 }
 
-/** The page as the panel runs it: images inlined, then the CSP, link target and print hook first in the head. */
+/**
+ * The page as the panel runs it: images inlined, then a head holding the CSP, link target and print hook placed before
+ * anything the page wrote (after a leading doctype only), so no script runs before the policy and no markup can hide it.
+ * The page's own <html> and <head> tags that follow are merged into it by the HTML parser.
+ */
 export function prepareHtml(html: string, images: Map<string, string>): string {
   const page = inlineImages(html, images);
-  const inject = `<meta http-equiv="Content-Security-Policy" content="${PANEL_CSP}"><base target="_blank">${PRINT_LISTENER}`;
-  const head = /<head(\s[^>]*)?>/i.exec(page);
-  if (head) return page.slice(0, head.index + head[0].length) + inject + page.slice(head.index + head[0].length);
-  const opener = /<html(\s[^>]*)?>/i.exec(page) ?? /^\s*<!doctype[^>]*>\s*/i.exec(page);
-  const at = opener ? opener.index + opener[0].length : 0;
-  return `${page.slice(0, at)}<head>${inject}</head>${page.slice(at)}`;
+  const inject = `<head><meta http-equiv="Content-Security-Policy" content="${PANEL_CSP}"><base target="_blank">${PRINT_LISTENER}</head>`;
+  const doctype = /^\s*<!doctype[^>]*>\s*/i.exec(page);
+  const at = doctype ? doctype[0].length : 0;
+  return page.slice(0, at) + inject + page.slice(at);
 }
+
+/**
+ * An SVG as an image URL. Not a blob: URL, which has OpenChat's origin, so "Open image in new tab" would run the SVG's
+ * scripts with access to the API; browsers refuse to open data: URLs as top-level pages.
+ */
+export const svgDataUrl = (svg: string): string => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
 /** CSV rows (quoted fields may hold commas, doubled quotes and newlines), at most `cap`, with how many were left out. */
 export function csvRows(text: string, cap = 500): { rows: string[][]; more: number } {

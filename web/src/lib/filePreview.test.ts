@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { csvRows, inlineImages, PANEL_CSP, prepareHtml, PRINT_LISTENER, saveableCode, snippetName } from './filePreview';
+import { csvRows, inlineImages, PANEL_CSP, prepareHtml, PRINT_LISTENER, saveableCode, snippetName, svgDataUrl } from './filePreview';
 
 const META = `<meta http-equiv="Content-Security-Policy" content="${PANEL_CSP}">`;
 
@@ -14,23 +14,32 @@ describe('PANEL_CSP', () => {
 });
 
 describe('prepareHtml', () => {
-  it('puts the CSP before anything else in the head', () => {
+  const HEAD = new RegExp(`^<head>${escape(META)}<base target="_blank">${escape(PRINT_LISTENER)}</head>`);
+
+  it('puts the CSP first, before the page has a chance to run anything', () => {
     const out = prepareHtml('<html><head><title>T</title></head><body></body></html>', new Map());
-    expect(out.indexOf(META)).toBeGreaterThan(-1);
-    expect(out.indexOf(META)).toBeLessThan(out.indexOf('<title>'));
-    expect(out).toContain('<base target="_blank">');
-    expect(out).toContain(PRINT_LISTENER);
+    expect(out).toMatch(HEAD);
+    expect(out.endsWith('<html><head><title>T</title></head><body></body></html>')).toBe(true);
   });
 
-  it('adds a head when missing', () => {
-    expect(prepareHtml('<p>x</p>', new Map())).toMatch(new RegExp(`^<head>${escape(META)}.*</head><p>x</p>$`, 's'));
-    expect(prepareHtml('<!DOCTYPE html>\n<p>x</p>', new Map()).startsWith('<!DOCTYPE html>\n<head>')).toBe(true);
-    const withHtml = prepareHtml('<html lang="en"><body>x</body></html>', new Map());
-    expect(withHtml.startsWith(`<html lang="en"><head>${META}`)).toBe(true);
+  it('keeps a doctype first', () => {
+    const out = prepareHtml('<!DOCTYPE html>\n<p>x</p>', new Map());
+    expect(out.startsWith('<!DOCTYPE html>\n<head>')).toBe(true);
+    expect(out.slice('<!DOCTYPE html>\n'.length)).toMatch(HEAD);
   });
 
-  it('finds a head with attributes and any case', () => {
-    expect(prepareHtml('<HTML><HEAD data-x="1"><title>T</title></HEAD></HTML>', new Map())).toContain(`<HEAD data-x="1">${META}`);
+  it('cannot be outrun by a script before the head', () => {
+    const out = prepareHtml('<!doctype html><script>fetch("x")</script><html><head></head></html>', new Map());
+    expect(out.indexOf(META)).toBeLessThan(out.indexOf('fetch'));
+  });
+
+  it('cannot be hidden in a comment', () => {
+    const out = prepareHtml('<!doctype html><html><!-- <head> --><head></head></html>', new Map());
+    expect(out.indexOf(META)).toBeLessThan(out.indexOf('<!--'));
+  });
+
+  it('handles a fragment', () => {
+    expect(prepareHtml('<p>x</p>', new Map())).toMatch(new RegExp(`${HEAD.source}<p>x</p>$`));
   });
 
   it('inlines images', () => {
@@ -57,6 +66,14 @@ describe('inlineImages', () => {
 
   it('handles names with regex characters', () => {
     expect(inlineImages('<img src="a (1).png">', new Map([['a (1).png', 'data:x']]))).toBe('<img src="data:x">');
+  });
+});
+
+describe('svgDataUrl', () => {
+  it('is a data: URL, which a browser will not open as a top-level page in OpenChat\'s origin', () => {
+    const url = svgDataUrl('<svg xmlns="http://www.w3.org/2000/svg"><text>é</text></svg>');
+    expect(url.startsWith('data:image/svg+xml;charset=utf-8,')).toBe(true);
+    expect(decodeURIComponent(url.slice(url.indexOf(',') + 1))).toBe('<svg xmlns="http://www.w3.org/2000/svg"><text>é</text></svg>');
   });
 });
 

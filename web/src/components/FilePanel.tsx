@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import hljs from 'highlight.js/lib/common';
 import { fileKind, type FileBlock, type FileVersion } from '../../../shared/files';
-import { csvRows, prepareHtml } from '../lib/filePreview';
+import { csvRows, prepareHtml, svgDataUrl } from '../lib/filePreview';
 import { Markdown } from './Markdown';
 
 interface Props {
@@ -28,8 +28,7 @@ function Highlighted({ code, name }: { code: string; name: string }) {
 }
 
 function SvgView({ content }: { content: string }) {
-  const url = useMemo(() => URL.createObjectURL(new Blob([content], { type: 'image/svg+xml' })), [content]);
-  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  const url = useMemo(() => svgDataUrl(content), [content]);
   return <div className="file-svg"><img src={url} alt="" /></div>;
 }
 
