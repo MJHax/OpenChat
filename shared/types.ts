@@ -190,3 +190,89 @@ export interface CompareDone { compareParentId: string | null }
 
 /** Time range the Stats page shows. */
 export type StatsRange = 'all' | 'year' | 'month' | 'week' | 'today';
+
+export interface StatsTiles {
+  cost: number;
+  /** Cost of the previous period of the same length; null for All time. */
+  previousCost: number | null;
+  promptTokens: number;
+  completionTokens: number;
+  replies: number;
+  /** Chats with a reply in the range, including deleted ones. */
+  chats: number;
+  cacheHitRate: number | null;
+  cacheSavings: number | null;
+  webSearches: number;
+  webSearchCost: number;
+  avgFirstTokenMs: number | null;
+  outputTokensPerSec: number | null;
+  activeDays: number;
+  rangeDays: number | null;
+  currentStreak: number;
+  longestStreak: number;
+  topModel: { id: string; name: string; share: number } | null;
+}
+
+export interface HeatDay { day: string; replies: number; cost: number }
+
+export interface UsageBucket {
+  key: string;
+  label: string;
+  replyCost: number;
+  backgroundCost: number;
+  replyTokens: number;
+  backgroundTokens: number;
+  replies: number;
+  backgroundCalls: number;
+}
+
+export interface ModelStats {
+  id: string;
+  name: string;
+  replies: number;
+  cost: number;
+  tokens: number;
+  cacheHitRate: number | null;
+  avgFirstTokenMs: number | null;
+  outputTokensPerSec: number | null;
+  avgCostPerReply: number | null;
+  reasoningTokens: number | null;
+  errorRate: number | null;
+  stoppedRate: number | null;
+  webSearches: number;
+}
+
+export interface FeatureStats {
+  compareRuns: number;
+  webSearchReplies: number;
+  attachments: number;
+  regeneratedOrEdited: number;
+  inputOutputRatio: number | null;
+}
+
+export interface BigChat { id: string; title: string; cost: number; replies: number }
+
+export interface StatsResponse {
+  range: StatsRange;
+  tiles: StatsTiles;
+  heatmap: HeatDay[];
+  buckets: UsageBucket[];
+  models: ModelStats[];
+  features: FeatureStats;
+  biggestByCost: BigChat[];
+  biggestByLength: BigChat[];
+  /** When cache, speed, error and feature tracking began (first non-backfilled call); null if never. */
+  trackingSince: number | null;
+}
+
+export interface ChatStats {
+  cost: number;
+  promptTokens: number;
+  completionTokens: number;
+  cacheHitRate: number | null;
+  cacheSavings: number | null;
+  replies: number;
+  models: number;
+  webSearches: number;
+  avgPromptTokens: number | null;
+}
