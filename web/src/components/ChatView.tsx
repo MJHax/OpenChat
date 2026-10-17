@@ -208,9 +208,12 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
           onReasoning: (text) => updateSlot(0, (s) => ({ ...s, reasoning: s.reasoning + text })),
           onDone: (e) => {
             void finish(null).then(() => {
-              // A finished reply that made files opens its last complete one, unless a file is already open.
-              const last = parseFileBlocks(e.message.content).filter((s) => s.type === 'file' && s.file.complete).at(-1);
-              if (last?.type === 'file' && isShown() && !openFileRef.current) setOpenFile({ name: last.file.name, messageId: e.message.id, adhoc: null });
+              // A finished reply that made files opens its last complete one when no file is open, and moves an open
+              // file on to the version this reply just wrote.
+              const made = parseFileBlocks(e.message.content).flatMap((s) => (s.type === 'file' && s.file.complete ? [s.file.name] : []));
+              const current = openFileRef.current;
+              const name = current ? made.find((n) => n === current.name) : made.at(-1);
+              if (name && isShown()) setOpenFile({ name, messageId: e.message.id, adhoc: null });
             });
           },
           onError: (e) => { void finish(e.message); },
