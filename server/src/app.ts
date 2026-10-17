@@ -29,6 +29,14 @@ export function createApp(deps: Deps): Hono {
     return c.json({ error: 'Internal server error' }, 500);
   });
 
+  // Generated pages run in a null-origin sandbox and may navigate to any site; neither may change data here.
+  app.use('/api/*', async (c, next) => {
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD' && (c.req.header('origin') === 'null' || c.req.header('sec-fetch-site') === 'cross-site')) {
+      throw new HttpError(403, 'Cross-site requests may not change data.');
+    }
+    await next();
+  });
+
   app.route('/api/settings', settingsRoutes(deps));
   app.route('/api/memories', memoryRoutes(deps));
   app.route('/api/models', modelRoutes(deps));
