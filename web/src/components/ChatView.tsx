@@ -17,6 +17,7 @@ import { saveBlob } from './FileCard';
 import { fileKind, fileVersions, parseFileBlocks, type FileBlock } from '../../../shared/files';
 import { inlineImages } from '../lib/filePreview';
 import { useChatImages } from '../lib/useChatImages';
+import { panelView } from '../lib/filePanelState';
 import { MessageItem } from './MessageItem';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { toDraft } from './useAttachmentDraft';
@@ -312,8 +313,10 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     versionOf: (name, messageId) => versionsFrom(messageId).get(name)?.find((v) => v.messageId === messageId)?.version ?? null,
     download: (file) => saveBlob(file, fileKind(file.name) === 'html' ? inlineImages(file.content, chatImages) : file.content),
   };
-  const panelVersions = openFile && !openFile.adhoc ? versionsFrom(openFile.messageId).get(openFile.name) ?? [] : [];
-  const panelInitial = panelVersions.find((v) => v.messageId === openFile?.messageId)?.version ?? panelVersions.length;
+  const panel = openFile ? panelView(openFile, versionsFrom(openFile.messageId).get(openFile.name) ?? []) : null;
+  useEffect(() => {
+    if (openFile && !panel) setOpenFile(null);
+  }, [openFile, panel === null]);
 
   const nameOf = (id: string | null) => models.find((m) => m.id === id)?.displayName ?? id ?? '';
   const savedColumns = (replies: Message[]): Column[] =>
@@ -427,7 +430,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
           onStop={() => abortRef.current?.abort()}
         />
 
-        {openFile && (
+        {openFile && panel && (
           <>
             <div
               className="file-divider"
@@ -435,18 +438,22 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
               aria-orientation="vertical"
               aria-label="Resize file panel"
               onPointerDown={(e) => {
+                // Captured, so the drag keeps going (and ends) even when the pointer is over the page's iframe.
+                const handle = e.currentTarget;
+                handle.setPointerCapture(e.pointerId);
                 const startX = e.clientX;
                 const startWidth = panelWidth;
                 const move = (ev: PointerEvent) => setPanelWidth(Math.max(320, Math.min(window.innerWidth - 480, startWidth + startX - ev.clientX)));
-                const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
-                window.addEventListener('pointermove', move);
-                window.addEventListener('pointerup', up);
+                const up = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up); };
+                handle.addEventListener('pointermove', move);
+                handle.addEventListener('pointerup', up);
+                handle.addEventListener('pointercancel', up);
               }}
             />
             <FilePanel
               name={openFile.name}
-              versions={panelVersions}
-              initialVersion={panelInitial}
+              versions={panel.versions}
+              initialVersion={panel.initial}
               adhoc={openFile.adhoc}
               images={chatImages}
               onDownload={filePanel.download}

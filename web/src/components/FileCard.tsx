@@ -2,6 +2,7 @@ import { useContext, type KeyboardEvent } from 'react';
 import { fileKind, mimeFor, safeFileName, type FileBlock, type FileKind } from '../../../shared/files';
 import { formatBytes } from '../lib/format';
 import { FilePanelContext } from './FilePanelContext';
+import { cardOpenable } from '../lib/filePanelState';
 
 const LABELS: Record<FileKind, string> = { html: 'HTML', svg: 'SVG', md: 'MD', csv: 'CSV', code: 'CODE', other: 'FILE' };
 
@@ -25,10 +26,11 @@ interface Props {
 
 /** A file a reply produced: click to open it in the side panel. */
 export function FileCard({ file, messageId, streaming }: Props) {
-  const panel = useContext(FilePanelContext);
+  const context = useContext(FilePanelContext);
+  const panel = cardOpenable(file, streaming) ? context : null;
   const kind = fileKind(file.name);
   const writing = !file.complete && streaming;
-  const version = writing ? null : panel?.versionOf(file.name, messageId) ?? null;
+  const version = writing ? null : context?.versionOf(file.name, messageId) ?? null;
   const size = formatBytes(byteLength(file.content));
   const open = () => panel?.open(file.name, messageId, file);
   const onKey = (e: KeyboardEvent) => {
@@ -56,7 +58,7 @@ export function FileCard({ file, messageId, streaming }: Props) {
       {!writing && (
         <button
           className="link"
-          onClick={(e) => { e.stopPropagation(); if (panel) panel.download(file); else saveBlob(file); }}
+          onClick={(e) => { e.stopPropagation(); if (context) context.download(file); else saveBlob(file); }}
           aria-label={`Download ${file.name}`}
         >
           Download
