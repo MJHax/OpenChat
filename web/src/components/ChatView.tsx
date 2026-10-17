@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import type { Attachment, ChatDetail, LibraryModel, Message, SettingsView } from '../../../shared/types';
 import { api, streamComparison, streamGeneration } from '../api';
 import { COMPARE_OFF, compareModels, loadCompare, saveCompare, type CompareState } from '../lib/compare';
-import { formatCost } from '../lib/format';
 import { initialModelId } from '../lib/models';
 import { loadSearch, saveSearch } from '../lib/search';
 import { navigate } from '../lib/route';
 import { AttachmentChips } from './AttachmentChips';
+import { ChatStatsPopover } from './ChatStatsPopover';
 import { CompareColumns, type Column } from './CompareColumns';
 import { Composer } from './Composer';
 import { Markdown } from './Markdown';
@@ -296,7 +296,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     <div className="chat">
       <header className="chat-header">
         <h1>{chatId ? title : 'New chat'}</h1>
-        {detail && detail.chat.totalCost > 0 && <span className="muted small">Total {formatCost(detail.chat.totalCost)}</span>}
+        <ChatStatsPopover chatId={chatId} totalCost={detail?.chat.totalCost ?? 0} refreshKey={detail} />
       </header>
 
       <div className="messages" ref={listRef}>

@@ -209,6 +209,16 @@ button.chip.more { border-style: dashed; color: var(--muted); }
 .sources ol { margin: 6px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; }
 .sources a { color: var(--accent); word-break: break-word; }
 
+/* Chat stats popover */
+.stats-pop { position: relative; flex-shrink: 0; }
+.stats-pop-button { font-size: 13px; }
+.stats-pop-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: 290px; max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); padding: 10px 12px; font-size: 13px; }
+.stats-pop-panel h4 { margin: 0 0 6px; font-size: 13px; }
+.stats-pop-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
+.stats-pop-row > span:last-child { text-align: right; }
+.cache-bar { height: 6px; border-radius: 3px; overflow: hidden; margin: 3px 0 6px; background: color-mix(in srgb, var(--accent) 35%, var(--surface)); }
+.cache-bar b { display: block; height: 100%; background: var(--accent); }
+
 /* Stats */
 .stats-page { max-width: 960px; display: flex; flex-direction: column; gap: 16px; }
 .stats-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
