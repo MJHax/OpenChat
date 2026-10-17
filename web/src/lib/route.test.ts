@@ -8,6 +8,7 @@ describe('parseHash', () => {
     expect(parseHash('#/chat/abc-123')).toEqual({ page: 'chat', chatId: 'abc-123' });
     expect(parseHash('#/models')).toEqual({ page: 'models' });
     expect(parseHash('#/settings')).toEqual({ page: 'settings' });
+    expect(parseHash('#/stats')).toEqual({ page: 'stats' });
     expect(parseHash('#/garbage')).toEqual({ page: 'chat', chatId: null });
   });
 });

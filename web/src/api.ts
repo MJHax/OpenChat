@@ -1,7 +1,7 @@
 import { parseSSE } from '../../shared/sse';
 import type {
   Attachment, CatalogResponse, ChatDetail, ChatSummary, CompareDone, CompareSlotDone, CompareSlotError, CompareStart, LibraryModel, Memory,
-  Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle,
+  Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle, StatsRange, StatsResponse, ChatStats,
 } from '../../shared/types';
 
 async function json<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -25,6 +25,8 @@ export const api = {
   replies: (chatId: string, parentId: string) =>
     json<Message[]>('GET', `/api/chats/${chatId}/replies?parentId=${encodeURIComponent(parentId)}`),
   search: (q: string) => json<SearchHit[]>('GET', `/api/search?q=${encodeURIComponent(q)}`),
+  chatStats: (id: string) => json<ChatStats>('GET', `/api/chats/${id}/stats`),
+  stats: (range: StatsRange, tz: string) => json<StatsResponse>('GET', `/api/stats?range=${range}&tz=${encodeURIComponent(tz)}`),
 
   listModels: () => json<LibraryModel[]>('GET', '/api/models'),
   catalog: (refresh = false) => json<CatalogResponse>('GET', `/api/models/catalog${refresh ? '?refresh=1' : ''}`),

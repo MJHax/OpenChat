@@ -120,6 +120,7 @@ export function Sidebar({ chats, activeChatId, onChatsChanged, onOpenChat }: Sid
 
       <div className="sidebar-footer">
         <a href="#/models">Model Library</a>
+        <a href="#/stats">Stats</a>
         <a href="#/settings">Settings</a>
       </div>
     </aside>
