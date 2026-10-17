@@ -78,6 +78,18 @@ export function callTimer() {
   };
 }
 
+/**
+ * Saves a partial reply, or returns null when it can't be saved — e.g. the chat was deleted mid-stream — so the
+ * call is still logged: it was paid for either way.
+ */
+export function saveIfChatExists(save: () => Message): Message | null {
+  try {
+    return save();
+  } catch {
+    return null;
+  }
+}
+
 /** A failed call was stopped if the client went away, otherwise it errored. */
 export const failureStatus = (signal: AbortSignal): UsageStatus => (signal.aborted ? 'stopped' : 'error');
 
@@ -166,7 +178,7 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
       const title = await maybeGenerateTitle(deps, o.chatId, key, o.modelId);
       if (title) await send('title', { title } satisfies StreamTitle);
     } catch (err) {
-      const partial = text ? save('stopped') : null;
+      const partial = text ? saveIfChatExists(() => save('stopped')) : null;
       if (key) log(failureStatus(abort.signal), partial?.id ?? null);
       if (abort.signal.aborted) return; // client went away; nothing to send
       await send('error', { message: replyErrorMessage(err), partial } satisfies StreamError);

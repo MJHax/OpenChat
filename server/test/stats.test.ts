@@ -70,6 +70,16 @@ describe('tiles', () => {
     expect(s.tiles.webSearchCost).toBeCloseTo(0.02);
   });
 
+  it('never counts more active days than the range has, and the chart holds every reply the tiles count', () => {
+    const afternoon = Date.UTC(2026, 9, 16, 15, 0);
+    // Now is 15:02; one reply a day at 15:03 for the past 7 days plus one today, so a rolling 168 h window would touch 8 days.
+    const daily = [row({ createdAt: afternoon }), ...Array.from({ length: 7 }, (_, i) => row({ createdAt: afternoon - (i + 1) * DAY + 180_000 }))];
+    const s = stats(daily, 'week', { now: afternoon + 120_000 });
+    expect(s.tiles.activeDays).toBe(7);
+    expect(s.tiles.replies).toBe(7);
+    expect(s.buckets.reduce((n, b) => n + b.replies, 0)).toBe(s.tiles.replies);
+  });
+
   it('counts active days in range and lifetime streaks', () => {
     const s = stats([row(), row({ createdAt: NOW - DAY }), row({ createdAt: NOW - 20 * DAY })], 'week');
     expect(s.tiles.activeDays).toBe(2);

@@ -1,6 +1,5 @@
 import type { StatsRange } from '../../shared/types';
 
-const DAY_MS = 86_400_000;
 const ROLLING_DAYS: Record<Exclude<StatsRange, 'all' | 'today'>, number> = { week: 7, month: 30, year: 365 };
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
@@ -84,9 +83,17 @@ export function rangeWindow(range: StatsRange, now: number, tz: string):
     const prevStart = startOfLocalDay(start - 1, tz);
     return { start, previous: { start: prevStart, end: prevStart + (now - start) }, days: 1 };
   }
+  // Whole local days, today included, so the window matches the chart's day buckets and "active days" can't exceed N.
   const days = ROLLING_DAYS[range];
-  const start = now - days * DAY_MS;
-  return { start, previous: { start: start - days * DAY_MS, end: start }, days };
+  const today = dayKey(now, tz);
+  const start = localMidnight(addDays(today, -(days - 1)), tz);
+  return { start, previous: { start: localMidnight(addDays(today, -(2 * days - 1)), tz), end: start }, days };
+}
+
+/** The instant local midnight begins on the local day `key`. */
+function localMidnight(key: string, tz: string): number {
+  const noonUtc = keyDate(key).getTime() + 12 * 3_600_000;
+  return startOfLocalDay(noonUtc - offset(noonUtc, tz), tz);
 }
 
 function monthsBetween(from: string, to: string): string[] {

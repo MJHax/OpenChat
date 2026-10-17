@@ -42,10 +42,18 @@ describe('rangeWindow', () => {
     expect(w.days).toBe(1);
   });
 
-  it('rolling ranges go back a fixed number of days', () => {
-    expect(rangeWindow('week', now, NY)).toEqual({ start: now - 7 * DAY, previous: { start: now - 14 * DAY, end: now - 7 * DAY }, days: 7 });
-    expect(rangeWindow('month', now, NY)).toEqual({ start: now - 30 * DAY, previous: { start: now - 60 * DAY, end: now - 30 * DAY }, days: 30 });
-    expect(rangeWindow('year', now, NY).days).toBe(365);
+  it('week, month and year cover whole local days, today included, so they match the chart', () => {
+    // 2026-10-16 14:00 New York: the week is Oct 10 00:00 → now; the previous week is Oct 3 00:00 → Oct 10 00:00.
+    expect(rangeWindow('week', now, NY)).toEqual({
+      start: Date.UTC(2026, 9, 10, 4, 0), previous: { start: Date.UTC(2026, 9, 3, 4, 0), end: Date.UTC(2026, 9, 10, 4, 0) }, days: 7,
+    });
+    expect(rangeWindow('month', now, NY).start).toBe(Date.UTC(2026, 8, 17, 4, 0));
+    expect(rangeWindow('year', now, NY)).toMatchObject({ start: Date.UTC(2025, 9, 17, 4, 0), days: 365 });
+  });
+
+  it('a week spanning the DST change still starts at local midnight', () => {
+    const afterFallBack = Date.UTC(2026, 10, 3, 17, 0); // Nov 3 12:00 EST
+    expect(rangeWindow('week', afterFallBack, NY).start).toBe(Date.UTC(2026, 9, 28, 4, 0)); // Oct 28 00:00 EDT
   });
 
   it('all time has no start and no previous period', () => {

@@ -3,7 +3,7 @@ import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 import type { Deps } from './app';
 import { newId } from './db';
 import { getChatRow, setActiveLeaf, setCompareParent, touchChat } from './chats';
-import { callTimer, failureStatus, mergeSources, promptFor, replyErrorMessage, searchCount } from './generate';
+import { callTimer, failureStatus, saveIfChatExists, mergeSources, promptFor, replyErrorMessage, searchCount } from './generate';
 import { recordUsage, type ReplyKind, type UsageStatus } from './usage';
 import { insertMessage } from './messages';
 import { OpenRouterError, type Usage } from './openrouter';
@@ -136,7 +136,7 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
       await send('slot-done', { slot: i, message } satisfies CompareSlotDone);
       return message;
     } catch (err) {
-      const partial = text ? save('stopped') : null;
+      const partial = text ? saveIfChatExists(() => save('stopped')) : null;
       if (key) log(failureStatus(abort.signal), partial?.id ?? null);
       if (!abort.signal.aborted) await send('slot-error', { slot: i, message: replyErrorMessage(err), partial } satisfies CompareSlotError);
       return partial;

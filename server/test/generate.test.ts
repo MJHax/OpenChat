@@ -528,6 +528,24 @@ describe('usage log', () => {
     expect(rows(db)[0]).toMatchObject({ status: 'error', messageId: partial.id });
   });
 
+  it('still logs a reply whose chat was deleted while it streamed', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const streamChat: OpenRouterClient['streamChat'] = async function* () {
+      yield { type: 'delta', text: 'Hel' };
+      await gate;
+      yield { type: 'usage', usage: USAGE };
+    };
+    const { call, db } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const pending = (async () => readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'm/x' })))();
+    await new Promise((r) => setTimeout(r, 20));
+    await call('DELETE', `/api/chats/${chatId}`);
+    release();
+    await pending;
+    expect(rows(db).filter((r) => r.purpose === 'reply')).toEqual([expect.objectContaining({ chatId, messageId: null, cost: 0.0004 })]);
+  });
+
   it('logs nothing without an API key', async () => {
     const { streamChat } = scripted([{ chunks: ['A'] }]);
     const { call, db } = makeApp({ streamChat }, {});

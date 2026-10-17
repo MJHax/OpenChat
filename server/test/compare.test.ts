@@ -239,6 +239,23 @@ describe('comparison usage log', () => {
     expect(replies.filter((r) => r.status === 'complete').every((r) => r.messageId !== null)).toBe(true);
   });
 
+  it('still logs every slot when the chat is deleted mid-comparison', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const streamChat: OpenRouterClient['streamChat'] = async function* () {
+      yield { type: 'delta', text: 'Hel' };
+      await gate;
+    };
+    const { call, db } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const pending = (async () => readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelIds: ['m/a', 'm/b'] })))();
+    await new Promise((r) => setTimeout(r, 20));
+    await call('DELETE', `/api/chats/${chatId}`);
+    release();
+    await pending;
+    expect(loadUsageRows(db, null).filter((r) => r.purpose === 'reply').map((r) => [r.modelId, r.messageId]).sort()).toEqual([['m/a', null], ['m/b', null]]);
+  });
+
   it('logs aborted slots as stopped, with or without text', async () => {
     const { streamChat } = byModel({ 'm/a': { chunks: ['Part'], hang: true }, 'm/b': { chunks: [], hang: true } });
     const { app, call, db } = makeApp({ streamChat });

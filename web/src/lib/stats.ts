@@ -63,6 +63,14 @@ export function heatColumns(days: HeatDay[]): (HeatDay | null)[][] {
   return cols;
 }
 
-export const emptyChatStats = (): ChatStats => ({
+/** Explains the "—" tiles: those stats exist only for calls made since the usage log began. */
+export function trackingNote(trackingSince: number | null): string {
+  const since = trackingSince === null
+    ? 'your next reply'
+    : new Date(trackingSince).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return `Cache, speed, error and feature stats are tracked from ${since}.`;
+}
+
+export const emptyChatStats =(): ChatStats => ({
   cost: 0, promptTokens: 0, completionTokens: 0, cacheHitRate: null, cacheSavings: null, replies: 0, models: 0, webSearches: 0, avgPromptTokens: null,
 });

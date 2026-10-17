@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { compactNumber, emptyChatStats, formatChange, formatPercent, formatSeconds, heatColumns, heatLevel, loadRange, RANGES, saveRange } from './stats';
+import { compactNumber, emptyChatStats, formatChange, formatPercent, formatSeconds, heatColumns, heatLevel, loadRange, RANGES, saveRange, trackingNote } from './stats';
 import type { HeatDay } from '../../../shared/types';
 
 describe('formatting', () => {
@@ -67,6 +67,13 @@ describe('range memory', () => {
 
   it('lists the five ranges in order', () => {
     expect(RANGES.map((r) => r.label)).toEqual(['All time', 'Year', 'Month', 'Week', 'Today']);
+  });
+});
+
+describe('trackingNote', () => {
+  it('names the start date, or says tracking starts with the next reply', () => {
+    expect(trackingNote(Date.UTC(2026, 9, 16, 18))).toBe('Cache, speed, error and feature stats are tracked from Oct 16, 2026.');
+    expect(trackingNote(null)).toBe('Cache, speed, error and feature stats are tracked from your next reply.');
   });
 });
 

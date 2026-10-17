@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { StatsRange, StatsResponse } from '../../../shared/types';
 import { api } from '../api';
-import { loadRange, RANGES, saveRange } from '../lib/stats';
+import { loadRange, RANGES, saveRange, trackingNote } from '../lib/stats';
 import { Segmented } from '../components/stats/Segmented';
 import { StatTiles } from '../components/stats/StatTiles';
 import { Heatmap } from '../components/stats/Heatmap';
@@ -47,11 +47,7 @@ export function Stats() {
             <UsageChart buckets={stats.buckets} />
             <ModelRows models={stats.models} />
             <FeaturePanels features={stats.features} byCost={stats.biggestByCost} byLength={stats.biggestByLength} />
-            {stats.trackingSince !== null && (
-              <p className="muted small">
-                Cache, speed, error and feature stats are tracked from {new Date(stats.trackingSince).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.
-              </p>
-            )}
+            <p className="muted small">{trackingNote(stats.trackingSince)}</p>
           </>
         )}
       </div>
