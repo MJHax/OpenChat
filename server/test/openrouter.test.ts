@@ -51,12 +51,12 @@ describe('OpenRouter client', () => {
     expect(models[0]).toEqual({
       id: 'a/full', name: 'Full', contextLength: 200000, promptPrice: 0, completionPrice: 0,
       description: 'Does it all', created: 1792102385, inputModalities: ['text', 'image', 'file'],
-      supportsTools: true, supportsReasoning: true, maxOutput: 8192,
+      supportsTools: true, supportsReasoning: true, maxOutput: 8192, cacheReadPrice: null,
     });
     expect(models[1]).toEqual({
       id: 'a/bare', name: 'a/bare', contextLength: null, promptPrice: null, completionPrice: null,
       description: '', created: null, inputModalities: ['text'],
-      supportsTools: false, supportsReasoning: false, maxOutput: null,
+      supportsTools: false, supportsReasoning: false, maxOutput: null, cacheReadPrice: null,
     });
   });
 
@@ -80,7 +80,7 @@ describe('OpenRouter client', () => {
     expect(events).toEqual([
       { type: 'delta', text: 'Hel' },
       { type: 'delta', text: 'lo' },
-      { type: 'usage', usage: { promptTokens: 12, completionTokens: 3, cost: 0.00042, webSearches: null } },
+      { type: 'usage', usage: { promptTokens: 12, completionTokens: 3, cost: 0.00042, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null } },
     ]);
     expect(calls[0].url).toBe('https://openrouter.ai/api/v1/chat/completions');
     expect((calls[0].init.headers as Record<string, string>).Authorization).toBe('Bearer sk-test');
@@ -131,6 +131,38 @@ describe('OpenRouter client', () => {
   it('complete() returns the message content', async () => {
     const { fn } = fakeFetch(() => Response.json({ choices: [{ message: { content: 'Trip ideas' } }] }));
     expect(await createOpenRouterClient(fn).complete({ apiKey: 'k', model: 'm', messages: [] })).toBe('Trip ideas');
+  });
+
+  it('complete() asks for usage and reports it through onUsage', async () => {
+    const { fn, calls } = fakeFetch(() => Response.json({
+      choices: [{ message: { content: 'Trip ideas' } }],
+      usage: { prompt_tokens: 40, completion_tokens: 6, cost: 0.0002, prompt_tokens_details: { cached_tokens: 0 } },
+    }));
+    const seen: unknown[] = [];
+    const text = await createOpenRouterClient(fn).complete({ apiKey: 'k', model: 'm', messages: [], onUsage: (u) => seen.push(u) });
+    expect(text).toBe('Trip ideas');
+    expect(JSON.parse(String(calls[0].init.body))).toMatchObject({ usage: { include: true } });
+    expect(seen).toEqual([{ promptTokens: 40, completionTokens: 6, cost: 0.0002, webSearches: null, cachedTokens: 0, cacheWriteTokens: null, reasoningTokens: null }]);
+  });
+
+  it('reads cache and reasoning token details from streamed usage', async () => {
+    const { fn } = fakeFetch(() => sse(
+      'data: {"choices":[{"delta":{}}],"usage":{"prompt_tokens":100,"completion_tokens":20,"cost":0.01,"prompt_tokens_details":{"cached_tokens":60,"cache_write_tokens":0},"completion_tokens_details":{"reasoning_tokens":8}}}',
+      'data: [DONE]',
+    ));
+    const events = await collect(createOpenRouterClient(fn).streamChat({ apiKey: 'k', model: 'm', messages: [] }));
+    expect(events).toEqual([{ type: 'usage', usage: {
+      promptTokens: 100, completionTokens: 20, cost: 0.01, webSearches: null, cachedTokens: 60, cacheWriteTokens: 0, reasoningTokens: 8,
+    } }]);
+  });
+
+  it('maps the cache read price, null when missing', async () => {
+    const { fn } = fakeFetch(() => Response.json({ data: [
+      { id: 'a/c', pricing: { prompt: '0.000003', completion: '0.000015', input_cache_read: '0.0000003' } },
+      { id: 'a/n', pricing: { prompt: '0.000003' } },
+    ] }));
+    const models = await createOpenRouterClient(fn).listModels();
+    expect(models.map((m) => m.cacheReadPrice)).toEqual([3e-7, null]);
   });
 
   it('checkKey() rejects an invalid key', async () => {
@@ -195,7 +227,7 @@ describe('streamChat web search', () => {
       type: 'sources',
       sources: [{ url: 'https://nodejs.org/en', title: 'Node.js' }, { url: 'https://github.com/nodejs/node', title: 'GitHub' }],
     });
-    expect(events.at(-1)).toEqual({ type: 'usage', usage: { promptTokens: 1, completionTokens: 2, cost: 0.015, webSearches: 2 } });
+    expect(events.at(-1)).toEqual({ type: 'usage', usage: { promptTokens: 1, completionTokens: 2, cost: 0.015, webSearches: 2, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null } });
   });
 
   it('reports no search count when usage lacks one', async () => {

@@ -43,6 +43,21 @@ const toPrice = (value: unknown): number | null => {
 
 const toCount = (value: unknown): number | null => (typeof value === 'number' && value > 0 ? value : null);
 
+/** Like toCount but keeps 0: a reported zero (e.g. no cache hit) differs from "not reported". */
+const toTokens = (value: unknown): number | null => (typeof value === 'number' && value >= 0 ? value : null);
+
+function parseUsage(raw: any): Usage {
+  return {
+    promptTokens: raw.prompt_tokens ?? null,
+    completionTokens: raw.completion_tokens ?? null,
+    cost: typeof raw.cost === 'number' ? raw.cost : null,
+    webSearches: toCount(raw.server_tool_use_details?.web_search_requests),
+    cachedTokens: toTokens(raw.prompt_tokens_details?.cached_tokens),
+    cacheWriteTokens: toTokens(raw.prompt_tokens_details?.cache_write_tokens),
+    reasoningTokens: toTokens(raw.completion_tokens_details?.reasoning_tokens),
+  };
+}
+
 const toStrings = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 
@@ -52,6 +67,12 @@ export interface Usage {
   cost: number | null;
   /** Searches OpenRouter's web search tool ran; null when not reported (no search, or the plugin). */
   webSearches: number | null;
+  /** Prompt tokens read from the provider's cache; null when not reported. */
+  cachedTokens: number | null;
+  /** Prompt tokens written to the cache (some providers only); null when not reported. */
+  cacheWriteTokens: number | null;
+  /** Reasoning share of the completion tokens; null when not reported. */
+  reasoningTokens: number | null;
 }
 
 /** 'tool': the model decides when to search (needs tool support). 'plugin': one search per reply, any model. */
@@ -100,7 +121,7 @@ export interface OpenRouterClient {
   listModels(): Promise<CatalogModel[]>;
   listCategory(category: Category): Promise<string[]>;
   checkKey(apiKey: string): Promise<void>;
-  complete(o: { apiKey: string; model: string; messages: ChatMessage[]; maxTokens?: number }): Promise<string>;
+  complete(o: { apiKey: string; model: string; messages: ChatMessage[]; maxTokens?: number; onUsage?: (usage: Usage) => void }): Promise<string>;
   streamChat(o: {
     apiKey: string; model: string; messages: ChatMessage[]; plugins?: Plugin[]; webSearch?: WebSearchMode; signal?: AbortSignal;
   }): AsyncGenerator<StreamEvent>;
@@ -148,6 +169,7 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
           supportsTools: params.includes('tools'),
           supportsReasoning: params.includes('reasoning'),
           maxOutput: toCount(m.top_provider?.max_completion_tokens),
+          cacheReadPrice: toPrice(m.pricing?.input_cache_read),
         };
       });
     },
@@ -162,13 +184,14 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
       await request('/key', { apiKey });
     },
 
-    async complete({ apiKey, model, messages, maxTokens }) {
+    async complete({ apiKey, model, messages, maxTokens, onUsage }) {
       const res = await request('/chat/completions', {
         method: 'POST',
         apiKey,
-        body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
+        body: JSON.stringify({ model, messages, max_tokens: maxTokens, usage: { include: true } }),
       });
       const json = (await res.json()) as any;
+      if (json.usage) onUsage?.(parseUsage(json.usage));
       return String(json.choices?.[0]?.message?.content ?? '');
     },
 
@@ -199,17 +222,7 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
           const sources = toSources(delta.annotations);
           if (sources.length) yield { type: 'sources', sources };
         }
-        if (chunk.usage) {
-          yield {
-            type: 'usage',
-            usage: {
-              promptTokens: chunk.usage.prompt_tokens ?? null,
-              completionTokens: chunk.usage.completion_tokens ?? null,
-              cost: typeof chunk.usage.cost === 'number' ? chunk.usage.cost : null,
-              webSearches: toCount(chunk.usage.server_tool_use_details?.web_search_requests),
-            },
-          };
-        }
+        if (chunk.usage) yield { type: 'usage', usage: parseUsage(chunk.usage) };
       }
     },
   };

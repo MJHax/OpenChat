@@ -32,6 +32,13 @@ export function cachedCapabilities(db: DB): Map<string, { inputModalities: strin
   return new Map(cached.models.map((m) => [m.id, { inputModalities: m.inputModalities, supportsTools: m.supportsTools }]));
 }
 
+/** Per-token prompt and cache-read prices from the cached catalog, however old; empty when nothing (or a legacy cache) is cached. */
+export function cachedPrices(db: DB): Map<string, { prompt: number | null; cacheRead: number | null }> {
+  const cached = readCache(db);
+  if (!cached || cached.legacy) return new Map();
+  return new Map(cached.models.map((m) => [m.id, { prompt: m.promptPrice, cacheRead: m.cacheReadPrice ?? null }]));
+}
+
 async function fetchRankings(openrouter: OpenRouterClient): Promise<Rankings> {
   const results = await Promise.allSettled(CATEGORIES.map((c) => openrouter.listCategory(c.id)));
   const rankings: Rankings = {};

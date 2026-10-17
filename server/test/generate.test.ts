@@ -10,7 +10,7 @@ import { updateSettings } from '../src/settings';
 import { withCatalogDefaults, type Attachment, type ChatDetail, type ChatSummary, type Message, type Source } from '../../shared/types';
 import { addModel } from '../src/library';
 
-const USAGE: Usage = { promptTokens: 10, completionTokens: 5, cost: 0.0004, webSearches: null };
+const USAGE: Usage = { promptTokens: 10, completionTokens: 5, cost: 0.0004, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null };
 
 /** Fake streamChat that plays `chunks`, then either fails or reports usage. Records every prompt it receives. */
 function scripted(replies: { chunks: string[]; failWith?: Error }[]) {

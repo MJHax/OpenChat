@@ -75,6 +75,8 @@ export interface CatalogModel {
   supportsTools: boolean;
   supportsReasoning: boolean;
   maxOutput: number | null;
+  /** USD per cached prompt token read; null if unknown. */
+  cacheReadPrice: number | null;
 }
 
 /** Fills the fields older cache rows and fallback lookups don't carry. */
@@ -90,6 +92,7 @@ export function withCatalogDefaults(m: Partial<CatalogModel> & { id: string }): 
     supportsTools: false,
     supportsReasoning: false,
     maxOutput: null,
+    cacheReadPrice: null,
     ...m,
   };
 }
