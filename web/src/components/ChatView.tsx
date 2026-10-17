@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Attachment, ChatDetail, LibraryModel, Message, SettingsView } from '../../../shared/types';
 import { api, streamComparison, streamGeneration } from '../api';
 import { COMPARE_OFF, compareModels, loadCompare, saveCompare, type CompareState } from '../lib/compare';
@@ -11,6 +11,12 @@ import { ContextPopover } from './ContextPopover';
 import { CompareColumns, type Column } from './CompareColumns';
 import { Composer } from './Composer';
 import { MessageBody } from './MessageBody';
+import { FilePanel } from './FilePanel';
+import { FilePanelContext, type FilePanelApi } from './FilePanelContext';
+import { saveBlob } from './FileCard';
+import { fileKind, fileVersions, parseFileBlocks, type FileBlock } from '../../../shared/files';
+import { inlineImages } from '../lib/filePreview';
+import { useChatImages } from '../lib/useChatImages';
 import { MessageItem } from './MessageItem';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { toDraft } from './useAttachmentDraft';
@@ -64,6 +70,11 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   const [webSearch, setWebSearchState] = useState(false);
   /** "Compare versions" view: the path index of the reply being compared, and all its versions. */
   const [versions, setVersions] = useState<{ index: number; replies: Message[] } | null>(null);
+  /** The file open in the side panel; `messageId` is the reply it came from (null for a streaming file or a snippet). */
+  const [openFile, setOpenFile] = useState<{ name: string; messageId: string | null; adhoc: FileBlock | null } | null>(null);
+  const openFileRef = useRef(openFile);
+  openFileRef.current = openFile;
+  const [panelWidth, setPanelWidth] = useState(560);
   const abortRef = useRef<AbortController | null>(null);
   const viewChatRef = useRef<string | null>(chatId);
   const createdChatRef = useRef<string | null>(null);
@@ -100,6 +111,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     setError(null);
     setVersions(null);
     setFailedEdit(null);
+    setOpenFile(null);
     setPending((p) => (p && p.chatId === chatId ? p : null));
     setCompareState(chatId ? loadCompare(chatId) : COMPARE_OFF);
     setWebSearchState(chatId ? loadSearch(chatId) : false);
@@ -194,7 +206,13 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
           onStart: () => { started = true; },
           onDelta: (text) => updateSlot(0, (s) => ({ ...s, text: s.text + text })),
           onReasoning: (text) => updateSlot(0, (s) => ({ ...s, reasoning: s.reasoning + text })),
-          onDone: () => { void finish(null); },
+          onDone: (e) => {
+            void finish(null).then(() => {
+              // A finished reply that made files opens its last complete one, unless a file is already open.
+              const last = parseFileBlocks(e.message.content).filter((s) => s.type === 'file' && s.file.complete).at(-1);
+              if (last?.type === 'file' && isShown() && !openFileRef.current) setOpenFile({ name: last.file.name, messageId: e.message.id, adhoc: null });
+            });
+          },
           onError: (e) => { void finish(e.message); },
           onTitle: () => onChatsChanged(),
         }, controller.signal);
@@ -276,6 +294,24 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     }
   };
 
+  const chatImages = useChatImages(detail?.chatImages ?? []);
+  /** Versions as seen from `messageId`: the active path, plus that reply when it's a comparison column off the path. */
+  const versionsFrom = (messageId: string | null) => {
+    if (messageId === null || messages.some((m) => m.id === messageId)) return fileVersions(messages);
+    const offPath = [...(detail?.compare?.replies ?? []), ...(versions?.replies ?? []), ...(pending?.slots ?? []).flatMap((s) => (s.message ? [s.message] : []))]
+      .find((m) => m.id === messageId);
+    if (!offPath) return fileVersions(messages);
+    const parent = messages.findIndex((m) => m.id === offPath.parentId);
+    return fileVersions([...(parent === -1 ? messages : messages.slice(0, parent + 1)), offPath]);
+  };
+  const filePanel: FilePanelApi = {
+    open: (name, messageId, file) => setOpenFile({ name, messageId, adhoc: messageId === null ? file : null }),
+    versionOf: (name, messageId) => versionsFrom(messageId).get(name)?.find((v) => v.messageId === messageId)?.version ?? null,
+    download: (file) => saveBlob(file, fileKind(file.name) === 'html' ? inlineImages(file.content, chatImages) : file.content),
+  };
+  const panelVersions = openFile && !openFile.adhoc ? versionsFrom(openFile.messageId).get(openFile.name) ?? [] : [];
+  const panelInitial = panelVersions.find((v) => v.messageId === openFile?.messageId)?.version ?? panelVersions.length;
+
   const nameOf = (id: string | null) => models.find((m) => m.id === id)?.displayName ?? id ?? '';
   const savedColumns = (replies: Message[]): Column[] =>
     replies.map((m) => ({ key: m.id, modelName: nameOf(m.modelId), text: m.content, reasoning: '', startedAt: 0, streaming: false, error: null, message: m }));
@@ -294,98 +330,128 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     : null;
 
   return (
-    <div className="chat">
-      <header className="chat-header">
-        <h1>{chatId ? title : 'New chat'}</h1>
-        <div className="chat-header-tools">
-          <ContextPopover chatId={chatId} modelIds={runModels ?? []} nameOf={nameOf} refreshKey={detail} />
-          <ChatStatsPopover chatId={chatId} totalCost={detail?.chat.totalCost ?? 0} refreshKey={detail} />
+    <FilePanelContext.Provider value={filePanel}>
+      <div className={`chat${openFile ? ' with-file' : ''}`} style={{ '--file-panel-width': `${panelWidth}px` } as CSSProperties}>
+        <header className="chat-header">
+          <h1>{chatId ? title : 'New chat'}</h1>
+          <div className="chat-header-tools">
+            <ContextPopover chatId={chatId} modelIds={runModels ?? []} nameOf={nameOf} refreshKey={detail} />
+            <ChatStatsPopover chatId={chatId} totalCost={detail?.chat.totalCost ?? 0} refreshKey={detail} />
+          </div>
+        </header>
+
+        <div className="messages" ref={listRef}>
+          <div className={`messages-inner${wide ? ' wide' : ''}`}>
+            {(noKey || noModels) && (
+              <div className="setup-hint">
+                {noKey && <div>Add your OpenRouter API key in <a href="#/settings">Settings</a>.</div>}
+                {noModels && <div>Add a model in the <a href="#/models">Model Library</a> to start chatting.</div>}
+              </div>
+            )}
+            {!chatId && !pending && !noKey && !noModels && <div className="empty">How can I help you today?</div>}
+
+            {shown.map((m, i) => (
+              <MessageItem
+                key={m.id}
+                message={m}
+                modelName={nameOf(m.modelId)}
+                models={models}
+                disabled={streaming || choosing !== null}
+                compareMode={compareList !== null}
+                onSelectSibling={selectSibling}
+                onRegenerate={(model) => regenerate(i, model)}
+                replyModels={replyModels}
+                onEdit={(text, attachments) => { void edit(i, text, attachments); }}
+                restoredEdit={failedEdit?.messageId === m.id ? failedEdit : null}
+                onCompareVersions={() => openVersions(i)}
+              />
+            ))}
+
+            {pending?.userText != null && (
+              <div className="msg user">
+                <AttachmentChips items={pending.userAttachments.map(toDraft)} inMessage />
+                {pending.userText && <div className="bubble">{pending.userText}</div>}
+              </div>
+            )}
+            {pending && pending.slots.length === 1 && (
+              <div className="msg assistant">
+                {!pending.slots[0].text && <ThinkingIndicator startedAt={pending.startedAt} reasoning={pending.slots[0].reasoning} webSearch={pending.webSearch} />}
+                {pending.slots[0].text && <div className="msg-body"><MessageBody text={pending.slots[0].text} messageId={null} streaming /></div>}
+                <div className="msg-meta"><span className="model-tag">{nameOf(pending.slots[0].modelId)}</span></div>
+              </div>
+            )}
+            {pending && pending.slots.length > 1 && (
+              <CompareColumns
+                columns={pending.slots.map((s, i) => ({
+                  key: String(i), modelName: nameOf(s.modelId), text: s.text, reasoning: s.reasoning,
+                  startedAt: pending.startedAt, streaming: !s.done, error: s.error, message: s.message, webSearch: pending.webSearch,
+                }))}
+              />
+            )}
+            {choosing && <CompareColumns title="Pick the reply to continue with" columns={savedColumns(choosing.replies)} onContinue={continueWith} />}
+            {versions && !pending && (
+              <CompareColumns title="All versions of this reply" columns={savedColumns(versions.replies)} onContinue={continueWith} onClose={() => setVersions(null)} />
+            )}
+
+            {error && !pending && (
+              <div className="error-bubble">
+                <span>{error}</span>
+                {messages.length > 0 && <button onClick={retry} disabled={!runModels}>Retry</button>}
+              </div>
+            )}
+            {!error && !pending && awaitingReply && (
+              <div className="no-reply">
+                <span className="muted">No reply yet. It was stopped before any text arrived.</span>
+                <button onClick={retry} disabled={!!disabledReason}>Generate reply</button>
+              </div>
+            )}
+          </div>
         </div>
-      </header>
 
-      <div className="messages" ref={listRef}>
-        <div className={`messages-inner${wide ? ' wide' : ''}`}>
-          {(noKey || noModels) && (
-            <div className="setup-hint">
-              {noKey && <div>Add your OpenRouter API key in <a href="#/settings">Settings</a>.</div>}
-              {noModels && <div>Add a model in the <a href="#/models">Model Library</a> to start chatting.</div>}
-            </div>
-          )}
-          {!chatId && !pending && !noKey && !noModels && <div className="empty">How can I help you today?</div>}
+        <Composer
+          disabledReason={disabledReason}
+          streaming={streaming}
+          models={models}
+          modelId={modelId}
+          onModelChange={setModelId}
+          compare={compare}
+          onCompareChange={setCompare}
+          webSearch={webSearch}
+          onWebSearchChange={setWebSearch}
+          replyModels={replyModels}
+          path={messages}
+          onSend={send}
+          onStop={() => abortRef.current?.abort()}
+        />
 
-          {shown.map((m, i) => (
-            <MessageItem
-              key={m.id}
-              message={m}
-              modelName={nameOf(m.modelId)}
-              models={models}
-              disabled={streaming || choosing !== null}
-              compareMode={compareList !== null}
-              onSelectSibling={selectSibling}
-              onRegenerate={(model) => regenerate(i, model)}
-              replyModels={replyModels}
-              onEdit={(text, attachments) => { void edit(i, text, attachments); }}
-              restoredEdit={failedEdit?.messageId === m.id ? failedEdit : null}
-              onCompareVersions={() => openVersions(i)}
+        {openFile && (
+          <>
+            <div
+              className="file-divider"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize file panel"
+              onPointerDown={(e) => {
+                const startX = e.clientX;
+                const startWidth = panelWidth;
+                const move = (ev: PointerEvent) => setPanelWidth(Math.max(320, Math.min(window.innerWidth - 480, startWidth + startX - ev.clientX)));
+                const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+                window.addEventListener('pointermove', move);
+                window.addEventListener('pointerup', up);
+              }}
             />
-          ))}
-
-          {pending?.userText != null && (
-            <div className="msg user">
-              <AttachmentChips items={pending.userAttachments.map(toDraft)} inMessage />
-              {pending.userText && <div className="bubble">{pending.userText}</div>}
-            </div>
-          )}
-          {pending && pending.slots.length === 1 && (
-            <div className="msg assistant">
-              {!pending.slots[0].text && <ThinkingIndicator startedAt={pending.startedAt} reasoning={pending.slots[0].reasoning} webSearch={pending.webSearch} />}
-              {pending.slots[0].text && <div className="msg-body"><MessageBody text={pending.slots[0].text} messageId={null} streaming /></div>}
-              <div className="msg-meta"><span className="model-tag">{nameOf(pending.slots[0].modelId)}</span></div>
-            </div>
-          )}
-          {pending && pending.slots.length > 1 && (
-            <CompareColumns
-              columns={pending.slots.map((s, i) => ({
-                key: String(i), modelName: nameOf(s.modelId), text: s.text, reasoning: s.reasoning,
-                startedAt: pending.startedAt, streaming: !s.done, error: s.error, message: s.message, webSearch: pending.webSearch,
-              }))}
+            <FilePanel
+              name={openFile.name}
+              versions={panelVersions}
+              initialVersion={panelInitial}
+              adhoc={openFile.adhoc}
+              images={chatImages}
+              onDownload={filePanel.download}
+              onClose={() => setOpenFile(null)}
             />
-          )}
-          {choosing && <CompareColumns title="Pick the reply to continue with" columns={savedColumns(choosing.replies)} onContinue={continueWith} />}
-          {versions && !pending && (
-            <CompareColumns title="All versions of this reply" columns={savedColumns(versions.replies)} onContinue={continueWith} onClose={() => setVersions(null)} />
-          )}
-
-          {error && !pending && (
-            <div className="error-bubble">
-              <span>{error}</span>
-              {messages.length > 0 && <button onClick={retry} disabled={!runModels}>Retry</button>}
-            </div>
-          )}
-          {!error && !pending && awaitingReply && (
-            <div className="no-reply">
-              <span className="muted">No reply yet. It was stopped before any text arrived.</span>
-              <button onClick={retry} disabled={!!disabledReason}>Generate reply</button>
-            </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
-
-      <Composer
-        disabledReason={disabledReason}
-        streaming={streaming}
-        models={models}
-        modelId={modelId}
-        onModelChange={setModelId}
-        compare={compare}
-        onCompareChange={setCompare}
-        webSearch={webSearch}
-        onWebSearchChange={setWebSearch}
-        replyModels={replyModels}
-        path={messages}
-        onSend={send}
-        onStop={() => abortRef.current?.abort()}
-      />
-    </div>
+    </FilePanelContext.Provider>
   );
 }
