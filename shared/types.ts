@@ -276,3 +276,25 @@ export interface ChatStats {
   webSearches: number;
   avgPromptTokens: number | null;
 }
+
+/** Roughly how many tokens each part of the conversation takes up in the model's context window. */
+export interface ContextParts {
+  system: number;
+  user: number;
+  assistant: number;
+  attachments: number;
+  /** Search results pulled into the latest reply; 0 when it didn't search. */
+  search: number;
+}
+
+export interface ContextUsage {
+  modelId: string;
+  /** The model's window in tokens; null when OpenRouter doesn't say. */
+  contextLength: number | null;
+  /** The real total from the latest reply's usage, plus estimates for anything after it. */
+  used: number;
+  /** True when no reply has reported its usage yet, so `used` is only an estimate. */
+  estimated: boolean;
+  /** Sums to `used`. Always approximate: OpenRouter reports one total, not a split. */
+  parts: ContextParts;
+}

@@ -12,6 +12,7 @@ import { searchRoutes } from './routes/search';
 import { generationRoutes } from './routes/generate';
 import { attachmentRoutes } from './routes/attachments';
 import { statsRoutes } from './routes/stats';
+import { contextRoutes } from './routes/context';
 
 export interface Deps {
   db: DB;
@@ -36,6 +37,7 @@ export function createApp(deps: Deps): Hono {
   app.route('/api/search', searchRoutes(deps));
   app.route('/api/attachments', attachmentRoutes(deps));
   app.route('/api/stats', statsRoutes(deps));
+  app.route('/api/context', contextRoutes(deps));
 
   return app;
 }

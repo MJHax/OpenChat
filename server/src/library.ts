@@ -50,6 +50,12 @@ export function modelSupportsTools(db: DB, id: string): boolean {
   return row.supports_tools === 1;
 }
 
+/** A model's context window in tokens; null when it isn't in the library or OpenRouter didn't say. */
+export function modelContextLength(db: DB, id: string): number | null {
+  const row = db.prepare('SELECT context_length FROM models WHERE id = ?').get(id) as { context_length: number | null } | undefined;
+  return row?.context_length ?? null;
+}
+
 export function displayNameOf(db: DB, id: string): string {
   const row = db.prepare('SELECT display_name FROM models WHERE id = ?').get(id) as { display_name: string } | undefined;
   return row?.display_name ?? id;

@@ -7,6 +7,7 @@ import { loadSearch, saveSearch } from '../lib/search';
 import { navigate } from '../lib/route';
 import { AttachmentChips } from './AttachmentChips';
 import { ChatStatsPopover } from './ChatStatsPopover';
+import { ContextPopover } from './ContextPopover';
 import { CompareColumns, type Column } from './CompareColumns';
 import { Composer } from './Composer';
 import { Markdown } from './Markdown';
@@ -296,7 +297,10 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     <div className="chat">
       <header className="chat-header">
         <h1>{chatId ? title : 'New chat'}</h1>
-        <ChatStatsPopover chatId={chatId} totalCost={detail?.chat.totalCost ?? 0} refreshKey={detail} />
+        <div className="chat-header-tools">
+          <ContextPopover chatId={chatId} modelIds={runModels ?? []} nameOf={nameOf} refreshKey={detail} />
+          <ChatStatsPopover chatId={chatId} totalCost={detail?.chat.totalCost ?? 0} refreshKey={detail} />
+        </div>
       </header>
 
       <div className="messages" ref={listRef}>

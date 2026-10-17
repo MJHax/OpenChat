@@ -1,7 +1,7 @@
 import { parseSSE } from '../../shared/sse';
 import type {
   Attachment, CatalogResponse, ChatDetail, ChatSummary, CompareDone, CompareSlotDone, CompareSlotError, CompareStart, LibraryModel, Memory,
-  Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle, StatsRange, StatsResponse, ChatStats,
+  Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle, StatsRange, StatsResponse, ChatStats, ContextUsage,
 } from '../../shared/types';
 
 async function json<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -26,6 +26,8 @@ export const api = {
     json<Message[]>('GET', `/api/chats/${chatId}/replies?parentId=${encodeURIComponent(parentId)}`),
   search: (q: string) => json<SearchHit[]>('GET', `/api/search?q=${encodeURIComponent(q)}`),
   chatStats: (id: string) => json<ChatStats>('GET', `/api/chats/${id}/stats`),
+  context: (modelId: string, chatId: string | null) =>
+    json<ContextUsage>('GET', `/api/context?model=${encodeURIComponent(modelId)}${chatId ? `&chat=${encodeURIComponent(chatId)}` : ''}`),
   stats: (range: StatsRange, tz: string) => json<StatsResponse>('GET', `/api/stats?range=${range}&tz=${encodeURIComponent(tz)}`),
 
   listModels: () => json<LibraryModel[]>('GET', '/api/models'),

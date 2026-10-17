@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ChatStats } from '../../../shared/types';
 import { api } from '../api';
 import { formatCost } from '../lib/format';
 import { compactNumber, emptyChatStats, formatPercent } from '../lib/stats';
+import { usePopover } from './usePopover';
 
 export interface ChatStatsPopoverProps {
   /** null for a chat that hasn't been created yet: everything reads 0. */
@@ -19,10 +20,9 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 export function ChatStatsPopover({ chatId, totalCost, refreshKey }: ChatStatsPopoverProps) {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, root } = usePopover();
   const [stats, setStats] = useState<ChatStats | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -37,22 +37,6 @@ export function ChatStatsPopover({ chatId, totalCost, refreshKey }: ChatStatsPop
       .catch((e: Error) => current && setError(e.message));
     return () => { current = false; };
   }, [open, chatId, refreshKey]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
 
   const s = stats;
   const hit = s?.cacheHitRate ?? null;
