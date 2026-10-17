@@ -3,6 +3,9 @@ import { DEFAULT_TITLE, getChatRow, renameChat } from './chats';
 import { getChatMessages } from './messages';
 import { getSetting } from './settings';
 import { activePath, repliesTo } from './tree';
+import { now } from './db';
+import type { Usage } from './openrouter';
+import { recordUsage, type UsageStatus } from './usage';
 
 export function cleanTitle(raw: string): string {
   const firstLine = raw.trim().split('\n')[0] ?? '';
@@ -44,10 +47,20 @@ async function generateTitle(deps: Deps, chatId: string, apiKey: string, fallbac
     .map((m) => `${m.role}: ${m.content}${m.attachments.length ? ` [attached: ${m.attachments.map((a) => a.filename).join(', ')}]` : ''}`)
     .join('\n\n')
     .slice(0, 4000);
+  const model = getSetting(db, 'title_model_id') || fallbackModel;
+  const startedAt = now();
+  const t0 = Date.now();
+  let usage: Usage | null = null;
+  const log = (status: UsageStatus) =>
+    recordUsage(db, {
+      purpose: 'title', chatId, messageId: null, runId: null, kind: null, compare: false, modelId: model, usage, webSearch: false,
+      webSearches: null, attachments: 0, firstTokenMs: null, durationMs: Date.now() - t0, status, createdAt: startedAt,
+    });
   try {
     const raw = await openrouter.complete({
       apiKey,
-      model: getSetting(db, 'title_model_id') || fallbackModel,
+      model,
+      onUsage: (u) => (usage = u),
       // Reasoning models think before answering; a small budget is spent entirely on reasoning.
       maxTokens: 1000,
       messages: [
@@ -55,11 +68,13 @@ async function generateTitle(deps: Deps, chatId: string, apiKey: string, fallbac
         { role: 'user', content: transcript },
       ],
     });
+    log('complete');
     const title = cleanTitle(raw);
     if (!title) return null;
     renameChat(db, chatId, title);
     return title;
   } catch {
+    log('error');
     return null;
   }
 }

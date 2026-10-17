@@ -8,6 +8,7 @@ import { streamReply } from '../generate';
 import { streamComparison } from '../compare';
 import type { DB } from '../db';
 import type { Message } from '../../../shared/types';
+import type { ReplyKind } from '../usage';
 
 const requireText = (value: unknown, error: string): string => {
   if (typeof value !== 'string' || !value.trim()) throw new HttpError(400, error);
@@ -59,11 +60,14 @@ export function generationRoutes(deps: Deps): Hono {
     inFlight.add(chat.id);
   }
 
-  function reply(c: Context, o: { chatId: string; parentId: string; modelIds: string[]; userMessageId: string | null }): Response {
+  function reply(c: Context, o: {
+    chatId: string; parentId: string; modelIds: string[]; userMessageId: string | null; kind: ReplyKind; attachments: number;
+  }): Response {
     const onFinish = () => inFlight.delete(o.chatId);
     try {
       if (o.modelIds.length === 1) {
-        return streamReply(c, deps, { chatId: o.chatId, parentId: o.parentId, modelId: o.modelIds[0], userMessageId: o.userMessageId, onFinish });
+        const { modelIds, ...rest } = o;
+        return streamReply(c, deps, { ...rest, modelId: modelIds[0], onFinish });
       }
       return streamComparison(c, deps, { ...o, onFinish });
     } catch (err) {
@@ -92,7 +96,7 @@ export function generationRoutes(deps: Deps): Hono {
     const user = saveUserMessage(chatId, chat.active_leaf_id, content, attachments, webSearch);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
-    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id });
+    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id, kind: 'send', attachments: attachments.length });
   });
 
   r.post('/:id/regenerate', async (c) => {
@@ -102,7 +106,7 @@ export function generationRoutes(deps: Deps): Hono {
     const parent = requireUserMessage(db, chatId, body.parentId);
     const modelIds = requireModels(body);
     claim(chat);
-    return reply(c, { chatId, parentId: parent.id, modelIds, userMessageId: null });
+    return reply(c, { chatId, parentId: parent.id, modelIds, userMessageId: null, kind: 'regenerate', attachments: 0 });
   });
 
   r.post('/:id/edit', async (c) => {
@@ -120,7 +124,7 @@ export function generationRoutes(deps: Deps): Hono {
     const user = saveUserMessage(chatId, original.parentId, content, attachments, webSearch);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
-    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id });
+    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id, kind: 'edit', attachments: attachments.length });
   });
 
   return r;

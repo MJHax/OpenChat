@@ -3,7 +3,8 @@ import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 import type { Deps } from './app';
 import { newId } from './db';
 import { getChatRow, setActiveLeaf, setCompareParent, touchChat } from './chats';
-import { mergeSources, promptFor, replyErrorMessage, searchCount } from './generate';
+import { callTimer, failureStatus, mergeSources, promptFor, replyErrorMessage, searchCount } from './generate';
+import { recordUsage, type ReplyKind, type UsageStatus } from './usage';
 import { insertMessage } from './messages';
 import { OpenRouterError, type Usage } from './openrouter';
 import { resolveApiKey } from './settings';
@@ -19,6 +20,9 @@ interface CompareOptions {
   modelIds: string[];
   /** Set when this request created a new user message. */
   userMessageId: string | null;
+  kind: ReplyKind;
+  /** Files on the user message being answered, for send/edit; 0 for regenerate. */
+  attachments: number;
   /** Called once, when every reply is saved or the stream ends, whichever comes first. */
   onFinish?: () => void;
 }
@@ -33,6 +37,7 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
   const { key } = resolveApiKey(db, env);
   const slots: CompareSlot[] = o.modelIds.map((modelId) => ({ assistantMessageId: newId(), modelId }));
   const abort = new AbortController();
+  const runId = newId();
   let finished = false;
   c.req.raw.signal.addEventListener('abort', () => abort.abort());
 
@@ -87,6 +92,13 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
     let sources: Source[] = [];
     // Each model gets its own prompt: one may see an image another can only read a note about, and search differently.
     const prompt = promptFor(deps, o.chatId, o.parentId, slot.modelId);
+    const timer = callTimer();
+    const log = (status: UsageStatus, messageId: string | null) =>
+      recordUsage(db, {
+        purpose: 'reply', chatId: o.chatId, messageId, runId, kind: o.kind, compare: true, modelId: slot.modelId, usage,
+        webSearch: prompt.webSearch !== undefined, webSearches: searchCount(prompt.webSearch, usage, sources), attachments: o.attachments,
+        ...timer.finish(), status, createdAt: timer.startedAt,
+      });
     const save = (status: MessageStatus): Message =>
       insertMessage(db, {
         id: slot.assistantMessageId,
@@ -107,9 +119,11 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
       if (!key) throw new OpenRouterError('No OpenRouter API key set. Add one in Settings.', 401);
       for await (const event of openrouter.streamChat({ apiKey: key, model: slot.modelId, ...prompt, signal: abort.signal })) {
         if (event.type === 'delta') {
+          timer.token();
           text += event.text;
           await send('delta', { slot: i, text: event.text } satisfies CompareSlotText);
         } else if (event.type === 'reasoning') {
+          timer.token();
           await send('reasoning', { slot: i, text: event.text } satisfies CompareSlotText);
         } else if (event.type === 'sources') {
           sources = mergeSources(sources, event.sources);
@@ -118,10 +132,12 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
         }
       }
       const message = save('complete');
+      log('complete', message.id);
       await send('slot-done', { slot: i, message } satisfies CompareSlotDone);
       return message;
     } catch (err) {
       const partial = text ? save('stopped') : null;
+      if (key) log(failureStatus(abort.signal), partial?.id ?? null);
       if (!abort.signal.aborted) await send('slot-error', { slot: i, message: replyErrorMessage(err), partial } satisfies CompareSlotError);
       return partial;
     }

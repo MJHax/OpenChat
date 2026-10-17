@@ -6,6 +6,7 @@ import { getChatMessages } from '../src/messages';
 import { getChatRow } from '../src/chats';
 import { withCatalogDefaults, type Attachment, type ChatDetail, type ChatSummary, type Message } from '../../shared/types';
 import { addModel } from '../src/library';
+import { loadUsageRows } from '../src/usage';
 
 type Script = { chunks: string[]; failWith?: Error; hang?: boolean };
 
@@ -221,5 +222,50 @@ describe('comparisons with attachments', () => {
     const parts = (model: string) => calls.filter((c) => c.model === model).at(-1)!.messages.at(-1)!.content as { type: string }[];
     expect(parts('v/vision').map((p) => p.type)).toEqual(['text', 'image_url']);
     expect(parts('t/text').map((p) => p.type)).toEqual(['text', 'text']);
+  });
+});
+
+describe('comparison usage log', () => {
+  it('logs every slot under one run, including one that failed before any text', async () => {
+    const { streamChat } = byModel({ 'm/b': { chunks: [], failWith: new OpenRouterError('Rate limited', 429) } });
+    const { call, db } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelIds: IDS }));
+    const replies = loadUsageRows(db, null).filter((r) => r.purpose === 'reply');
+    expect(replies).toHaveLength(3);
+    expect(new Set(replies.map((r) => r.runId)).size).toBe(1);
+    expect(replies.every((r) => r.compare && r.kind === 'send' && r.chatId === chatId)).toBe(true);
+    expect(replies.find((r) => r.modelId === 'm/b')).toMatchObject({ status: 'error', messageId: null });
+    expect(replies.filter((r) => r.status === 'complete').every((r) => r.messageId !== null)).toBe(true);
+  });
+
+  it('logs aborted slots as stopped, with or without text', async () => {
+    const { streamChat } = byModel({ 'm/a': { chunks: ['Part'], hang: true }, 'm/b': { chunks: [], hang: true } });
+    const { app, call, db } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const controller = new AbortController();
+    const res = await app.request(new Request(`http://localhost/api/chats/${chatId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: 'Q', modelIds: ['m/a', 'm/b'] }),
+      signal: controller.signal,
+    }));
+    const reader = res.body!.getReader();
+    const dec = new TextDecoder();
+    let seen = '';
+    while (!seen.includes('event: delta')) {
+      const { value, done } = await reader.read();
+      if (done) throw new Error(`stream ended before any delta: ${seen}`);
+      seen += dec.decode(value);
+    }
+    controller.abort();
+    await reader.cancel().catch(() => {});
+
+    let rows = loadUsageRows(db, null);
+    for (let i = 0; i < 50 && rows.length < 2; i++) {
+      await new Promise((r) => setTimeout(r, 20));
+      rows = loadUsageRows(db, null);
+    }
+    expect(rows.map((r) => [r.modelId, r.status, r.messageId !== null]).sort()).toEqual([['m/a', 'stopped', true], ['m/b', 'stopped', false]]);
   });
 });

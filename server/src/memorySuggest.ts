@@ -1,6 +1,8 @@
 import type { Deps } from './app';
 import { HttpError } from './http';
-import { OpenRouterError } from './openrouter';
+import { OpenRouterError, type Usage } from './openrouter';
+import { now } from './db';
+import { recordUsage, type UsageStatus } from './usage';
 import { getSetting, resolveApiKey } from './settings';
 
 export const MEMORY_PROMPT =
@@ -26,11 +28,21 @@ export async function suggestMemory(deps: Deps, text: unknown): Promise<string> 
   const { key } = resolveApiKey(db, env);
   if (!key) throw new HttpError(400, 'No OpenRouter API key set. Add one in Settings.');
 
+  const startedAt = now();
+  const t0 = Date.now();
+  let usage: Usage | null = null;
+  const log = (status: UsageStatus) =>
+    recordUsage(db, {
+      purpose: 'memory', chatId: null, messageId: null, runId: null, kind: null, compare: false, modelId: model, usage, webSearch: false,
+      webSearches: null, attachments: 0, firstTokenMs: null, durationMs: Date.now() - t0, status, createdAt: startedAt,
+    });
+
   let raw: string;
   try {
     raw = await openrouter.complete({
       apiKey: key,
       model,
+      onUsage: (u) => (usage = u),
       // Reasoning models think before answering; a small budget is spent entirely on reasoning.
       maxTokens: 1000,
       messages: [
@@ -38,7 +50,9 @@ export async function suggestMemory(deps: Deps, text: unknown): Promise<string> 
         { role: 'user', content: input.slice(0, 4000) },
       ],
     });
+    log('complete');
   } catch (err) {
+    log('error');
     throw new HttpError(502, err instanceof OpenRouterError ? err.message : 'Could not reach the memory model.');
   }
   const fact = cleanFact(raw);

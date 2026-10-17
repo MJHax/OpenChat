@@ -9,6 +9,7 @@ import { cleanTitle } from '../src/title';
 import { updateSettings } from '../src/settings';
 import { withCatalogDefaults, type Attachment, type ChatDetail, type ChatSummary, type Message, type Source } from '../../shared/types';
 import { addModel } from '../src/library';
+import { loadUsageRows } from '../src/usage';
 
 const USAGE: Usage = { promptTokens: 10, completionTokens: 5, cost: 0.0004, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null };
 
@@ -461,5 +462,88 @@ describe('mergeSources', () => {
     const A = { url: 'https://a.example', title: 'A' };
     expect(mergeSources([A], [{ url: 'https://a.example', title: 'Other' }, { url: 'https://b.example', title: 'B' }]))
       .toEqual([A, { url: 'https://b.example', title: 'B' }]);
+  });
+});
+
+describe('usage log', () => {
+  const rows = (db: ReturnType<typeof makeApp>['db']) => loadUsageRows(db, null);
+
+  it('logs a reply with its kind, message, usage and timing, plus the title call', async () => {
+    const { streamChat } = scripted([{ chunks: ['Hi'] }]);
+    const complete: OpenRouterClient['complete'] = async ({ onUsage }) => {
+      onUsage?.({ ...USAGE, cost: 0.0001 });
+      return 'Greeting';
+    };
+    const { call, db } = makeApp({ streamChat, complete });
+    const chatId = await newChat(call);
+    const events = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: 'm/x' }));
+    const reply = events.find((e) => e.event === 'done')!.data.message as Message;
+
+    const [replyRow, titleRow] = rows(db);
+    expect(replyRow).toMatchObject({
+      purpose: 'reply', kind: 'send', chatId, messageId: reply.id, modelId: 'm/x', compare: false, promptTokens: 10, completionTokens: 5,
+      cost: 0.0004, status: 'complete', webSearch: false, attachments: 0, backfilled: false,
+    });
+    expect(replyRow.runId).toBeTruthy();
+    expect(replyRow.durationMs).not.toBeNull();
+    expect(replyRow.firstTokenMs).not.toBeNull();
+    expect(titleRow).toMatchObject({ purpose: 'title', chatId, cost: 0.0001, status: 'complete', kind: null });
+  });
+
+  it('logs regenerate and edit kinds', async () => {
+    const { streamChat } = scripted([{ chunks: ['A'] }]);
+    const { call, db } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const first = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'm/x' }));
+    const userId = first[0].data.userMessageId as string;
+    await readEvents(await call('POST', `/api/chats/${chatId}/regenerate`, { parentId: userId, modelId: 'm/x' }));
+    await readEvents(await call('POST', `/api/chats/${chatId}/edit`, { messageId: userId, content: 'Q2', modelId: 'm/x' }));
+    expect(rows(db).filter((r) => r.purpose === 'reply').map((r) => r.kind)).toEqual(['send', 'regenerate', 'edit']);
+  });
+
+  it('counts the files on a sent message', async () => {
+    const { streamChat } = scripted([{ chunks: ['A'] }]);
+    const { call, db, upload } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const a = (await (await upload('one', 'a.txt')).json()) as Attachment;
+    const b = (await (await upload('two', 'b.txt')).json()) as Attachment;
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Read these', modelId: 'm/x', attachmentIds: [a.id, b.id] }));
+    expect(rows(db).find((r) => r.purpose === 'reply')!.attachments).toBe(2);
+  });
+
+  it('logs a failure before any text as an error with no message', async () => {
+    const { streamChat } = scripted([{ chunks: [], failWith: new OpenRouterError('Rate limited', 429) }]);
+    const { call, db } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'm/x' }));
+    expect(rows(db)).toEqual([expect.objectContaining({ purpose: 'reply', status: 'error', messageId: null, cost: null })]);
+  });
+
+  it('logs a failure after text as an error linked to the partial reply', async () => {
+    const { streamChat } = scripted([{ chunks: ['Par'], failWith: new OpenRouterError('Provider died', 502) }]);
+    const { call, db } = makeApp({ streamChat });
+    const chatId = await newChat(call);
+    const events = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'm/x' }));
+    const partial = events.find((e) => e.event === 'error')!.data.partial as Message;
+    expect(rows(db)[0]).toMatchObject({ status: 'error', messageId: partial.id });
+  });
+
+  it('logs nothing without an API key', async () => {
+    const { streamChat } = scripted([{ chunks: ['A'] }]);
+    const { call, db } = makeApp({ streamChat }, {});
+    const chatId = await newChat(call);
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'm/x' }));
+    expect(rows(db)).toEqual([]);
+  });
+
+  it('logs a failed title call as an error', async () => {
+    const { streamChat } = scripted([{ chunks: ['A'] }]);
+    const failing: OpenRouterClient['complete'] = async () => {
+      throw new OpenRouterError('nope', 502);
+    };
+    const { call, db } = makeApp({ streamChat, complete: failing });
+    const chatId = await newChat(call);
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'm/x' }));
+    expect(rows(db).find((r) => r.purpose === 'title')).toMatchObject({ status: 'error', chatId, cost: null });
   });
 });

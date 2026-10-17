@@ -4,6 +4,7 @@ import { OpenRouterError, type OpenRouterClient } from '../src/openrouter';
 import { cleanFact } from '../src/memorySuggest';
 import { updateSettings } from '../src/settings';
 import type { LibraryModel, SettingsView } from '../../shared/types';
+import { loadUsageRows } from '../src/usage';
 
 function capture(reply: string | Error = 'User lives in a farming town.') {
   const calls: Parameters<OpenRouterClient['complete']>[0][] = [];
@@ -95,5 +96,26 @@ describe('cleanFact', () => {
     expect(cleanFact('\n\n`Fact`\nmore')).toBe('Fact');
     expect(cleanFact('a'.repeat(400))).toHaveLength(300);
     expect(cleanFact('   ')).toBe('');
+  });
+});
+
+describe('memory suggestion usage log', () => {
+  it('logs the call with no chat', async () => {
+    const complete: OpenRouterClient['complete'] = async ({ onUsage }) => {
+      onUsage?.({ promptTokens: 30, completionTokens: 8, cost: 0.0002, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null });
+      return 'User likes tea.';
+    };
+    const { call, db } = makeApp({ complete });
+    updateSettings(db, { defaultModelId: 'm/default' });
+    await suggest(call, 'I like tea');
+    expect(loadUsageRows(db, null)).toEqual([expect.objectContaining({ purpose: 'memory', chatId: null, modelId: 'm/default', cost: 0.0002, status: 'complete' })]);
+  });
+
+  it('logs a failed call as an error', async () => {
+    const { complete } = capture(new OpenRouterError('Out of credits', 402));
+    const { call, db } = makeApp({ complete });
+    updateSettings(db, { defaultModelId: 'm/default' });
+    await suggest(call, 'I like tea');
+    expect(loadUsageRows(db, null)[0]).toMatchObject({ purpose: 'memory', status: 'error' });
   });
 });

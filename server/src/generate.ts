@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 import type { Deps } from './app';
-import { newId } from './db';
+import { newId, now } from './db';
 import { setActiveLeaf, touchChat } from './chats';
 import { getChatMessages, insertMessage } from './messages';
 import { OpenRouterError, type Usage, type WebSearchMode } from './openrouter';
@@ -11,6 +11,7 @@ import { buildMessages, pdfPlugins, type ChatMessage, type Plugin } from './prom
 import { getPersona, resolveApiKey } from './settings';
 import { maybeGenerateTitle } from './title';
 import { activePath } from './tree';
+import { recordUsage, type ReplyKind, type UsageStatus } from './usage';
 import type { Message, MessageStatus, Source, StreamDone, StreamError, StreamStart, StreamTitle } from '../../shared/types';
 
 export function replyErrorMessage(err: unknown): string {
@@ -56,9 +57,29 @@ interface ReplyOptions {
   modelId: string;
   /** Set when this request created a new user message. */
   userMessageId: string | null;
+  kind: ReplyKind;
+  /** Files on the user message being answered, for send/edit; 0 for regenerate. */
+  attachments: number;
   /** Called once, as soon as the reply is saved or the stream ends, whichever comes first. */
   onFinish?: () => void;
 }
+
+/** Times one streamed call: from the request to its first content or reasoning chunk, and to its end. */
+export function callTimer() {
+  const startedAt = now();
+  const t0 = Date.now();
+  let firstTokenMs: number | null = null;
+  return {
+    startedAt,
+    token() {
+      firstTokenMs ??= Date.now() - t0;
+    },
+    finish: () => ({ firstTokenMs, durationMs: Date.now() - t0 }),
+  };
+}
+
+/** A failed call was stopped if the client went away, otherwise it errored. */
+export const failureStatus = (signal: AbortSignal): UsageStatus => (signal.aborted ? 'stopped' : 'error');
 
 /**
  * Streams an assistant reply to `parentId` as SSE: start → delta* → done | error, then optional title.
@@ -94,6 +115,13 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
     let text = '';
     let usage: Usage | null = null;
     let sources: Source[] = [];
+    const timer = callTimer();
+    const log = (status: UsageStatus, messageId: string | null) =>
+      recordUsage(db, {
+        purpose: 'reply', chatId: o.chatId, messageId, runId: newId(), kind: o.kind, compare: false, modelId: o.modelId, usage,
+        webSearch: prompt.webSearch !== undefined, webSearches: searchCount(prompt.webSearch, usage, sources), attachments: o.attachments,
+        ...timer.finish(), status, createdAt: timer.startedAt,
+      });
     const save = (status: MessageStatus): Message => {
       const message = insertMessage(db, {
         id: assistantId,
@@ -119,9 +147,11 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
       if (!key) throw new OpenRouterError('No OpenRouter API key set. Add one in Settings.', 401);
       for await (const event of openrouter.streamChat({ apiKey: key, model: o.modelId, ...prompt, signal: abort.signal })) {
         if (event.type === 'delta') {
+          timer.token();
           text += event.text;
           await send('delta', { text: event.text });
         } else if (event.type === 'reasoning') {
+          timer.token();
           await send('reasoning', { text: event.text });
         } else if (event.type === 'sources') {
           sources = mergeSources(sources, event.sources);
@@ -130,12 +160,14 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
         }
       }
       const message = save('complete');
+      log('complete', message.id);
       await send('done', { message } satisfies StreamDone);
       finish(); // the reply is saved; titling below shouldn't block new generations in this chat
       const title = await maybeGenerateTitle(deps, o.chatId, key, o.modelId);
       if (title) await send('title', { title } satisfies StreamTitle);
     } catch (err) {
       const partial = text ? save('stopped') : null;
+      if (key) log(failureStatus(abort.signal), partial?.id ?? null);
       if (abort.signal.aborted) return; // client went away; nothing to send
       await send('error', { message: replyErrorMessage(err), partial } satisfies StreamError);
     }
