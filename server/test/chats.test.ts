@@ -4,6 +4,8 @@ import { insertMessage } from '../src/messages';
 import { setActiveLeaf } from '../src/chats';
 import { toFtsQuery } from '../src/search';
 import { logReply } from './usageHelpers';
+import { attachToMessage, chatImageNames, insertPending } from '../src/attachments';
+import type { DB } from '../src/db';
 import type { ChatDetail, ChatSummary, SearchHit } from '../../shared/types';
 
 async function seed() {
@@ -96,5 +98,32 @@ describe('search', () => {
     expect(toFtsQuery('  ')).toBeNull();
     expect(toFtsQuery('*"()')).toBeNull();
     expect(toFtsQuery('c++ AND bananas')).toBe('"c"* "AND"* "bananas"*');
+  });
+});
+
+describe('chat images', () => {
+  const image = (db: DB, messageId: string, filename: string, bytes: number[]) => {
+    const a = insertPending(db, { filename, kind: 'image', mime: 'image/png', data: new Uint8Array(bytes) });
+    attachToMessage(db, messageId, [{ ...a, messageId: null }]);
+    return a;
+  };
+
+  it('lists images from every branch, newest first, newest winning a shared name', async () => {
+    const { db, call, chat, u1, u2 } = await seed();
+    const old = image(db, u1.id, 'beach.png', [1]);
+    const offPath = image(db, u2.id, 'cat.png', [2]); // u2 hangs off a1, which is not on the active path
+    const newer = image(db, u2.id, 'beach.png', [3]);
+    const detail = (await (await call('GET', `/api/chats/${chat.id}`)).json()) as ChatDetail;
+    expect(detail.chatImages.map((a) => a.id)).toEqual([newer.id, offPath.id]);
+    expect(detail.chatImages.map((a) => a.id)).not.toContain(old.id);
+    expect(chatImageNames(db, chat.id)).toEqual(['beach.png', 'cat.png']);
+  });
+
+  it('ignores files that are not images', async () => {
+    const { db, call, chat, u1 } = await seed();
+    const t = insertPending(db, { filename: 'notes.txt', kind: 'text', mime: 'text/plain', data: new Uint8Array([65]) });
+    attachToMessage(db, u1.id, [{ ...t, messageId: null }]);
+    const detail = (await (await call('GET', `/api/chats/${chat.id}`)).json()) as ChatDetail;
+    expect(detail.chatImages).toEqual([]);
   });
 });

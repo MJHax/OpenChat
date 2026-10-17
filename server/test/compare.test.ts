@@ -136,7 +136,7 @@ describe('comparisons', () => {
     expect(detail.compare).toBeNull();
 
     await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Next', modelId: 'm/a' }));
-    expect(calls.at(-1)!.messages.map((m) => m.content)).toEqual(['Q', 'reply from m/b', 'Next']);
+    expect(calls.at(-1)!.messages.filter((m) => m.role !== 'system').map((m) => m.content)).toEqual(['Q', 'reply from m/b', 'Next']);
   });
 
   it('the lock covers the whole comparison', async () => {

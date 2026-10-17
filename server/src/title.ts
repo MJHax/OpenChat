@@ -1,4 +1,5 @@
 import type { Deps } from './app';
+import { copyText } from '../../shared/files';
 import { DEFAULT_TITLE, getChatRow, renameChat } from './chats';
 import { getChatMessages } from './messages';
 import { getSetting } from './settings';
@@ -44,7 +45,7 @@ async function generateTitle(deps: Deps, chatId: string, apiKey: string, fallbac
     if (reply) path.push(reply);
   }
   const transcript = path
-    .map((m) => `${m.role}: ${m.content}${m.attachments.length ? ` [attached: ${m.attachments.map((a) => a.filename).join(', ')}]` : ''}`)
+    .map((m) => `${m.role}: ${m.role === 'assistant' ? copyText(m.content) : m.content}${m.attachments.length ? ` [attached: ${m.attachments.map((a) => a.filename).join(', ')}]` : ''}`)
     .join('\n\n')
     .slice(0, 4000);
   const model = getSetting(db, 'title_model_id') || fallbackModel;

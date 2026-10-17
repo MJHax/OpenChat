@@ -136,3 +136,16 @@ export function attachmentsFor(db: DB, messageIds: string[]): Map<string, Attach
   }
   return out;
 }
+
+/** Images attached anywhere in the chat, newest first; when names repeat, only the newest of that name is kept. */
+export function chatImages(db: DB, chatId: string): Attachment[] {
+  const rows = db.prepare(
+    `SELECT a.id, a.message_id, a.kind, a.filename, a.mime, a.size FROM attachments a JOIN messages m ON m.id = a.message_id
+     WHERE m.chat_id = ? AND a.kind = 'image' ORDER BY a.created_at DESC, a.rowid DESC`,
+  ).all(chatId) as Row[];
+  const seen = new Set<string>();
+  return rows.filter((r) => !seen.has(r.filename) && seen.add(r.filename)).map(toAttachment);
+}
+
+/** The names a generated page can use to show the chat's images. */
+export const chatImageNames = (db: DB, chatId: string): string[] => chatImages(db, chatId).map((a) => a.filename);

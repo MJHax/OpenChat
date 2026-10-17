@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { makeApp, readEvents } from './appHelpers';
 import { OpenRouterError, type OpenRouterClient, type StreamEvent, type Usage, type WebSearchMode } from '../src/openrouter';
 import { mergeSources } from '../src/generate';
-import type { ChatMessage } from '../src/prompt';
+import { FILE_INSTRUCTIONS_HEADER, type ChatMessage } from '../src/prompt';
 import { getChatMessages, insertMessage } from '../src/messages';
 import { getChatRow } from '../src/chats';
 import { cleanTitle } from '../src/title';
@@ -71,7 +71,7 @@ describe('send', () => {
     const chatId = await newChat(call);
     await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q1', modelId: 'm/x' }));
     await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q2', modelId: 'm/y' }));
-    expect(calls[1].map((m) => m.content)).toEqual(['Q1', 'A1', 'Q2']);
+    expect(calls[1].filter((m) => m.role !== 'system').map((m) => m.content)).toEqual(['Q1', 'A1', 'Q2']);
     const detail = (await (await call('GET', `/api/chats/${chatId}`)).json()) as ChatDetail;
     expect(detail.messages.map((m) => [m.content, m.modelId])).toEqual([['Q1', null], ['A1', 'm/x'], ['Q2', null], ['A2', 'm/y']]);
   });
@@ -103,7 +103,7 @@ describe('regenerate and edit', () => {
     const userId = first[0].data.userMessageId as string;
 
     await readEvents(await call('POST', `/api/chats/${chatId}/regenerate`, { parentId: userId, modelId: 'm/b' }));
-    expect(calls[1].map((m) => m.content)).toEqual(['Q']);
+    expect(calls[1].filter((m) => m.role !== 'system').map((m) => m.content)).toEqual(['Q']);
 
     const detail = (await (await call('GET', `/api/chats/${chatId}`)).json()) as ChatDetail;
     expect(detail.messages[1]).toMatchObject({ content: 'Second', modelId: 'm/b', siblingIndex: 1 });
@@ -119,7 +119,7 @@ describe('regenerate and edit', () => {
 
     const events = await readEvents(await call('POST', `/api/chats/${chatId}/edit`, { messageId: userId, content: 'Dogs?', modelId: 'm/a' }));
     expect(events[0].data.userMessageId).not.toBe(userId);
-    expect(calls[1].map((m) => m.content)).toEqual(['Dogs?']);
+    expect(calls[1].filter((m) => m.role !== 'system').map((m) => m.content)).toEqual(['Dogs?']);
 
     const detail = (await (await call('GET', `/api/chats/${chatId}`)).json()) as ChatDetail;
     expect(detail.messages.map((m) => m.content)).toEqual(['Dogs?', 'About dogs']);
@@ -563,5 +563,36 @@ describe('usage log', () => {
     const chatId = await newChat(call);
     await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Q', modelId: 'm/x' }));
     expect(rows(db).find((r) => r.purpose === 'title')).toMatchObject({ status: 'error', chatId, cost: null });
+  });
+});
+
+describe('file generation', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1]);
+
+  it('teaches the reply model the file format and names the chat images', async () => {
+    const { streamChat, calls } = scripted([{ chunks: ['ok'] }]);
+    const { call, upload, db } = makeApp({ streamChat });
+    addModel(db, withCatalogDefaults({ id: 'v/vision', name: 'Vision', inputModalities: ['text', 'image'] }));
+    const chatId = await newChat(call);
+    const image = (await (await upload(PNG, 'beach.png')).json()) as Attachment;
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Brochure please', modelId: 'v/vision', attachmentIds: [image.id] }));
+    const system = calls[0][0];
+    expect(system.role).toBe('system');
+    expect(system.content).toContain(FILE_INSTRUCTIONS_HEADER);
+    expect(system.content).toContain('beach.png');
+  });
+
+  it('titles from the reply text, not the file body', async () => {
+    const { streamChat } = scripted([{ chunks: ['Here it is:\n<file name="a.html">\n<p>SECRET BODY</p>\n</file>'] }]);
+    const prompts: string[] = [];
+    const complete: OpenRouterClient['complete'] = async ({ messages }) => {
+      prompts.push(messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n'));
+      return 'Page';
+    };
+    const { call } = makeApp({ streamChat, complete });
+    const chatId = await newChat(call);
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Make a page', modelId: 'm/x' }));
+    expect(prompts[0]).toContain('[file: a.html]');
+    expect(prompts[0]).not.toContain('SECRET BODY');
   });
 });

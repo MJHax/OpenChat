@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSystemPrompt, buildMessages, pdfPlugins } from '../src/prompt';
+import { buildSystemPrompt, buildMessages, FILE_INSTRUCTIONS_HEADER, fileInstructions, pdfPlugins, replySystemPrompt } from '../src/prompt';
 import type { Attachment } from '../../shared/types';
 
 const empty = { aboutMe: '', customInstructions: '', memories: [] };
@@ -93,5 +93,57 @@ describe('pdfPlugins', () => {
     expect(pdfPlugins([{ attachments: [] }, {}], ['text', 'file'])).toBeUndefined();
     expect(pdfPlugins([{ attachments: [pdf] }], ['text', 'file'])).toEqual([{ id: 'file-parser', pdf: { engine: 'native' } }]);
     expect(pdfPlugins([{ attachments: [pdf] }], ['text'])).toEqual([{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }]);
+  });
+});
+
+describe('fileInstructions', () => {
+  it('explains the format', () => {
+    const text = fileInstructions([]);
+    expect(text.startsWith(FILE_INSTRUCTIONS_HEADER)).toBe(true);
+    expect(text).toContain('<file name="');
+    expect(text).toContain('</file>');
+    expect(text).toContain('same name');
+    expect(text).toContain('self-contained');
+    expect(text).toContain('@page');
+  });
+
+  it('lists attached image names only when there are some', () => {
+    expect(fileInstructions(['beach.jpg', 'cat.png'])).toContain('beach.jpg, cat.png');
+    expect(fileInstructions([])).not.toContain('Images attached');
+  });
+
+  it('stays short', () => {
+    expect(fileInstructions(['a.png']).length).toBeLessThan(1000);
+  });
+});
+
+describe('replySystemPrompt', () => {
+  it('is just the file section for an empty persona', () => {
+    expect(replySystemPrompt(empty, [])).toBe(fileInstructions([]));
+  });
+
+  it('puts the persona first', () => {
+    expect(replySystemPrompt({ ...empty, aboutMe: 'Sam' }, [])).toBe(`About the user:\nSam\n\n${fileInstructions([])}`);
+  });
+});
+
+describe('buildMessages with files', () => {
+  const f = (name: string, body: string) => `<file name="${name}">\n${body}\n</file>`;
+  const path = [
+    { role: 'user' as const, content: 'make a page' },
+    { role: 'assistant' as const, content: f('p.html', 'old') },
+    { role: 'user' as const, content: 'blue' },
+    { role: 'assistant' as const, content: f('p.html', 'new') },
+  ];
+
+  it('adds the file section and collapses superseded versions', () => {
+    const out = buildMessages(empty, path, undefined, { imageNames: ['beach.jpg'] });
+    expect(out[0]).toEqual({ role: 'system', content: fileInstructions(['beach.jpg']) });
+    expect(out[2]).toEqual({ role: 'assistant', content: '<file name="p.html" superseded="true" />' });
+    expect(out[4]).toEqual({ role: 'assistant', content: f('p.html', 'new') });
+  });
+
+  it('leaves prompts without files alone', () => {
+    expect(buildMessages(empty, path)[1]).toEqual({ role: 'assistant', content: f('p.html', 'old') });
   });
 });

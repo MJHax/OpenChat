@@ -1,6 +1,7 @@
 import type { DB } from './db';
 import { newId, now } from './db';
 import { HttpError } from './http';
+import { chatImages } from './attachments';
 import { getChatMessages } from './messages';
 import { activePath, repliesTo, withSiblings } from './tree';
 import type { ChatDetail, ChatSummary } from '../../shared/types';
@@ -85,5 +86,6 @@ export function getChatDetail(db: DB, id: string): ChatDetail {
     chat: { id: row.id, title: row.title, updatedAt: row.updated_at, totalCost, activeLeafId: row.active_leaf_id },
     messages: withSiblings(all, activePath(all, row.active_leaf_id)),
     compare: choiceParent ? { parentId: choiceParent, replies: repliesTo(all, choiceParent) } : null,
+    chatImages: chatImages(db, id),
   };
 }

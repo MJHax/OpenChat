@@ -1,4 +1,5 @@
 import { canViewImages, imageSkippedNote } from '../../shared/attachments';
+import { collapseSuperseded } from '../../shared/files';
 import type { Attachment, Message } from '../../shared/types';
 
 export interface Persona {
@@ -37,6 +38,30 @@ export function buildSystemPrompt(p: Persona): string | null {
   return sections.length ? sections.join('\n\n') : null;
 }
 
+export const FILE_INSTRUCTIONS_HEADER = 'Files:';
+
+/** How a reply hands the user a file. Only reply prompts get it; titles and memory suggestions never make files. */
+export function fileInstructions(imageNames: string[]): string {
+  const lines = [
+    FILE_INSTRUCTIONS_HEADER,
+    'When the user asks for a file, or the answer is a standalone document they will want to view or keep (a web page, SVG, CSV, long Markdown, a script), put it in a file block:',
+    '<file name="short-name.ext">',
+    '…raw content, no code fence…',
+    '</file>',
+    'The tags go on their own lines. To change a file, write the whole file again under the same name. Mention it in a sentence; do not repeat its content outside the block.',
+    'HTML must be one self-contained file; it may load libraries from public CDNs. For pages meant to print or save as PDF, use print CSS (@page size, page breaks).',
+  ];
+  if (imageNames.length) lines.push(`Images attached in this chat can be used in HTML by name (src="name"): ${imageNames.join(', ')}.`);
+  return lines.join('\n');
+}
+
+/** The system prompt for a reply: the persona, if any, then the file section. */
+export function replySystemPrompt(p: Persona, imageNames: string[]): string {
+  const persona = buildSystemPrompt(p);
+  const files = fileInstructions(imageNames);
+  return persona ? `${persona}\n\n${files}` : files;
+}
+
 const attr = (value: string) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 
 const dataUrl = (mime: string, data: Buffer) => `data:${mime};base64,${data.toString('base64')}`;
@@ -58,10 +83,15 @@ function toParts(m: PathEntry, attachments: Attachment[], o: AttachmentOptions):
   return parts;
 }
 
-/** Messages without attachments stay plain strings, so prompts for plain chats are unchanged. */
-export function buildMessages(p: Persona, path: PathEntry[], o?: AttachmentOptions): ChatMessage[] {
-  const system = buildSystemPrompt(p);
-  const messages: ChatMessage[] = path.map((m) => {
+/**
+ * Messages without attachments stay plain strings, so prompts for plain chats are unchanged. With `files` (replies),
+ * the system prompt explains file blocks and only the latest version of each file is sent in full.
+ */
+export function buildMessages(p: Persona, path: PathEntry[], o?: AttachmentOptions, files?: { imageNames: string[] }): ChatMessage[] {
+  const system = files ? replySystemPrompt(p, files.imageNames) : buildSystemPrompt(p);
+  const contents = files ? collapseSuperseded(path) : path.map((m) => m.content);
+  const messages: ChatMessage[] = path.map((entry, i) => {
+    const m = { ...entry, content: contents[i] };
     const attachments = m.attachments ?? [];
     if (!o || attachments.length === 0) return { role: m.role, content: m.content };
     return { role: m.role, content: toParts(m, attachments, o) };

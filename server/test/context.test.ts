@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { estimateContext, IMAGE_TOKENS, PDF_PAGE_TOKENS, pdfPages, type ContextInput } from '../src/context';
+import { estimateContext, IMAGE_TOKENS, PDF_PAGE_TOKENS, pdfPages, textTokens, type ContextInput } from '../src/context';
+import { fileInstructions } from '../src/prompt';
 import { makeApp, readEvents } from './appHelpers';
 import type { OpenRouterClient, StreamEvent } from '../src/openrouter';
 import { addModel } from '../src/library';
@@ -98,7 +99,9 @@ describe('GET /api/context', () => {
   it('works without a chat, and checks its inputs', async () => {
     const { call } = makeApp();
     const u = (await (await call('GET', '/api/context?model=m%2Funknown')).json()) as ContextUsage;
-    expect(u).toMatchObject({ contextLength: null, used: 0, estimated: true });
+    // A new chat still carries the file section of the system prompt.
+    expect(u).toMatchObject({ contextLength: null, used: textTokens(fileInstructions([])), estimated: true });
+    expect(u.parts.system).toBeGreaterThan(0);
     expect((await call('GET', '/api/context')).status).toBe(400);
     expect((await call('GET', '/api/context?model=m%2Fx&chat=nope')).status).toBe(404);
   });

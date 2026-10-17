@@ -58,6 +58,8 @@ export interface ChatDetail {
   messages: PathMessage[];
   /** Set while a comparison's replies are waiting for the user to pick one. */
   compare: { parentId: string; replies: Message[] } | null;
+  /** Images attached anywhere in the chat, newest first, one per file name; generated pages can show them by name. */
+  chatImages: Attachment[];
 }
 
 export interface CatalogModel {
