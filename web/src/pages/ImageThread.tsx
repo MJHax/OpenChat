@@ -3,6 +3,7 @@ import { defaultSettings, snapSettings, type ImageSettings } from '../../../shar
 import type { Attachment, ChatDetail, ImageGeneration, MediaLibraryModel, PathMessage, SettingsView } from '../../../shared/types';
 import { api, attachmentUrl, deleteAttachment, uploadAttachment } from '../api';
 import { navigate } from '../lib/route';
+import { editTarget, pickImageModel } from '../lib/imageTarget';
 import { money } from '../lib/imagePrice';
 import { shrinkFile } from '../lib/shrinkImage';
 import { ImageComposer } from '../components/ImageComposer';
@@ -93,8 +94,8 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, running]);
 
-  const entry = library.find((e) => e.id === modelId) ?? library[0];
-  const model = entry?.model ?? null;
+  // A saved model OpenRouter no longer lists can't be used; fall back to one that can, so the composer always shows.
+  const model = pickImageModel(library, modelId) ?? null;
   // Settings follow the model: a model change snaps them to what it offers.
   useEffect(() => {
     if (model) setSettings((s) => (s ? snapSettings(model, s) : defaultSettings(model)));
@@ -102,11 +103,7 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
 
   const images = messages.filter((m) => m.role === 'assistant').flatMap((m) => m.attachments.map((a) => ({ a, m })));
   const latest = images.at(-1)?.a ?? null;
-  const targetImage = newImage ? null : target ? images.find((x) => x.a.id === target)?.a ?? null : latest;
-  const targetIndex = targetImage ? images.findIndex((x) => x.a.id === targetImage.id) + 1 : 0;
-  const editNote = targetImage
-    ? (targetImage.id === latest?.id ? 'Editing the image above' : `Editing image ${targetIndex}`)
-    : uploads.length ? 'Editing your photo' : null;
+  const edit = editTarget({ picked: target, newImage, uploads: uploads.length, onPath: images.map((x) => x.a.id) });
 
   async function onFiles(files: File[]) {
     setUploading(true);
@@ -154,7 +151,7 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
   async function send() {
     if (!model || !settings) return;
     const ok = await generate({
-      prompt: prompt.trim(), modelId: model.id, settings, targetAttachmentId: targetImage?.id ?? null, attachmentIds: uploads.map((a) => a.id),
+      prompt: prompt.trim(), modelId: model.id, settings, targetAttachmentId: edit.id, attachmentIds: uploads.map((a) => a.id),
     });
     if (ok) {
       setPrompt('');
@@ -244,7 +241,7 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
           {error && <div className="error-bubble"><span>{error}</span></div>}
         </div>
       </div>
-      {settings && (
+      {settings && model && (
         <ImageComposer
           library={library}
           model={model}
@@ -257,16 +254,16 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
           uploading={uploading}
           onFiles={(f) => { void onFiles(f); }}
           onRemoveUpload={(id) => { setUploads((u) => u.filter((a) => a.id !== id)); void deleteAttachment(id).catch(() => {}); }}
-          editNote={editNote}
-          hasTarget={targetImage !== null || (newImage && latest !== null)}
+          editNote={edit.note}
+          hasTarget={edit.id !== null || target !== null || (newImage && latest !== null)}
           newImage={newImage}
           onNewImage={setNewImage}
-          refs={(targetImage ? 1 : 0) + uploads.length}
+          refs={(edit.id ? 1 : 0) + uploads.length}
           blocked={blocked}
           onGenerate={() => { void send(); }}
         />
       )}
-      {!settings && library.length === 0 && (
+      {!model && (
         <div className="composer"><div className="composer-box muted">Add an image model in the <a href="#/models">Model Library</a> (Image models) to start.</div></div>
       )}
       {zoom && (
