@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeApp } from './appHelpers';
 import { OpenRouterError, type OpenRouterClient, type Usage } from '../src/openrouter';
@@ -190,6 +190,56 @@ describe('video jobs', () => {
     await p.tick();
     expect(s.events()).toMatchObject([{ status: 'complete', cost: 0.12, message_id: null, thread_id: id }]);
     expect(existsSync(join(s.deps.mediaDir, `${assistantMessageId}.mp4`))).toBe(false);
+  });
+
+  it('a thread deleted during the download leaves no clip behind', async () => {
+    const s = setup();
+    const id = await s.thread();
+    const { assistantMessageId } = (await (await s.start(id)).json()) as { assistantMessageId: string };
+    const deps = s.deps;
+    const original = deps.openrouter.downloadVideo;
+    deps.openrouter.downloadVideo = async (o) => { await s.call('DELETE', `/api/chats/${id}`); return original(o); };
+    s.advance(31_000);
+    s.job.status = 'completed';
+    await s.poller().tick();
+    expect(existsSync(join(s.deps.mediaDir, `${assistantMessageId}.mp4`))).toBe(false);
+    expect(s.events()).toMatchObject([{ status: 'complete', message_id: null }]);
+  });
+
+  it('a clip that cannot be put in place is retried, not stuck', async () => {
+    const s = setup();
+    const id = await s.thread();
+    const { assistantMessageId } = (await (await s.start(id)).json()) as { assistantMessageId: string };
+    const target = join(s.deps.mediaDir, `${assistantMessageId}.mp4`);
+    mkdirSync(target, { recursive: true }); // a directory in the way makes the rename fail
+    const p = s.poller();
+    s.advance(31_000);
+    s.job.status = 'completed';
+    await p.tick();
+    expect((await s.detail(id)).messages.find((m) => m.id === assistantMessageId)!.status).toBe('generating');
+    expect(s.events()).toEqual([]);
+    rmSync(target, { recursive: true });
+    s.advance(31_000);
+    await p.tick();
+    expect((await s.detail(id)).messages.find((m) => m.id === assistantMessageId)!.status).toBe('complete');
+    expect(s.events()).toHaveLength(1);
+  });
+
+  it('shows why the last check failed while it keeps trying', async () => {
+    const s = setup();
+    const id = await s.thread();
+    const { assistantMessageId } = (await (await s.start(id)).json()) as { assistantMessageId: string };
+    s.advance(31_000);
+    s.job.status = 'completed';
+    s.job.downloadFails = true;
+    await s.poller().tick();
+    expect((await s.detail(id)).generations[assistantMessageId]).toMatchObject({ jobStatus: 'downloading', jobError: 'Could not reach OpenRouter.' });
+  });
+
+  it('a broken tick never rejects (it would crash the server)', async () => {
+    const s = setup();
+    s.db.exec('DROP TABLE video_jobs');
+    await expect(s.poller().tick()).resolves.toBeUndefined();
   });
 
   it('rejects a second job while one renders, and frames the model cannot take', async () => {

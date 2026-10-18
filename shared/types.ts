@@ -110,6 +110,8 @@ export interface ImageGeneration {
   frames?: { start: string | null; end: string | null };
   /** Video threads: OpenRouter's job status while rendering. */
   jobStatus?: string | null;
+  /** Video threads: why the last check on a rendering clip failed (it keeps trying). */
+  jobError?: string | null;
   /** 'new' image, an edit of a generated one, or an edit of an uploaded photo. */
   mode: 'new' | 'edit_generated' | 'edit_upload';
   error: string | null;

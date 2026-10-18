@@ -125,33 +125,48 @@ export function createVideoPoller(deps: Deps, opts: { now?: () => number; interv
   let timer: ReturnType<typeof setInterval> | null = null;
   let busy = false;
 
+  const isAlive = (j: JobRow) => !!getMessage(db, j.message_id) && !!(j.thread_id && getChatRow(db, j.thread_id));
+
+  /**
+   * Settles a job that OpenRouter has finished. Any step that throws leaves the job unfinished, so the next poll tries
+   * again: a paid clip is only marked done once it is on disk and recorded, all in one transaction.
+   */
   async function finish(j: JobRow, key: string, status: string, error: string | null, usage: Usage | null, at: number): Promise<void> {
-    const alive = !!getMessage(db, j.message_id) && !!(j.thread_id && getChatRow(db, j.thread_id));
     if (status === 'completed') {
+      setJobStatus(j.message_id, 'downloading');
       mkdirSync(deps.mediaDir, { recursive: true });
       const part = `${clipPath(deps.mediaDir, j.message_id)}.part`;
-      // A failed download leaves the job due again: the clip is paid for and must not be lost.
       const stream = await openrouter.downloadVideo({ apiKey: key, jobId: j.job_id });
       await pipeline(Readable.fromWeb(stream as WebReadableStream<Uint8Array>), createWriteStream(part));
       const model = cachedMediaModel(db, 'video', j.model_id) as VideoModel | null;
       const estimate = model ? videoPrice(model, JSON.parse(j.settings) as VideoSettings, j.photos).cost : null;
       const cost = usage?.cost ?? estimate;
-      recordEvent(db, j, { alive, usage, cost, estimated: usage?.cost == null, status: 'complete', at });
-      db.prepare('UPDATE video_jobs SET finished_at = ? WHERE job_id = ?').run(at, j.job_id);
-      if (!alive) { rmSync(part, { force: true }); return; }
-      renameSync(part, clipPath(deps.mediaDir, j.message_id));
-      db.prepare("UPDATE messages SET status = 'complete', cost = ? WHERE id = ?").run(cost, j.message_id);
-      db.prepare('UPDATE media_generations SET finished_at = ? WHERE message_id = ?').run(at, j.message_id);
-      touchChat(db, j.thread_id!);
-      await maybeGenerateTitle(deps, j.thread_id!, key, getSetting(db, 'default_model_id') || j.model_id);
+      // Checked after the download: the thread may have been deleted while it ran.
+      const alive = isAlive(j);
+      if (alive) renameSync(part, clipPath(deps.mediaDir, j.message_id));
+      else rmSync(part, { force: true });
+      db.transaction(() => {
+        recordEvent(db, j, { alive, usage, cost, estimated: usage?.cost == null, status: 'complete', at });
+        db.prepare('UPDATE video_jobs SET finished_at = ? WHERE job_id = ?').run(at, j.job_id);
+        if (!alive) return;
+        db.prepare("UPDATE messages SET status = 'complete', cost = ? WHERE id = ?").run(cost, j.message_id);
+        db.prepare('UPDATE media_generations SET finished_at = ? WHERE message_id = ?').run(at, j.message_id);
+        touchChat(db, j.thread_id!);
+      })();
+      clearJob(j.message_id);
+      if (alive) await maybeGenerateTitle(deps, j.thread_id!, key, getSetting(db, 'default_model_id') || j.model_id);
       return;
     }
-    recordEvent(db, j, { alive, usage, cost: usage?.cost ?? 0, estimated: false, status: 'error', at });
-    db.prepare('UPDATE video_jobs SET finished_at = ? WHERE job_id = ?').run(at, j.job_id);
-    if (!alive) return;
-    db.prepare("UPDATE messages SET status = 'error', cost = ? WHERE id = ?").run(usage?.cost ?? 0, j.message_id);
-    db.prepare('UPDATE media_generations SET error = ?, finished_at = ? WHERE message_id = ?')
-      .run(error ?? (status === 'expired' ? 'The job expired before it finished.' : `The job was ${status}.`), at, j.message_id);
+    const alive = isAlive(j);
+    db.transaction(() => {
+      recordEvent(db, j, { alive, usage, cost: usage?.cost ?? 0, estimated: false, status: 'error', at });
+      db.prepare('UPDATE video_jobs SET finished_at = ? WHERE job_id = ?').run(at, j.job_id);
+      if (!alive) return;
+      db.prepare("UPDATE messages SET status = 'error', cost = ? WHERE id = ?").run(usage?.cost ?? 0, j.message_id);
+      db.prepare('UPDATE media_generations SET error = ?, finished_at = ? WHERE message_id = ?')
+        .run(error ?? (status === 'expired' ? 'The job expired before it finished.' : `The job was ${status}.`), at, j.message_id);
+    })();
+    clearJob(j.message_id);
   }
 
   async function tick(): Promise<void> {
@@ -168,10 +183,16 @@ export function createVideoPoller(deps: Deps, opts: { now?: () => number; interv
           const job = await openrouter.getVideoJob({ apiKey: key, jobId: j.job_id, pollingUrl: j.polling_url });
           setJobStatus(j.message_id, job.status);
           if (FINAL.has(job.status)) await finish(j, key, job.status, job.error, job.usage, at);
+          else errors.delete(j.message_id);
         } catch (err) {
-          console.error(`Video job ${j.job_id}: ${(err as Error).message}`); // tried again on the next poll
+          // Tried again on the next poll; the thread shows why the last check failed.
+          errors.set(j.message_id, (err as Error).message);
+          console.error(`Video job ${j.job_id}: ${(err as Error).message}`);
         }
       }
+    } catch (err) {
+      // Called from a timer: a rejection here would take the whole server down.
+      console.error(`Video poller: ${(err as Error).message}`);
     } finally {
       busy = false;
     }
@@ -192,10 +213,13 @@ export function createVideoPoller(deps: Deps, opts: { now?: () => number; interv
   };
 }
 
-// Latest status from OpenRouter per rendering message, for the thread view ("pending", "in_progress").
+// Latest status per rendering message ("pending", "in_progress", "downloading"), and why the last check failed, if it did.
 const statuses = new Map<string, string>();
+const errors = new Map<string, string>();
 const setJobStatus = (messageId: string, status: string) => statuses.set(messageId, status);
+const clearJob = (messageId: string) => { statuses.delete(messageId); errors.delete(messageId); };
 export const jobStatusOf = (messageId: string): string | null => statuses.get(messageId) ?? null;
+export const jobErrorOf = (messageId: string): string | null => errors.get(messageId) ?? null;
 
 /** Removes the clip files of a thread's messages (called before the thread is deleted). */
 export function deleteThreadClips(deps: Deps, threadId: string): void {

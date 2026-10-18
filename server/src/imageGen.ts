@@ -10,7 +10,7 @@ import { replyErrorMessage } from './generate';
 import type { Usage } from './openrouter';
 import { getSetting, resolveApiKey } from './settings';
 import { maybeGenerateTitle } from './title';
-import { jobStatusOf } from './videoJobs';
+import { jobErrorOf, jobStatusOf } from './videoJobs';
 import { canGenerate, snapSettings, type ImageModel, type ImageSettings } from '../../shared/imageModels';
 import type { ImageGeneration } from '../../shared/types';
 
@@ -178,6 +178,7 @@ export function threadGenerations(db: DB, threadId: string): Record<string, Imag
       const [start = null, end = null] = JSON.parse(r.reference_ids) as (string | null)[];
       g.frames = { start, end };
       g.jobStatus = r.finished_at === null ? jobStatusOf(r.message_id) : null;
+      g.jobError = r.finished_at === null ? jobErrorOf(r.message_id) : null;
     }
     return [r.message_id, g];
   }));
