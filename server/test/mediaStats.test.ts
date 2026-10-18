@@ -85,6 +85,22 @@ describe('stats routes by view', () => {
     return ctx;
   }
 
+  it('has a video view with seconds and cost per second, counting video-thread titles', async () => {
+    const { call, db } = seed();
+    db.prepare("INSERT INTO chats (id, title, created_at, updated_at, kind) VALUES ('vid', 'Cats', 1, 1, 'video')").run();
+    const add = (seconds: number, cost: number) => db.prepare(
+      "INSERT INTO media_events (created_at, kind, thread_id, model_id, mode, settings, cost, seconds, duration_ms, status) VALUES (?, 'video', 'vid', 'g/veo', 'new', '{}', ?, ?, 30000, 'complete')",
+    ).run(Date.now() - 1000, cost, seconds);
+    add(5, 0.42);
+    add(4, 0.12);
+    db.prepare("INSERT INTO usage_events (created_at, purpose, chat_id, model_id, cost, status, thread_kind) VALUES (?, 'title', 'vid', 'm/x', 0.002, 'complete', 'video')").run(Date.now() - 1000);
+    const v = (await (await call('GET', '/api/stats?view=video&range=all&tz=UTC')).json()) as MediaStatsResponse;
+    expect(v.tiles).toMatchObject({ count: 2, seconds: 9 });
+    expect(v.tiles.spend).toBeCloseTo(0.542);
+    expect(v.tiles.avgCostPerSecond).toBeCloseTo(0.06);
+    expect(v.modes).toBeNull();
+  });
+
   it('keeps image costs out of the chats view, with the overall total on both', async () => {
     const { call } = seed();
     const chats = (await (await call('GET', '/api/stats?range=all&tz=UTC')).json()) as StatsResponse;
