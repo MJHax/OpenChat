@@ -2,6 +2,7 @@ import { parseSSE } from '../../shared/sse';
 import type { CatalogModel, Category, Source } from '../../shared/types';
 import type { ChatMessage, Plugin } from './prompt';
 import { parseImageModel, type ImageModel, type ImageSettings } from '../../shared/imageModels';
+import { parseVideoModel, type VideoModel } from '../../shared/videoModels';
 
 export const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
@@ -130,6 +131,12 @@ export interface OpenRouterClient {
   listImageModels(): Promise<ImageModel[]>;
   /** One image; `references` are data URLs of the images to edit or draw on. */
   generateImage(o: { apiKey: string; model: string; prompt: string; settings: ImageSettings; references: string[] }): Promise<GeneratedImage>;
+  listVideoModels(): Promise<VideoModel[]>;
+  /** Starts a video job; it runs on OpenRouter for minutes. */
+  submitVideo(o: { apiKey: string; body: object }): Promise<{ jobId: string; pollingUrl: string }>;
+  /** A job's status: pending / in_progress while running, then completed, failed, cancelled or expired. */
+  getVideoJob(o: { apiKey: string; jobId: string; pollingUrl: string }): Promise<{ status: string; error: string | null; usage: Usage | null }>;
+  downloadVideo(o: { apiKey: string; jobId: string }): Promise<ReadableStream<Uint8Array>>;
 }
 
 export interface GeneratedImage {
@@ -170,9 +177,11 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
       'X-Title': 'OpenChat',
     };
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    // A video job's polling URL may come back absolute; everything else is a path under the API base.
+    const url = /^https?:\/\//.test(path) ? path : `${base}${path}`;
     let res: Response;
     try {
-      res = await fetchImpl(`${base}${path}`, { ...rest, headers });
+      res = await fetchImpl(url, { ...rest, headers });
     } catch (err) {
       if ((err as Error).name === 'AbortError') throw err;
       throw new OpenRouterError('Could not reach OpenRouter. Check your internet connection.', 0);
@@ -240,6 +249,35 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
         }
       });
       return entries.flatMap((m, i) => parseImageModel(m, endpoints[i]) ?? []);
+    },
+
+    async listVideoModels() {
+      const res = await request('/videos/models');
+      const entries = ((await res.json()) as { data?: any[] }).data ?? [];
+      return entries.flatMap((m) => parseVideoModel(m) ?? []);
+    },
+
+    async submitVideo({ apiKey, body }) {
+      const res = await request('/videos', { method: 'POST', apiKey, body: JSON.stringify(body) });
+      const json = (await res.json()) as { id?: string; polling_url?: string };
+      if (!json.id) throw new OpenRouterError('OpenRouter did not start the video job.', 502);
+      return { jobId: json.id, pollingUrl: json.polling_url ?? `/api/v1/videos/${json.id}` };
+    },
+
+    async getVideoJob({ apiKey, jobId, pollingUrl }) {
+      const url = new URL(pollingUrl || `/api/v1/videos/${jobId}`, new URL(base).origin).toString();
+      const json = (await (await request(url, { apiKey })).json()) as { status?: string; error?: unknown; usage?: unknown };
+      return {
+        status: String(json.status ?? 'pending'),
+        error: typeof json.error === 'string' ? json.error : json.error ? JSON.stringify(json.error) : null,
+        usage: json.usage ? parseUsage(json.usage) : null,
+      };
+    },
+
+    async downloadVideo({ apiKey, jobId }) {
+      const res = await request(`/videos/${encodeURIComponent(jobId)}/content?index=0`, { apiKey });
+      if (!res.body) throw new OpenRouterError('The video download was empty.', 502);
+      return res.body;
     },
 
     async generateImage({ apiKey, model, prompt, settings, references }) {

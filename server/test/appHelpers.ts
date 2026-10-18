@@ -14,6 +14,10 @@ export function makeApp(openrouter: Partial<OpenRouterClient> = {}, env: Env = {
     streamChat: async function* () {},
     listImageModels: async () => [],
     generateImage: async () => { throw new Error('generateImage is not scripted in this test'); },
+    listVideoModels: async () => [],
+    submitVideo: async () => { throw new Error('submitVideo is not scripted in this test'); },
+    getVideoJob: async () => { throw new Error('getVideoJob is not scripted in this test'); },
+    downloadVideo: async () => { throw new Error('downloadVideo is not scripted in this test'); },
     ...openrouter,
   };
   const app = createApp({ db, openrouter: client, env });

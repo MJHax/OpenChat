@@ -247,6 +247,49 @@ describe('toSources', () => {
   });
 });
 
+describe('video job client', () => {
+  it('submits a job and reads its id and polling URL', async () => {
+    const { fn, calls } = fakeFetch(() => Response.json({ id: 'gen-vid-1', polling_url: '/api/v1/videos/gen-vid-1', status: 'pending' }, { status: 202 }));
+    const job = await createOpenRouterClient(fn).submitVideo({ apiKey: 'k', body: { model: 'm', prompt: 'p' } });
+    expect(job).toEqual({ jobId: 'gen-vid-1', pollingUrl: '/api/v1/videos/gen-vid-1' });
+    expect(calls[0].url).toBe('https://openrouter.ai/api/v1/videos');
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({ model: 'm', prompt: 'p' });
+  });
+
+  it('polls relative and absolute URLs', async () => {
+    const { fn, calls } = fakeFetch(() => Response.json({ status: 'completed', usage: { cost: 0.42 } }));
+    const client = createOpenRouterClient(fn);
+    const done = await client.getVideoJob({ apiKey: 'k', jobId: 'j', pollingUrl: '/api/v1/videos/j' });
+    await client.getVideoJob({ apiKey: 'k', jobId: 'j', pollingUrl: 'https://openrouter.ai/api/v1/videos/j' });
+    expect(calls.map((c) => c.url)).toEqual(['https://openrouter.ai/api/v1/videos/j', 'https://openrouter.ai/api/v1/videos/j']);
+    expect(done).toMatchObject({ status: 'completed', error: null, usage: { cost: 0.42 } });
+    expect((calls[0].init.headers as Record<string, string>).Authorization).toBe('Bearer k');
+  });
+
+  it('carries the reason a job failed', async () => {
+    const { fn } = fakeFetch(() => Response.json({ status: 'failed', error: 'Content blocked' }));
+    expect(await createOpenRouterClient(fn).getVideoJob({ apiKey: 'k', jobId: 'j', pollingUrl: '/api/v1/videos/j' }))
+      .toEqual({ status: 'failed', error: 'Content blocked', usage: null });
+  });
+
+  it('downloads the clip with the key', async () => {
+    const { fn, calls } = fakeFetch(() => new Response(new Uint8Array([1, 2, 3])));
+    const stream = await createOpenRouterClient(fn).downloadVideo({ apiKey: 'k', jobId: 'j' });
+    const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    expect([...bytes]).toEqual([1, 2, 3]);
+    expect(calls[0].url).toBe('https://openrouter.ai/api/v1/videos/j/content?index=0');
+    expect((calls[0].init.headers as Record<string, string>).Authorization).toBe('Bearer k');
+  });
+
+  it('lists video models, leaving out video-input ones', async () => {
+    const { fn } = fakeFetch(() => Response.json({ data: [
+      { id: 'a/vid', name: 'A', supported_durations: [5], supported_frame_images: ['first_frame'], pricing_skus: { duration_seconds: '0.1' } },
+      { id: 'runway/aleph-2', name: 'Aleph' },
+    ] }));
+    expect((await createOpenRouterClient(fn).listVideoModels()).map((m) => m.id)).toEqual(['a/vid']);
+  });
+});
+
 describe('image generation client', () => {
   const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7]);
 
