@@ -69,9 +69,13 @@ export function listMediaLibrary(db: DB, kind: MediaKind): MediaLibraryModel[] {
   const render = new Map((db.prepare(
     "SELECT model_id, AVG(duration_ms) AS ms FROM media_events WHERE kind = ? AND status = 'complete' AND duration_ms IS NOT NULL GROUP BY model_id",
   ).all(kind) as { model_id: string; ms: number }[]).map((r) => [r.model_id, r.ms]));
+  const recent = db.prepare(
+    "SELECT duration_ms FROM media_events WHERE kind = ? AND model_id = ? AND status = 'complete' AND duration_ms IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 20",
+  );
   return rows.map((r) => ({
     id: r.id, displayName: r.display_name, kind, model: catalog.find((m) => m.id === r.id) ?? null, avgCost: avg.get(r.id) ?? {},
     avgRenderMs: render.get(r.id) ?? null,
+    recentRenderMs: (recent.all(kind, r.id) as { duration_ms: number }[]).map((x) => x.duration_ms),
   }));
 }
 

@@ -57,7 +57,8 @@ export function ImageModelLibrary() {
   const load = (refresh = false) => {
     setLoading(true);
     setError(null);
-    api.mediaCatalog('image', refresh).then(setCatalog).catch((e: Error) => setError(e.message)).finally(() => setLoading(false));
+    // The list reads model details from the cached catalog, so it's reloaded once the catalog has arrived.
+    api.mediaCatalog('image', refresh).then((c) => { setCatalog(c); return api.listMediaModels('image').then(setLibrary); }).catch((e: Error) => setError(e.message)).finally(() => setLoading(false));
   };
   useEffect(() => {
     load();

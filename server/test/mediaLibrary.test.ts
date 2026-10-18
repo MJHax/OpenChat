@@ -85,7 +85,7 @@ describe('video models', () => {
     expect(listMediaLibrary(db, 'image')).toEqual([]);
     db.prepare("INSERT INTO media_events (created_at, kind, model_id, settings, cost, duration_ms, status) VALUES (1, 'video', 'g/veo', '{}', 0.2, 120000, 'complete')").run();
     db.prepare("INSERT INTO media_events (created_at, kind, model_id, settings, cost, duration_ms, status) VALUES (2, 'video', 'g/veo', '{}', 0.2, 180000, 'complete')").run();
-    expect(listMediaLibrary(db, 'video')[0]).toMatchObject({ id: 'g/veo', kind: 'video', avgRenderMs: 150000, model: { id: 'g/veo' } });
+    expect(listMediaLibrary(db, 'video')[0]).toMatchObject({ id: 'g/veo', kind: 'video', avgRenderMs: 150000, recentRenderMs: [180000, 120000], model: { id: 'g/veo' } });
   });
 });
 

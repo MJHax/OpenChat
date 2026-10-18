@@ -5,6 +5,7 @@ import type {
   GeneratedItems, MediaCatalog, MediaKind, MediaLibraryModel, MediaStatsResponse, MediaThreadStats, ThreadKind,
 } from '../../shared/types';
 import type { ImageSettings } from '../../shared/imageModels';
+import type { VideoSettings } from '../../shared/videoModels';
 
 async function json<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -41,6 +42,9 @@ export const api = {
   generateImage: (threadId: string, body: {
     prompt: string; modelId: string; settings: ImageSettings; targetAttachmentId: string | null; attachmentIds: string[]; parentId?: string;
   }) => json<{ userMessageId: string; assistantMessageId: string }>('POST', `/api/chats/${threadId}/images`, body),
+  generateVideo: (threadId: string, body: {
+    prompt: string; modelId: string; settings: VideoSettings; startAttachmentId: string | null; endAttachmentId: string | null;
+  }) => json<{ userMessageId: string; assistantMessageId: string }>('POST', `/api/chats/${threadId}/videos`, body),
   mediaThreadStats: (id: string) => json<MediaThreadStats>('GET', `/api/chats/${id}/stats`),
   mediaStats: (view: 'images' | 'video', range: StatsRange, tz: string) =>
     json<MediaStatsResponse>('GET', `/api/stats?view=${view}&range=${range}&tz=${encodeURIComponent(tz)}`),
@@ -88,6 +92,7 @@ export function uploadAttachment(file: File, onProgress: (fraction: number) => v
 export const deleteAttachment = (id: string) => json<{ ok: true }>('DELETE', `/api/attachments/${id}`).then(() => undefined);
 
 export const attachmentUrl = (id: string): string => `/api/attachments/${id}`;
+export const videoUrl = (messageId: string): string => `/api/videos/${messageId}`;
 
 export interface StreamHandlers {
   onStart(e: StreamStart): void;

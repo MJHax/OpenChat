@@ -14,7 +14,7 @@ export interface SidebarProps {
   onOpenChat(chatId: string, kind: ThreadKind): void;
 }
 
-const MODES: { id: ThreadKind; label: string }[] = [{ id: 'chat', label: 'Chats' }, { id: 'image', label: 'Images' }];
+const MODES: { id: ThreadKind; label: string }[] = [{ id: 'chat', label: 'Chats' }, { id: 'image', label: 'Images' }, { id: 'video', label: 'Video' }];
 const HOME: Record<ThreadKind, string> = { chat: '#/', image: '#/images', video: '#/video' };
 export const threadHref = (kind: ThreadKind, id: string) => (kind === 'chat' ? `#/chat/${id}` : `${HOME[kind]}/${id}`);
 
@@ -60,7 +60,7 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
     onChatsChanged();
   }
 
-  const newLabel = mode === 'image' ? 'New image' : 'New chat';
+  const newLabel = mode === 'image' ? 'New image' : mode === 'video' ? 'New video' : 'New chat';
 
   if (collapsed) {
     return (
@@ -116,9 +116,9 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
                 ) : (
                   <div key={chat.id} className={`chat-item${chat.id === activeChatId ? ' active' : ''}`}>
                     <a href={threadHref(chat.kind, chat.id)} title={chat.title}>
-                      {chat.kind === 'image' && (
+                      {chat.kind !== 'chat' && (
                         <span className="thread-thumb">
-                          {chat.thumbnailId && <img src={attachmentUrl(chat.thumbnailId)} alt="" />}
+                          {chat.thumbnailId ? <img src={attachmentUrl(chat.thumbnailId)} alt="" /> : chat.kind === 'video' ? '🎬' : null}
                         </span>
                       )}
                       <span className="chat-title">{chat.title}</span>

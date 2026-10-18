@@ -11,12 +11,14 @@ interface Props {
   /** Images too big to attach as they are, shrunk in the browser and uploaded like any file. */
   onFiles(files: File[]): void;
   onClose(): void;
+  /** Video frame slots: only images, and at most one. */
+  imagesOnly?: boolean;
 }
 
 const fileKey = (f: GeneratedItems['files'][number]) => `${f.messageId}/${f.name}`;
 
 /** "From my chats": images made in the Images tab and files generated in chats, to attach to this message. */
-export function GeneratedPicker({ onAttachments, onFiles, onClose }: Props) {
+export function GeneratedPicker({ onAttachments, onFiles, onClose, imagesOnly = false }: Props) {
   const [items, setItems] = useState<GeneratedItems | null>(null);
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -31,7 +33,7 @@ export function GeneratedPicker({ onAttachments, onFiles, onClose }: Props) {
   }, [onClose]);
 
   const toggle = (key: string) => setPicked((s) => {
-    const next = new Set(s);
+    const next = new Set(imagesOnly && !s.has(key) ? [] : s); // one photo per frame slot
     if (next.has(key)) next.delete(key);
     else next.add(key);
     return next;
@@ -82,8 +84,8 @@ export function GeneratedPicker({ onAttachments, onFiles, onClose }: Props) {
                 ))}
               </div>
             )}
-            <h4>Files</h4>
-            {shown.files.length === 0 ? <p className="muted small">No generated files{query ? ' match' : ' yet'}.</p> : (
+            {!imagesOnly && <h4>Files</h4>}
+            {imagesOnly ? null : shown.files.length === 0 ? <p className="muted small">No generated files{query ? ' match' : ' yet'}.</p> : (
               <ul className="picker-files">
                 {shown.files.map((f) => (
                   <li key={fileKey(f)}>

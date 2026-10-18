@@ -188,6 +188,20 @@ a.button { border: 1px solid var(--border); background: var(--surface); border-r
 .picker-files { list-style: none; margin: 0; padding: 0; }
 .picker-files label { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
 .picker-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); }
+.frame-row { display: flex; gap: 10px; margin-bottom: 6px; }
+.frame-slot { position: relative; width: 112px; height: 72px; display: flex; flex-direction: column; align-items: center; }
+.frame-slot img { width: 112px; height: 63px; object-fit: cover; border-radius: 8px; display: block; }
+.frame-slot .frame-empty { width: 112px; height: 63px; border: 1px dashed var(--border); border-radius: 8px; background: none; color: var(--muted); font-size: 12px; padding: 0; }
+.frame-slot.off .frame-empty { opacity: 0.45; }
+.frame-slot .frame-remove { position: absolute; top: -6px; right: -6px; padding: 0 5px; background: var(--surface); border-radius: 999px; font-size: 11px; }
+.frame-slot .frame-label { line-height: 1; margin-top: 2px; }
+.frame-slot .attach-options { bottom: auto; top: 100%; }
+.frame-pair { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+.video-result { width: min(100%, 560px); border-radius: 12px; background: #000; display: block; }
+.video-placeholder { flex-direction: column; gap: 4px; text-align: center; padding: 12px; max-height: 320px; width: min(100%, 480px); }
+.toasts { position: fixed; right: 16px; bottom: 16px; z-index: 70; display: flex; flex-direction: column; gap: 8px; }
+.toast { display: flex; align-items: center; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); }
+.toast .link { color: var(--text); }
 .image-model-details { display: flex; flex-direction: column; gap: 4px; }
 .image-model-details p { margin: 0; }
 .msg-body code { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; }

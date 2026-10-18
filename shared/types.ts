@@ -78,6 +78,8 @@ export interface MediaLibraryModel {
   model: MediaModel | null;
   /** Average time to generate, from completed calls; null before the first. */
   avgRenderMs: number | null;
+  /** The last 20 completed render times, newest first, for "usually N–M min". */
+  recentRenderMs: number[];
   /** The user's own average cost, keyed "size|quality" (e.g. "1K|medium", "2K|"). */
   avgCost: Record<string, number>;
 }

@@ -13,10 +13,10 @@ import { MediaStats } from '../components/stats/MediaStats';
 
 const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-type View = 'chats' | 'images';
-const VIEWS: { id: View; label: string }[] = [{ id: 'chats', label: 'Chats' }, { id: 'images', label: 'Images' }];
+type View = 'chats' | 'images' | 'video';
+const VIEWS: { id: View; label: string }[] = [{ id: 'chats', label: 'Chats' }, { id: 'images', label: 'Images' }, { id: 'video', label: 'Video' }];
 const VIEW_KEY = 'openchat.stats.view';
-const loadView = (): View => { try { return localStorage.getItem(VIEW_KEY) === 'images' ? 'images' : 'chats'; } catch { return 'chats'; } };
+const loadView = (): View => { try { const v = localStorage.getItem(VIEW_KEY); return v === 'images' || v === 'video' ? v : 'chats'; } catch { return 'chats'; } };
 const saveView = (v: View) => { try { localStorage.setItem(VIEW_KEY, v); } catch { /* private mode */ } };
 
 export function Stats() {
@@ -30,8 +30,9 @@ export function Stats() {
     let current = true;
     setError(null);
     const fail = (e: Error) => current && setError(e.message);
+    if (view !== 'chats') setMedia(null); // don't show the other view's numbers while loading
     if (view === 'chats') api.stats(range, zone()).then((s) => current && setStats(s)).catch(fail);
-    else api.mediaStats('images', range, zone()).then((s) => current && setMedia(s)).catch(fail);
+    else api.mediaStats(view, range, zone()).then((s) => current && setMedia(s)).catch(fail);
     return () => { current = false; };
   }, [range, view]);
 
@@ -62,7 +63,7 @@ export function Stats() {
             <p className="muted small">{trackingNote(stats.trackingSince)}</p>
           </>
         ) : media ? (
-          <MediaStats stats={media} noun="image" />
+          <MediaStats stats={media} noun={view === 'video' ? 'clip' : 'image'} />
         ) : null}
         {shown && <p className="muted small">All OpenChat spend in this range: {money(shown.allSpend)}</p>}
       </div>

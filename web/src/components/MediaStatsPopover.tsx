@@ -11,7 +11,7 @@ function Row({ label, value }: { label: string; value: string }) {
 const seconds = (ms: number | null) => (ms === null ? '—' : `${Math.round(ms / 1000)}s`);
 
 /** An image thread's header total; opens to images made, spend, averages and failures. */
-export function MediaStatsPopover({ threadId, totalCost, refreshKey }: { threadId: string; totalCost: number; refreshKey: unknown }) {
+export function MediaStatsPopover({ threadId, totalCost, refreshKey, noun = 'image' }: { threadId: string; totalCost: number; refreshKey: unknown; noun?: 'image' | 'clip' }) {
   const { open, setOpen, root } = usePopover();
   const [s, setStats] = useState<MediaThreadStats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,9 +34,9 @@ export function MediaStatsPopover({ threadId, totalCost, refreshKey }: { threadI
           <h4>This thread</h4>
           {error ? <p className="error-text small">{error}</p> : !s ? <p className="muted small">Loading…</p> : (
             <>
-              <Row label="Images" value={String(s.count)} />
+              <Row label={noun === 'clip' ? 'Clips' : 'Images'} value={String(s.count)} />
               <Row label="Spent" value={money(s.spend)} />
-              <Row label="Avg per image" value={s.avgCost === null ? '—' : money(s.avgCost)} />
+              <Row label={`Avg per ${noun}`} value={s.avgCost === null ? '—' : money(s.avgCost)} />
               <Row label="Avg time" value={seconds(s.avgDurationMs)} />
               <Row label="Failed (not charged)" value={String(s.failures)} />
             </>

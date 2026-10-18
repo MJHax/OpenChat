@@ -5,6 +5,7 @@ import { CatalogFilters } from '../components/CatalogFilters';
 import { ModelCard } from '../components/ModelCard';
 import { PopularShelf } from '../components/PopularShelf';
 import { ImageModelLibrary } from '../components/ImageModelLibrary';
+import { VideoModelLibrary } from '../components/VideoModelLibrary';
 import { Segmented } from '../components/stats/Segmented';
 import {
   countLabel, filterCatalog, isFiltering, latestOnly, NO_FILTER, popularFor, sortCatalog, topProviders, type CatalogFilter,
@@ -16,7 +17,9 @@ export interface ModelLibraryProps {
   onChanged(): void;
 }
 
-const KINDS: { id: 'chat' | 'image'; label: string }[] = [{ id: 'chat', label: 'Chat models' }, { id: 'image', label: 'Image models' }];
+const KINDS: { id: 'chat' | 'image' | 'video'; label: string }[] = [
+  { id: 'chat', label: 'Chat models' }, { id: 'image', label: 'Image models' }, { id: 'video', label: 'Video models' },
+];
 const PAGE_SIZE = 60;
 const TOP_PROVIDERS = 8;
 
@@ -30,7 +33,7 @@ export function ModelLibrary({ models, onChanged }: ModelLibraryProps) {
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [kind, setKind] = useState<'chat' | 'image'>('chat');
+  const [kind, setKind] = useState<'chat' | 'image' | 'video'>('chat');
 
   // A slow first load must not overwrite the result of a Refresh started after it.
   const latest = useRef(latestOnly());
@@ -73,12 +76,12 @@ export function ModelLibrary({ models, onChanged }: ModelLibraryProps) {
   }
 
   const switcher = <Segmented label="Model kind" options={KINDS} value={kind} onChange={setKind} />;
-  if (kind === 'image') {
+  if (kind !== 'chat') {
     return (
       <div className="page">
         <div className="page-inner">
           <div className="stats-head"><h1>Model Library</h1>{switcher}</div>
-          <ImageModelLibrary />
+          {kind === 'image' ? <ImageModelLibrary /> : <VideoModelLibrary />}
         </div>
       </div>
     );

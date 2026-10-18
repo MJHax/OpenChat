@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatSummary, LibraryModel, SettingsView, ThreadKind } from '../../shared/types';
 import { api } from './api';
 import { navigate, useRoute } from './lib/route';
 import { Sidebar, threadHref } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { ImageThread } from './pages/ImageThread';
+import { VideoThread } from './pages/VideoThread';
+import { systemNotify } from './lib/notify';
 import { ModelLibrary } from './pages/ModelLibrary';
 import { Settings } from './pages/Settings';
 import { Stats } from './pages/Stats';
@@ -18,7 +20,26 @@ export function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   // The sidebar keeps showing the last mode while on Model Library, Stats or Settings.
   const [lastMode, setLastMode] = useState<ThreadKind>('chat');
-  const mode: ThreadKind = route.page === 'images' ? 'image' : route.page === 'chat' ? 'chat' : lastMode;
+  const mode: ThreadKind = route.page === 'images' ? 'image' : route.page === 'video' ? 'video' : route.page === 'chat' ? 'chat' : lastMode;
+  const [toasts, setToasts] = useState<{ id: string; title: string }[]>([]);
+
+  // Clips render for minutes: watch video threads from anywhere in the app and say when one is ready.
+  const rendering = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const check = () => api.listChats('video').then((list) => {
+      const busy = new Set(list.filter((c) => c.busy).map((c) => c.id));
+      for (const id of rendering.current ?? []) {
+        if (busy.has(id)) continue;
+        const title = list.find((c) => c.id === id)?.title ?? 'Your clip';
+        setToasts((t) => [...t, { id, title }]);
+        systemNotify(title, id);
+      }
+      rendering.current = busy;
+    }).catch(() => {});
+    void check();
+    const timer = setInterval(check, 15_000);
+    return () => clearInterval(timer);
+  }, []);
   useEffect(() => setLastMode(mode), [mode]);
 
   const fail = (e: Error) => setLoadError(e.message);
@@ -49,8 +70,8 @@ export function App() {
     setChatReload((n) => n + 1);
   }, []);
 
-  const activeChatId = route.page === 'chat' ? route.chatId : route.page === 'images' ? route.threadId : null;
-  const title = chats.find((c) => c.id === activeChatId)?.title ?? (route.page === 'images' ? 'New image' : 'New chat');
+  const activeChatId = route.page === 'chat' ? route.chatId : route.page === 'images' || route.page === 'video' ? route.threadId : null;
+  const title = chats.find((c) => c.id === activeChatId)?.title ?? (route.page === 'images' ? 'New image' : route.page === 'video' ? 'New video' : 'New chat');
 
   return (
     <div className="app">
@@ -63,10 +84,25 @@ export function App() {
         {route.page === 'images' && (
           <ImageThread threadId={route.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />
         )}
+        {route.page === 'video' && (
+          <VideoThread threadId={route.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />
+        )}
         {route.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} />}
         {route.page === 'stats' && <Stats />}
         {route.page === 'settings' && <Settings models={models} onChanged={refreshSettings} />}
       </main>
+      {toasts.length > 0 && (
+        <div className="toasts" role="status">
+          {toasts.map((t) => (
+            <div key={t.id} className="toast">
+              <button className="link" onClick={() => { setToasts((x) => x.filter((y) => y.id !== t.id)); openChat(t.id, 'video'); }}>
+                🎬 “{t.title}” is ready
+              </button>
+              <button className="icon" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
