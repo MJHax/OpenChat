@@ -6,6 +6,9 @@ import { insertMessage } from '../messages';
 import { checkSpend } from '../limits';
 import { createDiscussion, discussionState, getDiscussionDetail, getDiscussionRow, setStatus, setTurnLimit } from '../discussion/store';
 import { streamTurn } from '../discussion/turn';
+import { summarizeDiscussion } from '../discussion/summary';
+import { renderReport, REPORT_CSP } from '../discussion/report';
+import { displayNameOf } from '../library';
 import { MAX_TURN_LIMIT } from '../../../shared/discussion';
 import type { NewDiscussion } from '../../../shared/types';
 
@@ -50,6 +53,23 @@ export function discussionRoutes(deps: Deps): Hono {
     setActiveLeaf(db, id, message.id);
     touchChat(db, id);
     return c.json(message, 201);
+  });
+
+  r.post('/:id/summary', async (c) => {
+    const id = c.req.param('id');
+    getDiscussionRow(db, id);
+    const body = await readJson<{ modelId?: unknown }>(c);
+    if (typeof body.modelId !== 'string' || !body.modelId.trim()) throw new HttpError(400, 'Pick a model first.');
+    if (inFlight.has(id)) throw new HttpError(409, 'Wait for the current turn to finish.');
+    return c.json(await summarizeDiscussion(deps, id, body.modelId.trim()));
+  });
+
+  r.get('/:id/report', (c) => {
+    const detail = getDiscussionDetail(db, c.req.param('id'));
+    const ids = new Set([...detail.participants.map((p) => p.modelId), ...(detail.summary ? [detail.summary.modelId] : [])]);
+    const modelNames = Object.fromEntries([...ids].map((m) => [m, displayNameOf(db, m)]));
+    c.header('Content-Security-Policy', REPORT_CSP);
+    return c.html(renderReport(detail, { generatedAt: Date.now(), modelNames }));
   });
 
   r.post('/:id/stop', (c) => {

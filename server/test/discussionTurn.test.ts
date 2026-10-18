@@ -114,6 +114,7 @@ describe('discussion turns', () => {
     expect(host.status).toBe(409);
     expect(await host.json()).toEqual({ error: 'Wait for the current turn to finish.' });
     expect(await s.turn()).toMatchObject({ status: 409, error: 'A turn is still running in this discussion.' });
+    expect((await s.call('POST', `/api/discussions/${s.id}/summary`, { modelId: 'test/cheap' })).status).toBe(409);
     release();
     await readEvents(await running);
     expect((await s.call('POST', `/api/discussions/${s.id}/messages`, { content: 'Wrap it up' })).status).toBe(201);
@@ -155,6 +156,50 @@ describe('discussion turns', () => {
     const res = await s.call('POST', `/api/discussions/${s.id}/more-turns`);
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'This discussion has reached the 100-turn maximum.' });
+  });
+
+  it('saves and replaces the summary and logs it as a summary call', async () => {
+    const replies = ['First summary.', ' Second summary. '];
+    const prompts: ChatMessage[][] = [];
+    const fake = scripted([{ text: ['The egg.'] }]);
+    const app = makeApp({
+      streamChat: fake.streamChat,
+      complete: async ({ messages, onUsage }) => {
+        prompts.push(messages);
+        onUsage?.(USAGE);
+        return replies[prompts.length - 1];
+      },
+    });
+    seedModel(app.db, 'test/tools', true);
+    const d = (await (await app.call('POST', '/api/discussions', newDiscussion())).json()) as DiscussionDetail;
+    await readEvents(await app.call('POST', `/api/discussions/${d.chat.id}/turn`));
+    await app.call('POST', `/api/discussions/${d.chat.id}/messages`, { content: 'Thanks.' });
+
+    const first = await (await app.call('POST', `/api/discussions/${d.chat.id}/summary`, { modelId: 'test/cheap' })).json();
+    expect(first).toMatchObject({ text: 'First summary.', modelId: 'test/cheap', cost: 0.002 });
+    expect(prompts[0][0]).toEqual({
+      role: 'system',
+      content: "Summarize this discussion for the Host. Say what each participant argued, how their positions moved over the discussion, and the outcome, if there was one. Use the participants' names. Keep it under 300 words.",
+    });
+    expect(prompts[0][1]).toEqual({
+      role: 'user', content: 'Topic: "Which came first, the chicken or the egg?"\n\n**Egg-Defender:** The egg.\n\n**Host:** Thanks.',
+    });
+
+    await app.call('POST', `/api/discussions/${d.chat.id}/summary`, { modelId: 'test/cheap' });
+    const detail = (await (await app.call('GET', `/api/discussions/${d.chat.id}`)).json()) as DiscussionDetail;
+    expect(detail.summary?.text).toBe('Second summary.');
+    const rows = loadUsageRows(app.db, null).filter((r) => r.purpose === 'summary');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ chatId: d.chat.id, threadKind: 'discussion', modelId: 'test/cheap' });
+  });
+
+  it('refuses an empty summary', async () => {
+    const app = makeApp({ complete: async () => '  ' });
+    seedModel(app.db, 'test/tools', true);
+    const d = (await (await app.call('POST', '/api/discussions', newDiscussion())).json()) as DiscussionDetail;
+    const res = await app.call('POST', `/api/discussions/${d.chat.id}/summary`, { modelId: 'test/cheap' });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: 'The model returned an empty summary. Try again or pick another model.' });
   });
 
   it('records usage with threadKind discussion', async () => {
