@@ -35,6 +35,7 @@ export function App() {
         // No toast when that thread is already on screen; a hidden tab still gets the system notification.
         if (window.location.hash !== `#/video/${id}`) setToasts((t) => [...t, { id, title: thread.title }]);
         systemNotify(thread.title, id);
+        refreshRef.current(); // the finished thread now has a title and no spinner
       }
       rendering.current = busy;
     }).catch(() => {});
@@ -46,6 +47,8 @@ export function App() {
 
   const fail = (e: Error) => setLoadError(e.message);
   const refreshChats = useCallback(() => { api.listChats(mode).then(setChats).catch(fail); }, [mode]);
+  const refreshRef = useRef(refreshChats);
+  refreshRef.current = refreshChats;
   const refreshModels = useCallback(() => {
     api.listModels().then(setModels).catch(fail);
     api.getSettings().then(setSettings).catch(fail); // default model lives in settings
