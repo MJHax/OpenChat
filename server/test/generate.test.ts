@@ -48,6 +48,19 @@ describe('send', () => {
     expect(getChatRow(db, chatId)).toMatchObject({ active_leaf_id: done.id, title: 'Greeting chat' });
   });
 
+  it('sends cache breakpoints to Claude and plain strings to others', async () => {
+    const { streamChat, calls } = scripted([{ chunks: ['ok'] }]);
+    const { call } = makeApp({ streamChat });
+    for (const modelId of ['anthropic/claude-haiku-4.5', 'openai/gpt-4o']) {
+      await readEvents(await call('POST', `/api/chats/${await newChat(call)}/messages`, { content: 'Hi', modelId }));
+    }
+    const mark = { type: 'ephemeral' };
+    expect(calls[0][0].content).toEqual([expect.objectContaining({ type: 'text', cache_control: mark })]);
+    expect(calls[0].at(-1)!.content).toEqual([{ type: 'text', text: 'Hi', cache_control: mark }]);
+    expect(typeof calls[1][0].content).toBe('string');
+    expect(calls[1].at(-1)!.content).toBe('Hi');
+  });
+
   it('includes the persona and only enabled memories in the prompt', async () => {
     const { streamChat, calls } = scripted([{ chunks: ['ok'] }]);
     const { call, db } = makeApp({ streamChat });

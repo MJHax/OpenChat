@@ -9,9 +9,11 @@ export interface Persona {
 }
 
 export type ContentPart =
-  | { type: 'text'; text: string }
+  | { type: 'text'; text: string; cache_control?: CacheControl }
   | { type: 'image_url'; image_url: { url: string } }
   | { type: 'file'; file: { filename: string; file_data: string } };
+
+export type CacheControl = { type: 'ephemeral' };
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -102,4 +104,40 @@ export function buildMessages(p: Persona, path: PathEntry[], o?: AttachmentOptio
 export function pdfPlugins(path: { attachments?: Attachment[] }[], inputModalities: string[]): Plugin[] | undefined {
   if (!path.some((m) => m.attachments?.some((a) => a.kind === 'pdf'))) return undefined;
   return [{ id: 'file-parser', pdf: { engine: inputModalities.includes('file') ? 'native' : 'cloudflare-ai' } }];
+}
+
+// Through OpenRouter these providers only cache prompts that carry explicit breakpoints; the rest cache on their own.
+const ALIBABA_CACHED = new Set([
+  'qwen/qwen3-max', 'qwen/qwen-plus', 'qwen/qwen3.6-plus', 'qwen/qwen3-coder-plus', 'qwen/qwen3-coder-flash', 'deepseek/deepseek-v3.2',
+]);
+
+export const needsCacheMarkers = (modelId: string): boolean => modelId.startsWith('anthropic/') || ALIBABA_CACHED.has(modelId);
+
+const CACHE: CacheControl = { type: 'ephemeral' };
+
+/** The message with a breakpoint on its last text part, or null when it has none. */
+function marked(m: ChatMessage): ChatMessage | null {
+  const parts: ContentPart[] = typeof m.content === 'string' ? (m.content ? [{ type: 'text', text: m.content }] : []) : m.content;
+  const last = parts.findLastIndex((p) => p.type === 'text');
+  if (last === -1) return null;
+  return { ...m, content: parts.map((p, i) => (i === last ? { ...p, cache_control: CACHE } : p)) };
+}
+
+/**
+ * For models that need them, breakpoints on the system prompt and on the last message: the next turn's prompt starts
+ * with that same prefix, so it is read from the cache. Other models get the messages back unchanged.
+ */
+export function withCacheMarkers(modelId: string, messages: ChatMessage[]): ChatMessage[] {
+  if (!needsCacheMarkers(modelId)) return messages;
+  const out = [...messages];
+  const first = out[0]?.role === 'system' ? 1 : 0;
+  if (first) out[0] = marked(out[0]) ?? out[0];
+  for (let i = out.length - 1; i >= first; i--) {
+    const m = marked(out[i]);
+    if (m) {
+      out[i] = m;
+      break;
+    }
+  }
+  return out;
 }

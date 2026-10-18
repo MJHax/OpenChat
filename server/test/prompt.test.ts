@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSystemPrompt, buildMessages, FILE_INSTRUCTIONS_HEADER, fileInstructions, pdfPlugins, replySystemPrompt } from '../src/prompt';
+import { buildSystemPrompt, buildMessages, FILE_INSTRUCTIONS_HEADER, fileInstructions, needsCacheMarkers, pdfPlugins, replySystemPrompt, withCacheMarkers, type ChatMessage } from '../src/prompt';
 import type { Attachment } from '../../shared/types';
 
 const empty = { aboutMe: '', customInstructions: '', memories: [] };
@@ -145,5 +145,54 @@ describe('buildMessages with files', () => {
 
   it('leaves prompts without files alone', () => {
     expect(buildMessages(empty, path)[1]).toEqual({ role: 'assistant', content: f('p.html', 'old') });
+  });
+});
+
+describe('withCacheMarkers', () => {
+  const mark = { type: 'ephemeral' as const };
+  const chat: ChatMessage[] = [
+    { role: 'system', content: 'S' },
+    { role: 'user', content: 'a' },
+    { role: 'assistant', content: 'b' },
+    { role: 'user', content: 'c' },
+  ];
+
+  it("leaves other models' messages untouched", () => {
+    expect(withCacheMarkers('openai/gpt-4o', chat)).toBe(chat);
+  });
+
+  it('marks the system prompt and the last message for Claude', () => {
+    const out = withCacheMarkers('anthropic/claude-haiku-4.5', chat);
+    expect(out[0]).toEqual({ role: 'system', content: [{ type: 'text', text: 'S', cache_control: mark }] });
+    expect(out[1]).toEqual(chat[1]);
+    expect(out[2]).toEqual(chat[2]);
+    expect(out[3]).toEqual({ role: 'user', content: [{ type: 'text', text: 'c', cache_control: mark }] });
+    expect(chat[0].content).toBe('S'); // the input is not mutated
+  });
+
+  it('marks the last text part when attachments follow', () => {
+    const image = { type: 'image_url' as const, image_url: { url: 'data:image/png;base64,AA' } };
+    const out = withCacheMarkers('anthropic/claude-haiku-4.5', [{ role: 'user', content: [{ type: 'text', text: 'see' }, image] }]);
+    expect(out[0].content).toEqual([{ type: 'text', text: 'see', cache_control: mark }, image]);
+  });
+
+  it('falls back to an earlier message when the last has no text', () => {
+    const pdf = { type: 'file' as const, file: { filename: 'a.pdf', file_data: 'data:application/pdf;base64,AA' } };
+    const out = withCacheMarkers('anthropic/claude-haiku-4.5', [
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: 'ok' },
+      { role: 'user', content: [pdf] },
+    ]);
+    expect(out[1].content).toEqual([{ type: 'text', text: 'ok', cache_control: mark }]);
+    expect(out[2].content).toEqual([pdf]);
+    expect(out[0].content).toBe('first');
+  });
+
+  it('knows which models need explicit markers', () => {
+    expect(needsCacheMarkers('anthropic/claude-sonnet-4.5')).toBe(true);
+    expect(needsCacheMarkers('qwen/qwen3-max')).toBe(true);
+    expect(needsCacheMarkers('qwen/qwen3-8b')).toBe(false);
+    expect(needsCacheMarkers('openai/gpt-4o')).toBe(false);
+    expect(needsCacheMarkers('google/gemini-2.5-flash')).toBe(false);
   });
 });

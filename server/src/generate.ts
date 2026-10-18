@@ -7,7 +7,7 @@ import { getChatMessages, insertMessage } from './messages';
 import { OpenRouterError, type Usage, type WebSearchMode } from './openrouter';
 import { chatImageNames, getAttachmentData } from './attachments';
 import { modelModalities, modelSupportsTools } from './library';
-import { buildMessages, pdfPlugins, type ChatMessage, type Plugin } from './prompt';
+import { buildMessages, pdfPlugins, withCacheMarkers, type ChatMessage, type Plugin } from './prompt';
 import { getPersona, resolveApiKey } from './settings';
 import { maybeGenerateTitle } from './title';
 import { activePath } from './tree';
@@ -37,7 +37,7 @@ export function promptFor(deps: Deps, chatId: string, parentId: string, modelId:
   const loadData = (id: string) => getAttachmentData(db, id) ?? Buffer.alloc(0);
   const webSearch = path.at(-1)?.webSearch ? (modelSupportsTools(db, modelId) ? 'tool' : 'plugin') : undefined;
   const messages = buildMessages(getPersona(db), path, { inputModalities, loadData }, { imageNames: chatImageNames(db, chatId) });
-  return { messages, plugins: pdfPlugins(path, inputModalities), webSearch };
+  return { messages: withCacheMarkers(modelId, messages), plugins: pdfPlugins(path, inputModalities), webSearch };
 }
 
 /** Adds sources not seen yet (by URL), keeping arrival order and the first title. */
