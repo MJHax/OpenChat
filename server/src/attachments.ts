@@ -137,6 +137,14 @@ export function attachmentsFor(db: DB, messageIds: string[]): Map<string, Attach
   return out;
 }
 
+/** Stores a generated file (an image a model made) on the assistant message that produced it. */
+export function insertGenerated(db: DB, a: { messageId: string; filename: string; kind: AttachmentKind; mime: string; data: Uint8Array }): Attachment {
+  const id = newId();
+  db.prepare('INSERT INTO attachments (id, message_id, position, kind, filename, mime, size, data, created_at) VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?)')
+    .run(id, a.messageId, a.kind, a.filename, a.mime, a.data.length, a.data, now());
+  return { id, kind: a.kind, filename: a.filename, mime: a.mime, size: a.data.length };
+}
+
 /** Images attached anywhere in the chat, newest first; when names repeat, only the newest of that name is kept. */
 export function chatImages(db: DB, chatId: string): Attachment[] {
   const rows = db.prepare(

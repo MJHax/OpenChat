@@ -1,4 +1,4 @@
-import type { ImageModel } from './imageModels';
+import type { ImageModel, ImageSettings } from './imageModels';
 
 export type Role = 'user' | 'assistant';
 /** 'generating' and 'error' only occur in image and video threads. */
@@ -89,6 +89,21 @@ export interface ChatDetail {
   compare: { parentId: string; replies: Message[] } | null;
   /** Images attached anywhere in the chat, newest first, one per file name; generated pages can show them by name. */
   chatImages: Attachment[];
+  /** Image and video threads: the request behind each assistant message, by message id. */
+  generations: Record<string, ImageGeneration>;
+}
+
+export interface ImageGeneration {
+  modelId: string;
+  prompt: string;
+  settings: ImageSettings;
+  /** 'new' image, an edit of a generated one, or an edit of an uploaded photo. */
+  mode: 'new' | 'edit_generated' | 'edit_upload';
+  error: string | null;
+  startedAt: number;
+  finishedAt: number | null;
+  targetAttachmentId: string | null;
+  cost: number | null;
 }
 
 export interface CatalogModel {

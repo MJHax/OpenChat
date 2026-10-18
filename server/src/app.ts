@@ -8,6 +8,7 @@ import { settingsRoutes } from './routes/settings';
 import { memoryRoutes } from './routes/memories';
 import { modelRoutes } from './routes/models';
 import { mediaModelRoutes } from './routes/mediaModels';
+import { imageRoutes } from './routes/images';
 import { chatRoutes } from './routes/chats';
 import { searchRoutes } from './routes/search';
 import { generationRoutes } from './routes/generate';
@@ -44,6 +45,7 @@ export function createApp(deps: Deps): Hono {
   app.route('/api/media-models', mediaModelRoutes(deps));
   app.route('/api/chats', chatRoutes(deps));
   app.route('/api/chats', generationRoutes(deps));
+  app.route('/api/chats', imageRoutes(deps));
   app.route('/api/search', searchRoutes(deps));
   app.route('/api/attachments', attachmentRoutes(deps));
   app.route('/api/stats', statsRoutes(deps));

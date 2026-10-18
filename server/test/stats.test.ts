@@ -14,7 +14,7 @@ function row(over: Partial<UsageRow> = {}): UsageRow {
     id, createdAt: NOW - 3_600_000, purpose: 'reply', chatId: 'c1', messageId: `m${id}`, runId: `r${id}`, kind: 'send', compare: false,
     modelId: 'a/one', promptTokens: 100, completionTokens: 20, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null,
     cost: 0.01, cacheSavings: null, webSearch: false, webSearches: null, attachments: 0, firstTokenMs: null, durationMs: null,
-    status: 'complete', backfilled: false, ...over,
+    status: 'complete', backfilled: false, threadKind: 'chat', ...over,
   };
 }
 

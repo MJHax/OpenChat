@@ -5,6 +5,7 @@ import { openDb } from './db';
 import { createApp } from './app';
 import { createOpenRouterClient } from './openrouter';
 import { cleanupPending } from './attachments';
+import { failInterruptedGenerations } from './imageGen';
 
 try {
   process.loadEnvFile('.env');
@@ -14,6 +15,7 @@ try {
 
 const db = openDb(process.env.OPENCHAT_DB ?? 'data/openchat.db');
 cleanupPending(db);
+failInterruptedGenerations(db);
 const app = createApp({ db, openrouter: createOpenRouterClient(), env: process.env });
 
 // In `npm start`, serve the built frontend. In `npm run dev`, Vite serves it instead.

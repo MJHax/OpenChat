@@ -2,6 +2,7 @@ import type { DB } from './db';
 import { newId, now } from './db';
 import { HttpError } from './http';
 import { chatImages } from './attachments';
+import { threadGenerations } from './imageGen';
 import { getChatMessages } from './messages';
 import { activePath, repliesTo, withSiblings } from './tree';
 import type { ChatDetail, ChatSummary, ThreadKind } from '../../shared/types';
@@ -95,5 +96,6 @@ export function getChatDetail(db: DB, id: string): ChatDetail {
     messages: withSiblings(all, activePath(all, row.active_leaf_id)),
     compare: choiceParent ? { parentId: choiceParent, replies: repliesTo(all, choiceParent) } : null,
     chatImages: chatImages(db, id),
+    generations: row.kind === 'chat' ? {} : threadGenerations(db, id),
   };
 }

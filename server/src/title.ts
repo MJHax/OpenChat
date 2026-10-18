@@ -38,6 +38,13 @@ async function generateTitle(deps: Deps, chatId: string, apiKey: string, fallbac
   // Title once any reply has completed; stopped/partial replies don't count.
   if (!all.some((m) => m.role === 'assistant' && m.status === 'complete')) return null;
   const path = activePath(all, chat.active_leaf_id);
+  // An image thread that starts with only a photo has nothing to summarise: it's named after the file, without a model call.
+  const opener = path.find((m) => m.role === 'user');
+  if (chat.kind !== 'chat' && opener && !opener.content.trim() && opener.attachments.length) {
+    const title = `${opener.attachments[0].filename.replace(/\.[^.]+$/, '')} edit`.slice(0, 80);
+    renameChat(db, chatId, title);
+    return title;
+  }
   const last = path.at(-1);
   // During a comparison the path ends at the user message; include the first complete reply.
   if (last?.role === 'user') {
@@ -56,6 +63,7 @@ async function generateTitle(deps: Deps, chatId: string, apiKey: string, fallbac
     recordUsage(db, {
       purpose: 'title', chatId, messageId: null, runId: null, kind: null, compare: false, modelId: model, usage, webSearch: false,
       webSearches: null, attachments: 0, firstTokenMs: null, durationMs: Date.now() - t0, status, createdAt: startedAt,
+      threadKind: chat.kind,
     });
   try {
     const raw = await openrouter.complete({

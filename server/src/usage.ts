@@ -1,6 +1,7 @@
 import type { DB } from './db';
 import { cachedPrices } from './catalog';
 import type { Usage } from './openrouter';
+import type { ThreadKind } from '../../shared/types';
 
 export type UsagePurpose = 'reply' | 'title' | 'memory';
 export type ReplyKind = 'send' | 'edit' | 'regenerate';
@@ -26,6 +27,8 @@ export interface UsageEventInput {
   durationMs: number | null;
   status: UsageStatus;
   createdAt: number;
+  /** The kind of thread the call was for; 'chat' when left out. */
+  threadKind?: ThreadKind;
 }
 
 /** A logged call as read back. */
@@ -53,6 +56,7 @@ export interface UsageRow {
   durationMs: number | null;
   status: UsageStatus;
   backfilled: boolean;
+  threadKind: ThreadKind;
 }
 
 /** USD the cached tokens saved, at the cached catalog's current prices; null when a price or the count is unknown. */
@@ -68,13 +72,13 @@ export function recordUsage(db: DB, e: UsageEventInput): void {
   db.prepare(
     `INSERT INTO usage_events (created_at, purpose, chat_id, message_id, run_id, kind, compare, model_id, prompt_tokens, completion_tokens,
        cached_tokens, cache_write_tokens, reasoning_tokens, cost, cache_savings, web_search, web_searches, attachments, first_token_ms,
-       duration_ms, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       duration_ms, status, thread_kind)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     e.createdAt, e.purpose, e.chatId, e.messageId, e.runId, e.kind, e.compare ? 1 : 0, e.modelId, u?.promptTokens ?? null,
     u?.completionTokens ?? null, u?.cachedTokens ?? null, u?.cacheWriteTokens ?? null, u?.reasoningTokens ?? null, u?.cost ?? null,
     cacheSavings(db, e.modelId, u?.cachedTokens ?? null), e.webSearch ? 1 : 0, e.webSearches, e.attachments, e.firstTokenMs,
-    e.durationMs, e.status,
+    e.durationMs, e.status, e.threadKind ?? 'chat',
   );
 }
 
@@ -83,7 +87,7 @@ interface Raw {
   kind: ReplyKind | null; compare: number; model_id: string; prompt_tokens: number | null; completion_tokens: number | null;
   cached_tokens: number | null; cache_write_tokens: number | null; reasoning_tokens: number | null; cost: number | null;
   cache_savings: number | null; web_search: number; web_searches: number | null; attachments: number; first_token_ms: number | null;
-  duration_ms: number | null; status: UsageStatus; backfilled: number;
+  duration_ms: number | null; status: UsageStatus; backfilled: number; thread_kind: ThreadKind;
 }
 
 const toRow = (r: Raw): UsageRow => ({
@@ -110,6 +114,7 @@ const toRow = (r: Raw): UsageRow => ({
   durationMs: r.duration_ms,
   status: r.status,
   backfilled: r.backfilled === 1,
+  threadKind: r.thread_kind ?? 'chat',
 });
 
 /** Calls made at or after `since` (all of them when null), oldest first. */
