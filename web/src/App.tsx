@@ -6,6 +6,7 @@ import { Sidebar, threadHref } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { ImageThread } from './pages/ImageThread';
 import { VideoThread } from './pages/VideoThread';
+import { DiscussionPage } from './pages/DiscussionPage';
 import { systemNotify } from './lib/notify';
 import { ModelLibrary } from './pages/ModelLibrary';
 import { Settings } from './pages/Settings';
@@ -20,7 +21,8 @@ export function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   // The sidebar keeps showing the last mode while on Model Library, Stats or Settings.
   const [lastMode, setLastMode] = useState<ThreadKind>('chat');
-  const mode: ThreadKind = route.page === 'images' ? 'image' : route.page === 'video' ? 'video' : route.page === 'chat' ? 'chat' : lastMode;
+  const mode: ThreadKind = route.page === 'images' ? 'image' : route.page === 'video' ? 'video' : route.page === 'chat' ? 'chat'
+    : route.page === 'discussions' ? 'discussion' : lastMode;
   const [toasts, setToasts] = useState<{ id: string; title: string }[]>([]);
 
   // Clips render for minutes: watch video threads from anywhere in the app and say when one is ready.
@@ -75,7 +77,8 @@ export function App() {
     setChatReload((n) => n + 1);
   }, []);
 
-  const activeChatId = route.page === 'chat' ? route.chatId : route.page === 'images' || route.page === 'video' ? route.threadId : null;
+  const activeChatId = route.page === 'chat' ? route.chatId : route.page === 'images' || route.page === 'video' ? route.threadId
+    : route.page === 'discussions' ? route.discussionId : null;
   const title = chats.find((c) => c.id === activeChatId)?.title ?? (route.page === 'images' ? 'New image' : route.page === 'video' ? 'New video' : 'New chat');
 
   return (
@@ -91,6 +94,10 @@ export function App() {
         )}
         {route.page === 'video' && (
           <VideoThread threadId={route.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />
+        )}
+        {route.page === 'discussions' && (
+          <DiscussionPage key={route.discussionId ?? 'new'} discussionId={route.discussionId} models={models} settings={settings}
+            onDiscussionsChanged={refreshChats} />
         )}
         {route.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} />}
         {route.page === 'stats' && <Stats />}

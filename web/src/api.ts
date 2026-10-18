@@ -3,6 +3,7 @@ import type {
   Attachment, CatalogResponse, ChatDetail, ChatSummary, CompareDone, CompareSlotDone, CompareSlotError, CompareStart, LibraryModel, Memory,
   Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle, StatsRange, StatsResponse, ChatStats, ContextUsage,
   GeneratedItems, MediaCatalog, MediaKind, MediaLibraryModel, MediaStatsResponse, MediaThreadStats, ThreadKind, StorageUsage, DeleteTarget, LimitStatus,
+  DiscussionDetail, DiscussionState, DiscussionSummary, DiscussionTurnDone, DiscussionTurnError, DiscussionTurnStart, NewDiscussion,
 } from '../../shared/types';
 import type { ImageSettings } from '../../shared/imageModels';
 import type { VideoSettings } from '../../shared/videoModels';
@@ -71,6 +72,14 @@ export const api = {
   storage: () => json<StorageUsage>('GET', '/api/data/storage'),
   cleanUp: () => json<StorageUsage>('POST', '/api/data/cleanup'),
   deleteData: (target: DeleteTarget, confirm: string) => json<{ ok: true; chatIds: string[] }>('POST', '/api/data/delete', { target, confirm }),
+
+  createDiscussion: (d: NewDiscussion) => json<DiscussionDetail>('POST', '/api/discussions', d),
+  getDiscussion: (id: string) => json<DiscussionDetail>('GET', `/api/discussions/${id}`),
+  postHostMessage: (id: string, content: string) => json<Message>('POST', `/api/discussions/${id}/messages`, { content }),
+  stopDiscussion: (id: string) => json<DiscussionState>('POST', `/api/discussions/${id}/stop`),
+  moreTurns: (id: string) => json<DiscussionState>('POST', `/api/discussions/${id}/more-turns`),
+  summarizeDiscussion: (id: string, modelId: string) => json<DiscussionSummary>('POST', `/api/discussions/${id}/summary`, { modelId }),
+  discussionReportUrl: (id: string) => `/api/discussions/${id}/report`,
 
   listMemories: () => json<Memory[]>('GET', '/api/memories'),
   addMemory: (content: string) => json<Memory>('POST', '/api/memories', { content }),
@@ -169,5 +178,32 @@ export async function streamComparison(url: string, body: unknown, h: CompareHan
     else if (ev.event === 'slot-error') h.onSlotError(data);
     else if (ev.event === 'done') h.onDone(data);
     else if (ev.event === 'title') h.onTitle(data);
+  }
+}
+
+export interface DiscussionTurnHandlers {
+  onStart(e: DiscussionTurnStart): void;
+  onDelta(text: string): void;
+  onReasoning(text: string): void;
+  onDone(e: DiscussionTurnDone): void;
+  /** A failed turn, or a refused request (`status` is its HTTP status; 402 is a spending limit). */
+  onError(e: DiscussionTurnError | { message: string; status: number }): void;
+}
+
+/** Streams one discussion turn. Rejects with AbortError when `signal` aborts. */
+export async function streamDiscussionTurn(id: string, h: DiscussionTurnHandlers, signal: AbortSignal): Promise<void> {
+  const res = await fetch(`/api/discussions/${id}/turn`, { method: 'POST', signal });
+  if (!res.ok || !res.body) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    h.onError({ message: data.error ?? `Request failed (${res.status})`, status: res.status });
+    return;
+  }
+  for await (const ev of parseSSE(res.body)) {
+    const data = JSON.parse(ev.data);
+    if (ev.event === 'start') h.onStart(data);
+    else if (ev.event === 'delta') h.onDelta(data.text);
+    else if (ev.event === 'reasoning') h.onReasoning(data.text);
+    else if (ev.event === 'done') h.onDone(data);
+    else if (ev.event === 'error') h.onError(data);
   }
 }

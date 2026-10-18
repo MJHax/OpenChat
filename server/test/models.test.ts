@@ -155,7 +155,7 @@ describe('model library', () => {
     const { call } = setup();
     const added = (await (await call('POST', '/api/models', { id: 'openai/gpt-4o:free' })).json()) as LibraryModel[];
     expect(added).toEqual([
-      { id: 'openai/gpt-4o:free', displayName: 'GPT-4o (free)', contextLength: 128000, promptPrice: 0, completionPrice: 0, isDefault: true, inputModalities: ['text'] },
+      { id: 'openai/gpt-4o:free', displayName: 'GPT-4o (free)', contextLength: 128000, promptPrice: 0, completionPrice: 0, isDefault: true, inputModalities: ['text'], supportsTools: false },
     ]);
 
     await call('POST', '/api/models', { id: '~anthropic/claude' });
@@ -182,6 +182,13 @@ describe('model library', () => {
     expect(list).toHaveLength(1);
     expect((await call('PATCH', '/api/models', { id: 'nope/x', isDefault: true })).status).toBe(404);
     expect((await call('POST', '/api/models', { id: '  ' })).status).toBe(400);
+  });
+
+  it('lists supportsTools for library models', async () => {
+    const { call } = setup();
+    await call('POST', '/api/models', { id: 'openai/gpt-4o:free' });
+    const list = (await (await call('POST', '/api/models', { id: 'google/gemini' })).json()) as LibraryModel[];
+    expect(list.map((m) => [m.id, m.supportsTools])).toEqual([['openai/gpt-4o:free', false], ['google/gemini', true]]);
   });
 
   it('stores input modalities when a model is added', async () => {

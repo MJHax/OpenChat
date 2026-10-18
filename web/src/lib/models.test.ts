@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { initialModelId } from './models';
 import type { LibraryModel, Message } from '../../../shared/types';
 
-const lib = (id: string, isDefault = false): LibraryModel => ({ id, displayName: id, contextLength: null, promptPrice: null, completionPrice: null, isDefault, inputModalities: ['text'] });
+const lib = (id: string, isDefault = false): LibraryModel => ({ id, displayName: id, contextLength: null, promptPrice: null, completionPrice: null, isDefault, inputModalities: ['text'], supportsTools: false });
 const reply = (modelId: string): Pick<Message, 'role' | 'modelId'> => ({ role: 'assistant', modelId });
 const models = [lib('a/one'), lib('b/two', true), lib('c/three')];
 

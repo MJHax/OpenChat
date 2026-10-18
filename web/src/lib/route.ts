@@ -7,6 +7,7 @@ export type Route =
   | { page: 'chat'; chatId: string | null }
   | { page: 'images'; threadId: string | null }
   | { page: 'video'; threadId: string | null }
+  | { page: 'discussions'; discussionId: string | null }
   | { page: 'models' }
   | { page: 'stats' }
   /** `section` is an element id inside the tab to scroll to, e.g. `#/settings/general/limits`. */
@@ -16,6 +17,7 @@ export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/');
   if (parts[0] === 'images') return { page: 'images', threadId: parts[1] ? decodeURIComponent(parts[1]) : null };
   if (parts[0] === 'video') return { page: 'video', threadId: parts[1] ? decodeURIComponent(parts[1]) : null };
+  if (parts[0] === 'discussions') return { page: 'discussions', discussionId: parts[1] ? decodeURIComponent(parts[1]) : null };
   if (parts[0] === 'models') return { page: 'models' };
   if (parts[0] === 'settings') {
     const tab = SETTINGS_TABS.find((t) => t === parts[1]);

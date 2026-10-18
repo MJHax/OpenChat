@@ -252,6 +252,8 @@ export interface LibraryModel {
   isDefault: boolean;
   /** e.g. ['text', 'image', 'file']; ['text'] when unknown. */
   inputModalities: string[];
+  /** Whether it can call tools, e.g. to moderate a discussion; false when unknown. */
+  supportsTools: boolean;
 }
 
 export interface Memory {
