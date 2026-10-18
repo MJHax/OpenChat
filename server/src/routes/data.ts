@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import type { Deps } from '../app';
 import { HttpError, readJson } from '../http';
 import { cleanUp, DELETE_TARGETS, deleteData, storageUsage } from '../dataStore';
+import { exportEntries } from '../exportData';
+import { toWebStream, zipStream } from '../zip';
 import type { DeleteTarget } from '../../../shared/types';
 
 /** Settings › Data: storage use, clean up, export, and the delete actions. */
@@ -13,6 +15,15 @@ export function dataRoutes(deps: Deps): Hono {
   r.post('/cleanup', (c) => {
     cleanUp(deps.db);
     return c.json(storageUsage(deps));
+  });
+
+  r.get('/export', (c) => {
+    const day = new Date().toISOString().slice(0, 10);
+    return c.body(toWebStream(zipStream(exportEntries(deps))), 200, {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="openchat-export-${day}.zip"`,
+      'Cache-Control': 'no-store',
+    });
   });
 
   r.post('/delete', async (c) => {
