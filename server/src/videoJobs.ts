@@ -26,10 +26,13 @@ export interface VideoRequest {
   endAttachmentId: string | null;
 }
 
-/** Every 30 s for the first half hour, then every 5 min, until OpenRouter gives a final status. Never gives up on its own. */
+/** Every 30 s for the first half hour, then every 5 min, until OpenRouter gives a final status. Never gives up on a render. */
 export const FAST_POLL_MS = 30_000;
 export const SLOW_POLL_MS = 5 * 60_000;
 export const SLOW_AFTER_MS = 30 * 60_000;
+/** A finished clip whose download keeps failing is given up on this long after the first failure. */
+export const DOWNLOAD_GIVE_UP_MS = 24 * 60 * 60_000;
+const GAVE_UP = "The clip finished, but it couldn't be downloaded for 24 hours, so OpenChat stopped trying. OpenRouter has likely charged for it.";
 const FINAL = new Set(['completed', 'failed', 'cancelled', 'expired']);
 
 const nextPoll = (startedAt: number, at: number) => at + (at - startedAt < SLOW_AFTER_MS ? FAST_POLL_MS : SLOW_POLL_MS);
@@ -119,7 +122,7 @@ async function submitAndSave(deps: Deps, thread: ChatRow, model: VideoModel, pro
 
 interface JobRow {
   job_id: string; thread_id: string | null; message_id: string; model_id: string; settings: string; photos: number; polling_url: string;
-  started_at: number; next_poll_at: number;
+  started_at: number; next_poll_at: number; download_failed_at: number | null;
 }
 
 function recordEvent(db: DB, j: JobRow, o: { alive: boolean; usage: Usage | null; cost: number | null; estimated: boolean; status: 'complete' | 'error'; at: number }) {
@@ -144,22 +147,31 @@ export function createVideoPoller(deps: Deps, opts: { now?: () => number; interv
 
   /**
    * Settles a job that OpenRouter has finished. Any step that throws leaves the job unfinished, so the next poll tries
-   * again: a paid clip is only marked done once it is on disk and recorded, all in one transaction.
+   * again: a paid clip is only marked done once it is on disk and recorded, all in one transaction. A download that has
+   * kept failing for DOWNLOAD_GIVE_UP_MS is settled as an error, still recorded with its cost since it was likely charged.
    */
   async function finish(j: JobRow, key: string, status: string, error: string | null, usage: Usage | null, at: number): Promise<void> {
     if (status === 'completed') {
       setJobStatus(j.message_id, 'downloading');
-      mkdirSync(deps.mediaDir, { recursive: true });
       const part = `${clipPath(deps.mediaDir, j.message_id)}.part`;
-      const stream = await openrouter.downloadVideo({ apiKey: key, jobId: j.job_id });
-      await pipeline(Readable.fromWeb(stream as WebReadableStream<Uint8Array>), createWriteStream(part));
       const model = cachedMediaModel(db, 'video', j.model_id) as VideoModel | null;
       const estimate = model ? videoPrice(model, JSON.parse(j.settings) as VideoSettings, j.photos).cost : null;
       const cost = usage?.cost ?? estimate;
-      // Checked after the download: the thread may have been deleted while it ran.
-      const alive = isAlive(j);
-      if (alive) renameSync(part, clipPath(deps.mediaDir, j.message_id));
-      else rmSync(part, { force: true });
+      let alive: boolean;
+      try {
+        mkdirSync(deps.mediaDir, { recursive: true });
+        const stream = await openrouter.downloadVideo({ apiKey: key, jobId: j.job_id });
+        await pipeline(Readable.fromWeb(stream as WebReadableStream<Uint8Array>), createWriteStream(part));
+        // Checked after the download: the thread may have been deleted while it ran.
+        alive = isAlive(j);
+        if (alive) renameSync(part, clipPath(deps.mediaDir, j.message_id));
+        else rmSync(part, { force: true });
+      } catch (err) {
+        if (j.download_failed_at === null) db.prepare('UPDATE video_jobs SET download_failed_at = ? WHERE job_id = ?').run(at, j.job_id);
+        if (at - (j.download_failed_at ?? at) < DOWNLOAD_GIVE_UP_MS) throw err;
+        giveUp(j, usage, cost, at, err as Error);
+        return;
+      }
       db.transaction(() => {
         recordEvent(db, j, { alive, usage, cost, estimated: usage?.cost == null, status: 'complete', at });
         db.prepare('UPDATE video_jobs SET finished_at = ? WHERE job_id = ?').run(at, j.job_id);
@@ -182,6 +194,21 @@ export function createVideoPoller(deps: Deps, opts: { now?: () => number; interv
         .run(error ?? (status === 'expired' ? 'The job expired before it finished.' : `The job was ${status}.`), at, j.message_id);
     })();
     clearJob(j.message_id);
+  }
+
+  function giveUp(j: JobRow, usage: Usage | null, cost: number | null, at: number, err: Error): void {
+    rmSync(`${clipPath(deps.mediaDir, j.message_id)}.part`, { force: true });
+    const alive = isAlive(j);
+    db.transaction(() => {
+      recordEvent(db, j, { alive, usage, cost, estimated: usage?.cost == null, status: 'complete', at });
+      db.prepare('UPDATE video_jobs SET finished_at = ? WHERE job_id = ?').run(at, j.job_id);
+      if (!alive) return;
+      db.prepare("UPDATE messages SET status = 'error', cost = ? WHERE id = ?").run(cost, j.message_id);
+      db.prepare('UPDATE media_generations SET error = ?, finished_at = ? WHERE message_id = ?').run(GAVE_UP, at, j.message_id);
+      touchChat(db, j.thread_id!);
+    })();
+    clearJob(j.message_id);
+    console.error(`Video job ${j.job_id}: gave up downloading: ${err.message}`);
   }
 
   async function tick(): Promise<void> {
