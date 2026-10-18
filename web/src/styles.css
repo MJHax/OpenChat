@@ -418,3 +418,36 @@ button.chip.more { border-style: dashed; color: var(--muted); }
 .stat-line a { color: var(--text); text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stat-line a:hover { text-decoration: underline; }
 .stat-line > span:last-child { flex-shrink: 0; }
+
+/* Settings tabs and the Data tab */
+.settings-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 8px 0 4px; }
+.settings-tabs a { padding: 6px 12px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.settings-tabs a:hover { color: var(--text); }
+.settings-tabs a[aria-current='page'] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.storage-bar { height: 12px; margin: 2px 0; }
+.storage-rows { display: flex; flex-direction: column; }
+.store-messages { background: var(--ctx-system); }
+.store-uploads { background: var(--ctx-attachments); }
+.store-images { background: var(--ctx-search); }
+.store-videos { background: var(--ctx-assistant); }
+.store-reclaimable { background: var(--ctx-user); }
+.store-other { background: var(--muted); }
+a.button-link { display: inline-block; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 6px 12px; color: var(--text); text-decoration: none; }
+a.button-link:hover { border-color: var(--accent); }
+.data-delete-row { justify-content: space-between; align-items: center; }
+.data-delete-row > button { flex-shrink: 0; }
+.danger-zone { margin-top: 16px; border-color: var(--danger); }
+button.danger-button { border-color: var(--danger); color: var(--danger); }
+button.danger-button:not(:disabled):hover { background: var(--danger); color: #fff; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+.modal { max-width: 480px; width: 100%; max-height: calc(100vh - 32px); overflow-y: auto; }
+.modal h3 { margin: 0; }
+.modal p, .modal ul { margin: 0; }
+
+/* Spending limits */
+.limit-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.limit-toggle { display: flex; align-items: center; gap: 6px; min-width: 90px; }
+.limit-amount { display: inline-flex; align-items: center; gap: 4px; }
+.limit-amount input { width: 90px; }
+.spend-notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--ctx-attachments); border-radius: 10px; padding: 6px 10px; font-size: 13px; }
+.page h2[id] { scroll-margin-top: 16px; }

@@ -1,6 +1,7 @@
 import type { DB } from './db';
 import { HttpError } from './http';
 import type { Persona } from './prompt';
+import { getLimits, saveLimits } from './limits';
 import type { SettingsUpdate, SettingsView, Theme } from '../../shared/types';
 
 const DEFAULTS = {
@@ -17,7 +18,7 @@ export type Env = Record<string, string | undefined>;
 
 const THEMES: Theme[] = ['light', 'dark', 'system'];
 
-const UPDATE_KEYS: Record<keyof SettingsUpdate, SettingKey> = {
+const UPDATE_KEYS: Record<Exclude<keyof SettingsUpdate, 'spendingLimits'>, SettingKey> = {
   apiKey: 'api_key',
   aboutMe: 'about_me',
   customInstructions: 'custom_instructions',
@@ -62,6 +63,7 @@ export function getSettingsView(db: DB, env: Env): SettingsView {
     defaultModelId: getSetting(db, 'default_model_id'),
     titleModelId: getSetting(db, 'title_model_id'),
     memoryModelId: getSetting(db, 'memory_model_id'),
+    spendingLimits: getLimits(db),
   };
 }
 
@@ -69,7 +71,8 @@ export function updateSettings(db: DB, update: SettingsUpdate): void {
   if (update.theme !== undefined && !THEMES.includes(update.theme)) {
     throw new HttpError(400, 'Theme must be light, dark, or system.');
   }
-  for (const [field, key] of Object.entries(UPDATE_KEYS) as [keyof SettingsUpdate, SettingKey][]) {
+  if (update.spendingLimits !== undefined) saveLimits(db, update.spendingLimits);
+  for (const [field, key] of Object.entries(UPDATE_KEYS) as [Exclude<keyof SettingsUpdate, 'spendingLimits'>, SettingKey][]) {
     const value = update[field];
     if (value === undefined) continue;
     if (typeof value !== 'string') throw new HttpError(400, `${field} must be a string.`);

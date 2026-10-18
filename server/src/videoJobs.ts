@@ -16,6 +16,7 @@ import { getSetting, resolveApiKey } from './settings';
 import { maybeGenerateTitle } from './title';
 import { buildVideoRequest, snapVideoSettings, videoPrice, type VideoModel, type VideoSettings } from '../../shared/videoModels';
 import { BAD_ATTACHMENT } from '../../shared/attachments';
+import { checkSpend } from './limits';
 
 export interface VideoRequest {
   prompt: string;
@@ -90,6 +91,8 @@ async function submitAndSave(deps: Deps, thread: ChatRow, model: VideoModel, pro
   if (!key) throw new HttpError(400, 'No OpenRouter API key set. Add one in Settings.');
 
   const settings = snapVideoSettings(model, req.settings);
+  // Clips cost the most and can't be stopped once submitted: refused when their price would go over a limit.
+  checkSpend(db, { estimate: videoPrice(model, settings, [start, end].filter(Boolean).length).cost });
   const body = buildVideoRequest(model, settings, prompt, { first: start && dataUrl(start, db), last: end && dataUrl(end, db) });
   let job: { jobId: string; pollingUrl: string };
   try {

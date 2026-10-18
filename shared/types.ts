@@ -211,6 +211,54 @@ export interface Memory {
   createdAt: number;
 }
 
+/** Bytes on disk, for Settings > Data. `total` is the sum of the parts. */
+export interface StorageUsage {
+  total: number;
+  parts: {
+    /** Message text, including generated files written into replies. */
+    messages: number;
+    /** Files the user attached. */
+    uploads: number;
+    /** Images made in image threads. */
+    images: number;
+    /** Clip files. */
+    videos: number;
+    /** Free pages left by deleted content, plus the WAL file; Clean up gives it back. */
+    reclaimable: number;
+    /** Indexes, stats and settings. */
+    other: number;
+  };
+}
+
+export type DeleteTarget = 'chats' | 'images' | 'videos' | 'all';
+
+/** Calendar periods: the local day from midnight, the week from Monday 00:00, the month from the 1st. */
+export type LimitPeriod = 'daily' | 'weekly' | 'monthly';
+
+export interface LimitSetting {
+  enabled: boolean;
+  /** USD; kept while the limit is off so turning it back on restores it. */
+  amount: number | null;
+}
+
+export interface SpendingLimits {
+  daily: LimitSetting;
+  weekly: LimitSetting;
+  monthly: LimitSetting;
+  /** The browser's time zone when the limits were saved; periods start at local midnight there. */
+  timeZone: string;
+}
+
+/** Where an enabled limit stands right now. */
+export interface LimitStatus {
+  period: LimitPeriod;
+  amount: number;
+  /** Spent since `start`, plus the estimated price of clips still rendering. */
+  spent: number;
+  start: number;
+  resetsAt: number;
+}
+
 export interface SettingsView {
   hasApiKey: boolean;
   apiKeySource: 'settings' | 'env' | 'none';
@@ -221,6 +269,7 @@ export interface SettingsView {
   defaultModelId: string;
   titleModelId: string;
   memoryModelId: string;
+  spendingLimits: SpendingLimits;
 }
 
 export type SettingsUpdate = Partial<{
@@ -231,6 +280,7 @@ export type SettingsUpdate = Partial<{
   defaultModelId: string;
   titleModelId: string;
   memoryModelId: string;
+  spendingLimits: SpendingLimits;
 }>;
 
 export interface SearchHit {

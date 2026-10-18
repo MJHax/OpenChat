@@ -16,6 +16,7 @@ import { generationRoutes } from './routes/generate';
 import { attachmentRoutes } from './routes/attachments';
 import { statsRoutes } from './routes/stats';
 import { contextRoutes } from './routes/context';
+import { dataRoutes } from './routes/data';
 
 export interface Deps {
   db: DB;
@@ -66,6 +67,7 @@ export function createApp(deps: Deps): Hono {
   app.route('/api/attachments', attachmentRoutes(deps));
   app.route('/api/stats', statsRoutes(deps));
   app.route('/api/context', contextRoutes(deps));
+  app.route('/api/data', dataRoutes(deps));
 
   return app;
 }

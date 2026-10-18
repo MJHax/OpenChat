@@ -195,6 +195,8 @@ export function openDb(file: string): DB {
   const db = new Database(file);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+  // Freed pages are zeroed, so deleted text and files don't linger in the file.
+  db.pragma('secure_delete = ON');
   db.exec(SCHEMA);
   migrate(db);
   return db;
