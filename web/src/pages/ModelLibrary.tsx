@@ -4,6 +4,8 @@ import { api } from '../api';
 import { CatalogFilters } from '../components/CatalogFilters';
 import { ModelCard } from '../components/ModelCard';
 import { PopularShelf } from '../components/PopularShelf';
+import { ImageModelLibrary } from '../components/ImageModelLibrary';
+import { Segmented } from '../components/stats/Segmented';
 import {
   countLabel, filterCatalog, isFiltering, latestOnly, NO_FILTER, popularFor, sortCatalog, topProviders, type CatalogFilter,
   type SortKey,
@@ -14,6 +16,7 @@ export interface ModelLibraryProps {
   onChanged(): void;
 }
 
+const KINDS: { id: 'chat' | 'image'; label: string }[] = [{ id: 'chat', label: 'Chat models' }, { id: 'image', label: 'Image models' }];
 const PAGE_SIZE = 60;
 const TOP_PROVIDERS = 8;
 
@@ -27,6 +30,7 @@ export function ModelLibrary({ models, onChanged }: ModelLibraryProps) {
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [kind, setKind] = useState<'chat' | 'image'>('chat');
 
   // A slow first load must not overwrite the result of a Refresh started after it.
   const latest = useRef(latestOnly());
@@ -68,10 +72,22 @@ export function ModelLibrary({ models, onChanged }: ModelLibraryProps) {
     }
   }
 
+  const switcher = <Segmented label="Model kind" options={KINDS} value={kind} onChange={setKind} />;
+  if (kind === 'image') {
+    return (
+      <div className="page">
+        <div className="page-inner">
+          <div className="stats-head"><h1>Model Library</h1>{switcher}</div>
+          <ImageModelLibrary />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page">
       <div className="page-inner">
-        <h1>Model Library</h1>
+        <div className="stats-head"><h1>Model Library</h1>{switcher}</div>
         {actionError && <p className="error-text">{actionError}</p>}
 
         <h2>My models</h2>

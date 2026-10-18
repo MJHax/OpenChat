@@ -11,4 +11,9 @@ describe('parseHash', () => {
     expect(parseHash('#/stats')).toEqual({ page: 'stats' });
     expect(parseHash('#/garbage')).toEqual({ page: 'chat', chatId: null });
   });
+
+  it('maps image threads', () => {
+    expect(parseHash('#/images')).toEqual({ page: 'images', threadId: null });
+    expect(parseHash('#/images/abc')).toEqual({ page: 'images', threadId: 'abc' });
+  });
 });

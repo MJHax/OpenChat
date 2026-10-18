@@ -1,9 +1,15 @@
 import { useMemo, useSyncExternalStore } from 'react';
 
-export type Route = { page: 'chat'; chatId: string | null } | { page: 'models' } | { page: 'stats' } | { page: 'settings' };
+export type Route =
+  | { page: 'chat'; chatId: string | null }
+  | { page: 'images'; threadId: string | null }
+  | { page: 'models' }
+  | { page: 'stats' }
+  | { page: 'settings' };
 
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/');
+  if (parts[0] === 'images') return { page: 'images', threadId: parts[1] ? decodeURIComponent(parts[1]) : null };
   if (parts[0] === 'models') return { page: 'models' };
   if (parts[0] === 'settings') return { page: 'settings' };
   if (parts[0] === 'stats') return { page: 'stats' };

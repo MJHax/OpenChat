@@ -76,8 +76,16 @@ describe('search', () => {
     const { call, chat } = await seed();
     const hits = (await (await call('GET', '/api/search?q=bana')).json()) as SearchHit[];
     expect(hits.length).toBe(3);
-    expect(hits[0]).toMatchObject({ chatId: chat.id, chatTitle: 'New chat' });
+    expect(hits[0]).toMatchObject({ chatId: chat.id, chatTitle: 'New chat', chatKind: 'chat' });
     expect(hits[0].snippet).toContain('«');
+  });
+
+  it('says which kind of thread a hit is in', async () => {
+    const { call, db } = await seed();
+    const thread = (await (await call('POST', '/api/chats', { kind: 'image' })).json()) as ChatSummary;
+    insertMessage(db, { chatId: thread.id, parentId: null, role: 'user', content: 'a banana boat at sunset' });
+    const hits = (await (await call('GET', '/api/search?q=sunset')).json()) as SearchHit[];
+    expect(hits).toMatchObject([{ chatId: thread.id, chatKind: 'image' }]);
   });
 
   it('returns [] for an empty query', async () => {

@@ -1,17 +1,24 @@
 import { useEffect, useState } from 'react';
-import type { ChatSummary, SearchHit } from '../../../shared/types';
-import { api } from '../api';
+import type { ChatSummary, SearchHit, ThreadKind } from '../../../shared/types';
+import { api, attachmentUrl } from '../api';
+import { Segmented } from './stats/Segmented';
 import { groupByDate, splitSnippet } from '../lib/format';
 import { navigate } from '../lib/route';
 
 export interface SidebarProps {
+  /** Which threads the list shows: chats or image threads. */
+  mode: ThreadKind;
   chats: ChatSummary[];
   activeChatId: string | null;
   onChatsChanged(): void;
-  onOpenChat(chatId: string): void;
+  onOpenChat(chatId: string, kind: ThreadKind): void;
 }
 
-export function Sidebar({ chats, activeChatId, onChatsChanged, onOpenChat }: SidebarProps) {
+const MODES: { id: ThreadKind; label: string }[] = [{ id: 'chat', label: 'Chats' }, { id: 'image', label: 'Images' }];
+const HOME: Record<ThreadKind, string> = { chat: '#/', image: '#/images', video: '#/video' };
+export const threadHref = (kind: ThreadKind, id: string) => (kind === 'chat' ? `#/chat/${id}` : `${HOME[kind]}/${id}`);
+
+export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -33,7 +40,7 @@ export function Sidebar({ chats, activeChatId, onChatsChanged, onOpenChat }: Sid
   async function openHit(hit: SearchHit) {
     await api.selectMessage(hit.chatId, hit.messageId).catch(() => {});
     setQuery('');
-    onOpenChat(hit.chatId);
+    onOpenChat(hit.chatId, hit.chatKind);
   }
 
   async function commitRename(chat: ChatSummary) {
@@ -49,15 +56,17 @@ export function Sidebar({ chats, activeChatId, onChatsChanged, onOpenChat }: Sid
   async function remove(chat: ChatSummary) {
     if (!window.confirm(`Delete "${chat.title}"? This cannot be undone.`)) return;
     await api.deleteChat(chat.id).catch(() => {});
-    if (chat.id === activeChatId) navigate('#/');
+    if (chat.id === activeChatId) navigate(HOME[mode]);
     onChatsChanged();
   }
+
+  const newLabel = mode === 'image' ? 'New image' : 'New chat';
 
   if (collapsed) {
     return (
       <aside className="sidebar collapsed">
         <button className="icon" onClick={() => setCollapsed(false)} aria-label="Expand sidebar" title="Expand sidebar">☰</button>
-        <button className="icon" onClick={() => navigate('#/')} aria-label="New chat" title="New chat">＋</button>
+        <button className="icon" onClick={() => navigate(HOME[mode])} aria-label={newLabel} title={newLabel}>＋</button>
       </aside>
     );
   }
@@ -68,8 +77,9 @@ export function Sidebar({ chats, activeChatId, onChatsChanged, onOpenChat }: Sid
         <span className="brand">OpenChat</span>
         <button className="icon" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar" title="Collapse sidebar">⟨</button>
       </div>
-      <button className="new-chat" onClick={() => navigate('#/')}>＋ New chat</button>
-      <input className="search" type="search" placeholder="Search chats" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <Segmented label="Mode" options={MODES} value={mode} onChange={(m) => navigate(HOME[m])} />
+      <button className="new-chat" onClick={() => navigate(HOME[mode])}>＋ {newLabel}</button>
+      <input className="search" type="search" placeholder="Search" value={query} onChange={(e) => setQuery(e.target.value)} />
 
       <nav className="chat-list">
         {query.trim() ? (
@@ -105,7 +115,15 @@ export function Sidebar({ chats, activeChatId, onChatsChanged, onOpenChat }: Sid
                   />
                 ) : (
                   <div key={chat.id} className={`chat-item${chat.id === activeChatId ? ' active' : ''}`}>
-                    <a href={`#/chat/${chat.id}`} title={chat.title}>{chat.title}</a>
+                    <a href={threadHref(chat.kind, chat.id)} title={chat.title}>
+                      {chat.kind === 'image' && (
+                        <span className="thread-thumb">
+                          {chat.thumbnailId && <img src={attachmentUrl(chat.thumbnailId)} alt="" />}
+                        </span>
+                      )}
+                      <span className="chat-title">{chat.title}</span>
+                      {chat.busy && <span className="spinner" aria-label="Generating" />}
+                    </a>
                     <span className="chat-actions">
                       <button className="icon" aria-label="Rename chat" title="Rename" onClick={() => { setRenaming(chat.id); setDraft(chat.title); }}>✎</button>
                       <button className="icon" aria-label="Delete chat" title="Delete" onClick={() => remove(chat)}>🗑</button>

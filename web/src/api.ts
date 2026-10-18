@@ -2,8 +2,9 @@ import { parseSSE } from '../../shared/sse';
 import type {
   Attachment, CatalogResponse, ChatDetail, ChatSummary, CompareDone, CompareSlotDone, CompareSlotError, CompareStart, LibraryModel, Memory,
   Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle, StatsRange, StatsResponse, ChatStats, ContextUsage,
-  MediaCatalog, MediaKind, MediaLibraryModel, ThreadKind,
+  MediaCatalog, MediaKind, MediaLibraryModel, MediaThreadStats, ThreadKind,
 } from '../../shared/types';
+import type { ImageSettings } from '../../shared/imageModels';
 
 async function json<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -36,6 +37,11 @@ export const api = {
   addModel: (id: string) => json<LibraryModel[]>('POST', '/api/models', { id }),
   updateModel: (patch: { id: string; displayName?: string; isDefault?: boolean }) => json<LibraryModel[]>('PATCH', '/api/models', patch),
   removeModel: (id: string) => json<LibraryModel[]>('DELETE', `/api/models?id=${encodeURIComponent(id)}`),
+
+  generateImage: (threadId: string, body: {
+    prompt: string; modelId: string; settings: ImageSettings; targetAttachmentId: string | null; attachmentIds: string[]; parentId?: string;
+  }) => json<{ userMessageId: string; assistantMessageId: string }>('POST', `/api/chats/${threadId}/images`, body),
+  mediaThreadStats: (id: string) => json<MediaThreadStats>('GET', `/api/chats/${id}/stats`),
 
   listMediaModels: (kind: MediaKind) => json<MediaLibraryModel[]>('GET', `/api/media-models?kind=${kind}`),
   mediaCatalog: (kind: MediaKind, refresh = false) => json<MediaCatalog>('GET', `/api/media-models/catalog?kind=${kind}${refresh ? '&refresh=1' : ''}`),

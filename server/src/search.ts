@@ -11,7 +11,7 @@ export function searchMessages(db: DB, q: string): SearchHit[] {
   const query = toFtsQuery(q);
   if (!query) return [];
   return db.prepare(
-    `SELECT m.id AS messageId, m.chat_id AS chatId, c.title AS chatTitle,
+    `SELECT m.id AS messageId, m.chat_id AS chatId, c.title AS chatTitle, c.kind AS chatKind,
             snippet(messages_fts, 0, '«', '»', '…', 12) AS snippet
      FROM messages_fts
      JOIN messages m ON m.seq = messages_fts.rowid

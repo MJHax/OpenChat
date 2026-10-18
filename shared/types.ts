@@ -213,6 +213,8 @@ export type SettingsUpdate = Partial<{
 export interface SearchHit {
   chatId: string;
   chatTitle: string;
+  /** Which mode the thread opens in. */
+  chatKind: ThreadKind;
   messageId: string;
   /** Matched text wrapped in « and ». */
   snippet: string;
