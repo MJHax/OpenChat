@@ -94,7 +94,10 @@ export function App() {
         )}
         {route.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} />}
         {route.page === 'stats' && <Stats />}
-        {route.page === 'settings' && <Settings models={models} onChanged={refreshSettings} />}
+        {route.page === 'settings' && (
+          <Settings models={models} tab={route.tab} section={route.section} onChanged={refreshSettings}
+            onDataChanged={() => { refreshChats(); refreshModels(); }} />
+        )}
       </main>
       {toasts.length > 0 && (
         <div className="toasts" role="status">

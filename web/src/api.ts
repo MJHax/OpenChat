@@ -2,7 +2,7 @@ import { parseSSE } from '../../shared/sse';
 import type {
   Attachment, CatalogResponse, ChatDetail, ChatSummary, CompareDone, CompareSlotDone, CompareSlotError, CompareStart, LibraryModel, Memory,
   Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle, StatsRange, StatsResponse, ChatStats, ContextUsage,
-  GeneratedItems, MediaCatalog, MediaKind, MediaLibraryModel, MediaStatsResponse, MediaThreadStats, ThreadKind,
+  GeneratedItems, MediaCatalog, MediaKind, MediaLibraryModel, MediaStatsResponse, MediaThreadStats, ThreadKind, StorageUsage, DeleteTarget,
 } from '../../shared/types';
 import type { ImageSettings } from '../../shared/imageModels';
 import type { VideoSettings } from '../../shared/videoModels';
@@ -60,6 +60,10 @@ export const api = {
   getSettings: () => json<SettingsView>('GET', '/api/settings'),
   updateSettings: (update: SettingsUpdate) => json<SettingsView>('PUT', '/api/settings', update),
   testKey: () => json<{ ok: boolean; error?: string }>('POST', '/api/settings/test-key'),
+
+  storage: () => json<StorageUsage>('GET', '/api/data/storage'),
+  cleanUp: () => json<StorageUsage>('POST', '/api/data/cleanup'),
+  deleteData: (target: DeleteTarget, confirm: string) => json<{ ok: true; chatIds: string[] }>('POST', '/api/data/delete', { target, confirm }),
 
   listMemories: () => json<Memory[]>('GET', '/api/memories'),
   addMemory: (content: string) => json<Memory>('POST', '/api/memories', { content }),

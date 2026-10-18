@@ -18,7 +18,7 @@ export function dataRoutes(deps: Deps): Hono {
   });
 
   r.get('/export', (c) => {
-    const day = new Date().toISOString().slice(0, 10);
+    const day = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD, local
     return c.body(toWebStream(zipStream(exportEntries(deps))), 200, {
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename="openchat-export-${day}.zip"`,
