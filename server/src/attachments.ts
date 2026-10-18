@@ -6,6 +6,10 @@ import {
   BAD_ATTACHMENT, MAX_ATTACHMENTS, MAX_TOTAL_BYTES, PENDING_TTL_MS, TOO_MANY_FILES, TOO_MUCH_TOTAL, canViewImages,
 } from '../../shared/attachments';
 import type { Attachment, AttachmentKind } from '../../shared/types';
+import { fileVersions, mimeFor, parseFileBlocks, safeFileName } from '../../shared/files';
+import { ATTACHMENT_LIMITS, tooLargeMessage } from '../../shared/attachments';
+import { getChatMessages, getMessage } from './messages';
+import { activePath } from './tree';
 
 export type AttachmentRow = Attachment & { messageId: string | null };
 
@@ -143,6 +147,51 @@ export function insertGenerated(db: DB, a: { messageId: string; filename: string
   db.prepare('INSERT INTO attachments (id, message_id, position, kind, filename, mime, size, data, created_at) VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?)')
     .run(id, a.messageId, a.kind, a.filename, a.mime, a.data.length, a.data, now());
   return { id, kind: a.kind, filename: a.filename, mime: a.mime, size: a.data.length };
+}
+
+export interface GeneratedItems {
+  images: { attachmentId: string; threadId: string; threadTitle: string; createdAt: number }[];
+  files: { chatId: string; chatTitle: string; messageId: string; name: string; size: number }[];
+}
+
+/** Everything OpenChat made that can be attached to a chat: images from image threads, and each chat's latest files. */
+export function generatedItems(db: DB): GeneratedItems {
+  const images = db.prepare(
+    `SELECT a.id AS attachmentId, c.id AS threadId, c.title AS threadTitle, a.created_at AS createdAt
+     FROM attachments a JOIN messages m ON m.id = a.message_id JOIN chats c ON c.id = m.chat_id
+     WHERE c.kind = 'image' AND m.role = 'assistant' AND a.kind = 'image' ORDER BY a.created_at DESC`,
+  ).all() as GeneratedItems['images'];
+  const files: (GeneratedItems['files'][number] & { at: number })[] = [];
+  const chats = db.prepare("SELECT id, title, active_leaf_id FROM chats WHERE kind = 'chat'").all() as { id: string; title: string; active_leaf_id: string | null }[];
+  for (const chat of chats) {
+    const path = activePath(getChatMessages(db, chat.id), chat.active_leaf_id);
+    for (const versions of fileVersions(path).values()) {
+      const latest = versions.at(-1)!;
+      if (!latest.file.complete) continue;
+      const at = path.find((m) => m.id === latest.messageId)!.createdAt;
+      files.push({ chatId: chat.id, chatTitle: chat.title, messageId: latest.messageId, name: latest.name, size: Buffer.byteLength(latest.file.content), at });
+    }
+  }
+  files.sort((a, b) => b.at - a.at);
+  return { images, files: files.map(({ at: _at, ...f }) => f) };
+}
+
+/** A new pending attachment holding a copy of a generated image, or of a file a chat reply wrote. */
+export function copyGenerated(db: DB, source: { attachmentId?: string; messageId?: string; name?: string }): Attachment {
+  if (source.attachmentId) {
+    const row = getAttachmentRow(db, source.attachmentId);
+    const data = row && getAttachmentData(db, row.id);
+    if (!row || !data) throw new HttpError(404, 'That image is no longer available.');
+    return insertPending(db, { filename: row.filename, kind: row.kind, mime: row.mime, data });
+  }
+  const message = source.messageId ? getMessage(db, source.messageId) : undefined;
+  const file = message?.role === 'assistant'
+    ? parseFileBlocks(message.content).flatMap((s) => (s.type === 'file' && s.file.name === source.name ? [s.file] : [])).at(-1)
+    : undefined;
+  if (!file) throw new HttpError(404, 'That file is no longer available.');
+  const data = new TextEncoder().encode(file.content);
+  if (data.length > ATTACHMENT_LIMITS.text) throw new HttpError(413, tooLargeMessage(file.name, 'text'));
+  return insertPending(db, { filename: safeFileName(file.name), kind: 'text', mime: mimeFor(file.name), data });
 }
 
 /** Images attached anywhere in the chat, newest first; when names repeat, only the newest of that name is kept. */

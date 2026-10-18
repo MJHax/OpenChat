@@ -9,8 +9,9 @@ import type { OpenRouterClient } from '../src/openrouter';
 import { createChat, deleteChat } from '../src/chats';
 import { insertMessage } from '../src/messages';
 import {
-  attachmentsFor, cleanFilename, cleanupPending, deletePending, detectKind, getAttachmentData, getAttachmentRow, insertPending,
+  attachmentsFor, cleanFilename, cleanupPending, deletePending, detectKind, getAttachmentData, getAttachmentRow, insertGenerated, insertPending,
 } from '../src/attachments';
+import { setActiveLeaf } from '../src/chats';
 
 const bytes = (...values: number[]) => new Uint8Array(values);
 const utf8 = (text: string) => new TextEncoder().encode(text);
@@ -333,5 +334,57 @@ describe('sending with attachments', () => {
     const res = await call('POST', `/api/chats/${chatId}/edit`, { messageId: second.id, content: 'x', modelId: 'v/vision', attachmentIds: [other.id] });
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe(BAD_ATTACHMENT);
+  });
+});
+
+describe('attaching generated images and files', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9]);
+  const file = (name: string, body: string) => `<file name="${name}">\n${body}\n</file>`;
+
+  function seed() {
+    const ctx = makeApp();
+    const { db } = ctx;
+    const thread = createChat(db, 'image');
+    const tu = insertMessage(db, { chatId: thread.id, parentId: null, role: 'user', content: 'a fox' });
+    const ta = insertMessage(db, { chatId: thread.id, parentId: tu.id, role: 'assistant', content: '' });
+    const fox = insertGenerated(db, { messageId: ta.id, filename: 'a-fox-1.png', kind: 'image', mime: 'image/png', data: PNG });
+    const chat = createChat(db);
+    const u1 = insertMessage(db, { chatId: chat.id, parentId: null, role: 'user', content: 'page' });
+    const a1 = insertMessage(db, { chatId: chat.id, parentId: u1.id, role: 'assistant', content: file('p.html', 'old') });
+    const u2 = insertMessage(db, { chatId: chat.id, parentId: a1.id, role: 'user', content: 'blue' });
+    const a2 = insertMessage(db, { chatId: chat.id, parentId: u2.id, role: 'assistant', content: `${file('p.html', 'new')}\n${file('d.csv', 'a,b')}` });
+    setActiveLeaf(db, chat.id, a2.id);
+    return { ...ctx, thread, chat, fox, a2 };
+  }
+
+  it('lists generated images and the latest version of each file', async () => {
+    const { call, fox, chat, a2, thread } = seed();
+    const g = (await (await call('GET', '/api/attachments/generated')).json()) as { images: { attachmentId: string; threadId: string }[]; files: { chatId: string; messageId: string; name: string; size: number }[] };
+    expect(g.images).toEqual([expect.objectContaining({ attachmentId: fox.id, threadId: thread.id, threadTitle: 'New chat' })]);
+    expect(g.files.map((f) => [f.chatId, f.messageId, f.name, f.size])).toEqual([[chat.id, a2.id, 'p.html', 3], [chat.id, a2.id, 'd.csv', 3]]);
+  });
+
+  it('copies a generated image into a new pending attachment', async () => {
+    const { call, db, fox } = seed();
+    const res = await call('POST', '/api/attachments/copy', { attachmentId: fox.id });
+    expect(res.status).toBe(201);
+    const copy = (await res.json()) as Attachment;
+    expect(copy).toMatchObject({ kind: 'image', filename: 'a-fox-1.png', mime: 'image/png' });
+    expect(copy.id).not.toBe(fox.id);
+    expect(getAttachmentRow(db, copy.id)?.messageId).toBeNull();
+    expect(getAttachmentData(db, copy.id)?.equals(Buffer.from(PNG))).toBe(true);
+  });
+
+  it('copies a generated file as a text attachment', async () => {
+    const { call, db, a2 } = seed();
+    const copy = (await (await call('POST', '/api/attachments/copy', { messageId: a2.id, name: 'p.html' })).json()) as Attachment;
+    expect(copy).toMatchObject({ kind: 'text', filename: 'p.html', mime: 'text/html;charset=utf-8' });
+    expect(getAttachmentData(db, copy.id)?.toString('utf8')).toBe('new');
+  });
+
+  it('refuses things that are not there', async () => {
+    const { call, a2 } = seed();
+    expect((await call('POST', '/api/attachments/copy', { attachmentId: 'nope' })).status).toBe(404);
+    expect((await call('POST', '/api/attachments/copy', { messageId: a2.id, name: 'missing.txt' })).status).toBe(404);
   });
 });

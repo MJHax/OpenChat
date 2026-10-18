@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Deps } from '../app';
-import { HttpError } from '../http';
-import { cleanFilename, cleanupPending, deletePending, detectKind, getAttachmentData, getAttachmentRow, insertPending } from '../attachments';
+import { HttpError, readJson } from '../http';
+import {
+  cleanFilename, cleanupPending, copyGenerated, deletePending, detectKind, generatedItems, getAttachmentData, getAttachmentRow, insertPending,
+} from '../attachments';
 import { ATTACHMENT_LIMITS, MB, UNSUPPORTED_TYPE, emptyFileMessage, tooLargeMessage } from '../../../shared/attachments';
 
 /** RFC 5987 value-chars: encodeURIComponent leaves `'()*` alone, but they are not allowed unencoded. */
@@ -10,6 +12,14 @@ const rfc5987 = (value: string) => encodeURIComponent(value).replace(/['()*]/g, 
 
 export function attachmentRoutes({ db }: Deps): Hono {
   const r = new Hono();
+
+  // Before '/:id', so "generated" isn't read as an attachment id.
+  r.get('/generated', (c) => c.json(generatedItems(db)));
+
+  r.post('/copy', async (c) => {
+    cleanupPending(db);
+    return c.json(copyGenerated(db, await readJson<{ attachmentId?: string; messageId?: string; name?: string }>(c)), 201);
+  });
 
   r.post(
     '/',
