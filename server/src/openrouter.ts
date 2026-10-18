@@ -1,6 +1,7 @@
 import { parseSSE } from '../../shared/sse';
 import type { CatalogModel, Category, Source } from '../../shared/types';
 import type { ChatMessage, Plugin } from './prompt';
+import { parseImageModel, type ImageModel, type ImageSettings } from '../../shared/imageModels';
 
 export const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
@@ -125,6 +126,37 @@ export interface OpenRouterClient {
   streamChat(o: {
     apiKey: string; model: string; messages: ChatMessage[]; plugins?: Plugin[]; webSearch?: WebSearchMode; signal?: AbortSignal;
   }): AsyncGenerator<StreamEvent>;
+  /** Image models with their pricing; a model whose pricing can't be fetched is listed with an unknown price. */
+  listImageModels(): Promise<ImageModel[]>;
+  /** One image; `references` are data URLs of the images to edit or draw on. */
+  generateImage(o: { apiKey: string; model: string; prompt: string; settings: ImageSettings; references: string[] }): Promise<GeneratedImage>;
+}
+
+export interface GeneratedImage {
+  data: Buffer;
+  mime: string;
+  usage: Usage | null;
+}
+
+/** The image's type from its first bytes; PNG when unrecognised (OpenRouter's default). */
+function sniffImage(b: Buffer): string {
+  if (b[0] === 0xff && b[1] === 0xd8) return 'image/jpeg';
+  if (b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
+  return 'image/png';
+}
+
+/** Runs `fn` over `items` with at most `limit` in flight, keeping order. */
+async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
 }
 
 export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = OPENROUTER_BASE): OpenRouterClient {
@@ -193,6 +225,33 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
       const json = (await res.json()) as any;
       if (json.usage) onUsage?.(parseUsage(json.usage));
       return String(json.choices?.[0]?.message?.content ?? '');
+    },
+
+    async listImageModels() {
+      const res = await request('/images/models');
+      const entries = ((await res.json()) as { data?: any[] }).data ?? [];
+      const endpoints = await mapLimited(entries, 6, async (m) => {
+        try {
+          return await (await request(`/images/models/${String(m.id)}/endpoints`)).json();
+        } catch {
+          return null;
+        }
+      });
+      return entries.flatMap((m, i) => parseImageModel(m, endpoints[i]) ?? []);
+    },
+
+    async generateImage({ apiKey, model, prompt, settings, references }) {
+      const body: Record<string, unknown> = { model, prompt, n: 1, aspect_ratio: settings.aspect };
+      if (settings.size) body.resolution = settings.size;
+      if (settings.quality) body.quality = settings.quality;
+      if (settings.transparent) body.background = 'transparent';
+      if (references.length) body.input_references = references;
+      const res = await request('/images', { method: 'POST', apiKey, body: JSON.stringify(body) });
+      const json = (await res.json()) as { data?: { b64_json?: string; media_type?: string }[]; usage?: unknown };
+      const image = json.data?.[0];
+      if (!image?.b64_json) throw new OpenRouterError('The model returned no image.', 502);
+      const data = Buffer.from(image.b64_json, 'base64');
+      return { data, mime: image.media_type ?? sniffImage(data), usage: json.usage ? parseUsage(json.usage) : null };
     },
 
     async *streamChat({ apiKey, model, messages, plugins, webSearch, signal }) {

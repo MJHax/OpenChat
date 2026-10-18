@@ -12,6 +12,8 @@ export function makeApp(openrouter: Partial<OpenRouterClient> = {}, env: Env = {
     checkKey: async () => {},
     complete: async () => 'A title',
     streamChat: async function* () {},
+    listImageModels: async () => [],
+    generateImage: async () => { throw new Error('generateImage is not scripted in this test'); },
     ...openrouter,
   };
   const app = createApp({ db, openrouter: client, env });

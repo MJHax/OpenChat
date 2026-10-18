@@ -246,3 +246,69 @@ describe('toSources', () => {
     expect(toSources(undefined)).toEqual([]);
   });
 });
+
+describe('image generation client', () => {
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7]);
+
+  it('posts one image request and decodes the result', async () => {
+    const { fn, calls } = fakeFetch(() => Response.json({
+      data: [{ b64_json: PNG.toString('base64') }],
+      usage: { prompt_tokens: 12, completion_tokens: 1290, cost: 0.039 },
+    }));
+    const out = await createOpenRouterClient(fn).generateImage({
+      apiKey: 'k', model: 'g/banana', prompt: 'a fox', settings: { aspect: '1:1', size: '1K', quality: null, transparent: false },
+      references: ['data:image/png;base64,AA'],
+    });
+    expect(calls[0].url).toBe('https://openrouter.ai/api/v1/images');
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({
+      model: 'g/banana', prompt: 'a fox', n: 1, aspect_ratio: '1:1', resolution: '1K', input_references: ['data:image/png;base64,AA'],
+    });
+    expect(out.mime).toBe('image/png');
+    expect(out.data.equals(PNG)).toBe(true);
+    expect(out.usage).toMatchObject({ promptTokens: 12, completionTokens: 1290, cost: 0.039 });
+  });
+
+  it('sends quality and a transparent background only when set', async () => {
+    const { fn, calls } = fakeFetch(() => Response.json({ data: [{ b64_json: PNG.toString('base64'), media_type: 'image/webp' }] }));
+    const out = await createOpenRouterClient(fn).generateImage({
+      apiKey: 'k', model: 'o/img', prompt: 'p', settings: { aspect: 'auto', size: null, quality: 'medium', transparent: true }, references: [],
+    });
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({ model: 'o/img', prompt: 'p', n: 1, aspect_ratio: 'auto', quality: 'medium', background: 'transparent' });
+    expect(out.mime).toBe('image/webp');
+    expect(out.usage).toBeNull();
+  });
+
+  it('turns a failed generation into an OpenRouterError', async () => {
+    const { fn } = fakeFetch(() => new Response(JSON.stringify({ error: { message: 'blocked' } }), { status: 502 }));
+    const err = await createOpenRouterClient(fn)
+      .generateImage({ apiKey: 'k', model: 'm', prompt: 'p', settings: { aspect: '1:1', size: null, quality: null, transparent: false }, references: [] })
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(OpenRouterError);
+    expect(err.status).toBe(502);
+  });
+
+  it('rejects a response with no image', async () => {
+    const { fn } = fakeFetch(() => Response.json({ data: [] }));
+    await expect(createOpenRouterClient(fn)
+      .generateImage({ apiKey: 'k', model: 'm', prompt: 'p', settings: { aspect: '1:1', size: null, quality: null, transparent: false }, references: [] }))
+      .rejects.toThrow(OpenRouterError);
+  });
+
+  it('lists image models with their pricing, skipping SVG-only ones', async () => {
+    const { fn, calls } = fakeFetch(({ url }) => {
+      if (url.endsWith('/images/models')) {
+        return Response.json({ data: [
+          { id: 'a/img', name: 'A', supported_parameters: { aspect_ratio: { type: 'enum', values: ['1:1'] } } },
+          { id: 'r/vec', name: 'Vec', supported_parameters: { output_format: { type: 'enum', values: ['svg'] } } },
+          { id: 'b/img', name: 'B', supported_parameters: {} },
+        ] });
+      }
+      if (url.includes('/a/img/')) return Response.json({ endpoints: [{ pricing: [{ billable: 'output_image', unit: 'image', cost_usd: 0.04 }] }] });
+      if (url.includes('/b/img/')) return new Response('nope', { status: 500 });
+      return Response.json({ endpoints: [{ pricing: [] }] });
+    });
+    const models = await createOpenRouterClient(fn).listImageModels();
+    expect(models.map((m) => [m.id, m.price.kind])).toEqual([['a/img', 'image'], ['b/img', 'unknown']]);
+    expect(calls.some((c) => c.url.endsWith('/images/models/a/img/endpoints'))).toBe(true);
+  });
+});
