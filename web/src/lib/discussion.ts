@@ -10,4 +10,19 @@ export function cheapestModel(models: LibraryModel[]): LibraryModel | null {
   return sorted[0] ?? null;
 }
 
+/** Up to two initials for an avatar: "Egg-Defender" → "ED", "Moderator" → "MO". */
+export function initials(name: string): string {
+  const words = name.trim().split(/[\s\-_]+/).filter(Boolean);
+  if (!words.length) return '?';
+  return (words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2)).toUpperCase();
+}
+
+/** Why the discussion ended, for the line at the end of the transcript; null while it can still take turns. */
+export function endText(s: DiscussionState): string | null {
+  if (s.status !== 'ended') return null;
+  if (s.endReason === 'moderator') return `The moderator ended the discussion${s.endNote ? `: ${s.endNote}` : '.'}`;
+  if (s.endReason === 'stopped') return 'You stopped the discussion.';
+  return 'Reached the turn limit.';
+}
+
 export const turnLabel = (s: DiscussionState) => `Turn ${s.turnsTaken} of ${s.turnLimit}`;

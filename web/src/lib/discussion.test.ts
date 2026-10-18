@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cheapestModel, turnLabel } from './discussion';
+import { cheapestModel, endText, initials, turnLabel } from './discussion';
 import type { LibraryModel } from '../../../shared/types';
 
 const model = (id: string, completionPrice: number | null, promptPrice: number | null = 0): LibraryModel => ({
@@ -18,6 +18,25 @@ describe('cheapestModel', () => {
 
   it('returns null for an empty library', () => {
     expect(cheapestModel([])).toBeNull();
+  });
+});
+
+describe('initials', () => {
+  it('takes the first letters of two words, or two letters of one', () => {
+    expect(initials('Egg-Defender')).toBe('ED');
+    expect(initials('  moderator ')).toBe('MO');
+    expect(initials('Big egg fan')).toBe('BE');
+    expect(initials('')).toBe('?');
+  });
+});
+
+describe('endText', () => {
+  const base = { status: 'ended' as const, endNote: null, turnLimit: 4, turnsTaken: 4 };
+  it('says why a discussion ended, and nothing while active', () => {
+    expect(endText({ ...base, endReason: 'limit' })).toBe('Reached the turn limit.');
+    expect(endText({ ...base, endReason: 'stopped' })).toBe('You stopped the discussion.');
+    expect(endText({ ...base, endReason: 'moderator', endNote: 'They agreed.' })).toBe('The moderator ended the discussion: They agreed.');
+    expect(endText({ ...base, status: 'active', endReason: null })).toBeNull();
   });
 });
 

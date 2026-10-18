@@ -6,6 +6,8 @@ export const NAME_MAX = 40;
 export const TOPIC_MAX = 500;
 export const DEFAULT_TURN_LIMIT = 10;
 export const MAX_TURN_LIMIT = 100;
+/** Same as a chat's own instructions (MAX_INSTRUCTIONS on the server). */
+export const INSTRUCTIONS_MAX = 20_000;
 /** What models call the person watching; no participant may use it. */
 export const HOST_NAME = 'Host';
 

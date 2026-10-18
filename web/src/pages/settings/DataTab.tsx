@@ -12,6 +12,7 @@ export interface DataTabProps {
 
 const PARTS: { key: keyof StorageUsage['parts']; label: string }[] = [
   { key: 'messages', label: 'Chat messages' },
+  { key: 'discussions', label: 'Discussions' },
   { key: 'uploads', label: 'Uploaded attachments' },
   { key: 'images', label: 'Generated images' },
   { key: 'videos', label: 'Videos' },
@@ -32,7 +33,13 @@ const DELETES: { target: Exclude<DeleteTarget, 'all'>; button: string; title: st
     target: 'videos', button: 'Delete all videos', title: 'Delete all videos?',
     body: 'Every video thread is deleted from disk, with its clip files. Everything else stays.',
   },
+  {
+    target: 'discussions', button: 'Delete all discussions', title: 'Delete all discussions?',
+    body: "Every discussion and its transcript and summary will be deleted. This can't be undone.",
+  },
 ];
+
+const NOUN: Record<Exclude<DeleteTarget, 'all'>, string> = { chats: 'chat', images: 'image thread', videos: 'video thread', discussions: 'discussion' };
 
 function StorageBar({ usage }: { usage: StorageUsage }) {
   const scale = Math.max(usage.total, 1);
@@ -124,7 +131,7 @@ export function DataTab({ view, onDeleted }: DataTabProps) {
     setConfirming(null);
     if (target === 'all') forgetAllPrefs();
     else forgetChatPrefs(chatIds);
-    setNote(target === 'all' ? 'All your data was deleted.' : `Deleted ${chatIds.length} ${target === 'chats' ? 'chat' : target === 'images' ? 'image thread' : 'video thread'}${chatIds.length === 1 ? '' : 's'}.`);
+    setNote(target === 'all' ? 'All your data was deleted.' : `Deleted ${chatIds.length} ${NOUN[target]}${chatIds.length === 1 ? '' : 's'}.`);
     onDeleted(target === 'all');
     void refresh();
   }
