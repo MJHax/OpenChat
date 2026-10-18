@@ -261,7 +261,9 @@ describe('image generation client', () => {
     });
     expect(calls[0].url).toBe('https://openrouter.ai/api/v1/images');
     expect(JSON.parse(String(calls[0].init.body))).toEqual({
-      model: 'g/banana', prompt: 'a fox', n: 1, aspect_ratio: '1:1', resolution: '1K', input_references: ['data:image/png;base64,AA'],
+      model: 'g/banana', prompt: 'a fox', n: 1, aspect_ratio: '1:1', resolution: '1K',
+      // OpenRouter rejects bare strings here (checked with a real call); each reference is an image_url object.
+      input_references: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,AA' } }],
     });
     expect(out.mime).toBe('image/png');
     expect(out.data.equals(PNG)).toBe(true);

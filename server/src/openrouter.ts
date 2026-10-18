@@ -247,7 +247,7 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
       if (settings.size) body.resolution = settings.size;
       if (settings.quality) body.quality = settings.quality;
       if (settings.transparent) body.background = 'transparent';
-      if (references.length) body.input_references = references;
+      if (references.length) body.input_references = references.map((url) => ({ type: 'image_url', image_url: { url } }));
       const res = await request('/images', { method: 'POST', apiKey, body: JSON.stringify(body) });
       const json = (await res.json()) as { data?: { b64_json?: string; media_type?: string }[]; usage?: unknown };
       const image = json.data?.[0];
