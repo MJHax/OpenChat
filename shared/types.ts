@@ -346,6 +346,12 @@ export interface MediaStatsResponse {
   allSpend: number;
 }
 
+/** Things OpenChat made that a chat can attach: images from image threads, and each chat's latest generated files. */
+export interface GeneratedItems {
+  images: { attachmentId: string; threadId: string; threadTitle: string; createdAt: number }[];
+  files: { chatId: string; chatTitle: string; messageId: string; name: string; size: number }[];
+}
+
 export interface MediaThreadStats {
   count: number;
   spend: number;

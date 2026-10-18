@@ -94,7 +94,7 @@ export function MessageItem({
             <textarea value={draft} onChange={(e) => setDraft(e.target.value)} onPaste={drop.onPaste} rows={Math.min(12, draft.split('\n').length + 1)} autoFocus />
             {editBlock && <div className="composer-hint">{editBlock}</div>}
             <div className="row">
-              <AttachButton onFiles={files.add} />
+              <AttachButton onFiles={files.add} onAttachments={files.restore} />
               <span className="spacer" />
               <button onClick={() => { setEditing(false); setDraft(message.content); files.discard(); }}>Cancel</button>
               <button className="primary" disabled={!canSave} onClick={() => { setEditing(false); onEdit(draft.trim(), files.ready); files.clear(); }}>

@@ -5,7 +5,7 @@ import { displayNameOf, modelModalities } from './library';
 import {
   BAD_ATTACHMENT, MAX_ATTACHMENTS, MAX_TOTAL_BYTES, PENDING_TTL_MS, TOO_MANY_FILES, TOO_MUCH_TOTAL, canViewImages,
 } from '../../shared/attachments';
-import type { Attachment, AttachmentKind } from '../../shared/types';
+import type { Attachment, AttachmentKind, GeneratedItems } from '../../shared/types';
 import { fileVersions, mimeFor, parseFileBlocks, safeFileName } from '../../shared/files';
 import { ATTACHMENT_LIMITS, tooLargeMessage } from '../../shared/attachments';
 import { getChatMessages, getMessage } from './messages';
@@ -147,11 +147,6 @@ export function insertGenerated(db: DB, a: { messageId: string; filename: string
   db.prepare('INSERT INTO attachments (id, message_id, position, kind, filename, mime, size, data, created_at) VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?)')
     .run(id, a.messageId, a.kind, a.filename, a.mime, a.data.length, a.data, now());
   return { id, kind: a.kind, filename: a.filename, mime: a.mime, size: a.data.length };
-}
-
-export interface GeneratedItems {
-  images: { attachmentId: string; threadId: string; threadTitle: string; createdAt: number }[];
-  files: { chatId: string; chatTitle: string; messageId: string; name: string; size: number }[];
 }
 
 /** Everything OpenChat made that can be attached to a chat: images from image threads, and each chat's latest files. */

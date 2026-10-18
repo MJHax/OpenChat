@@ -2,7 +2,7 @@ import { parseSSE } from '../../shared/sse';
 import type {
   Attachment, CatalogResponse, ChatDetail, ChatSummary, CompareDone, CompareSlotDone, CompareSlotError, CompareStart, LibraryModel, Memory,
   Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle, StatsRange, StatsResponse, ChatStats, ContextUsage,
-  MediaCatalog, MediaKind, MediaLibraryModel, MediaThreadStats, ThreadKind,
+  GeneratedItems, MediaCatalog, MediaKind, MediaLibraryModel, MediaStatsResponse, MediaThreadStats, ThreadKind,
 } from '../../shared/types';
 import type { ImageSettings } from '../../shared/imageModels';
 
@@ -42,6 +42,10 @@ export const api = {
     prompt: string; modelId: string; settings: ImageSettings; targetAttachmentId: string | null; attachmentIds: string[]; parentId?: string;
   }) => json<{ userMessageId: string; assistantMessageId: string }>('POST', `/api/chats/${threadId}/images`, body),
   mediaThreadStats: (id: string) => json<MediaThreadStats>('GET', `/api/chats/${id}/stats`),
+  mediaStats: (view: 'images' | 'video', range: StatsRange, tz: string) =>
+    json<MediaStatsResponse>('GET', `/api/stats?view=${view}&range=${range}&tz=${encodeURIComponent(tz)}`),
+  generated: () => json<GeneratedItems>('GET', '/api/attachments/generated'),
+  copyGenerated: (source: { attachmentId: string } | { messageId: string; name: string }) => json<Attachment>('POST', '/api/attachments/copy', source),
 
   listMediaModels: (kind: MediaKind) => json<MediaLibraryModel[]>('GET', `/api/media-models?kind=${kind}`),
   mediaCatalog: (kind: MediaKind, refresh = false) => json<MediaCatalog>('GET', `/api/media-models/catalog?kind=${kind}${refresh ? '&refresh=1' : ''}`),

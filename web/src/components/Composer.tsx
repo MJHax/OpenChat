@@ -77,7 +77,7 @@ export function Composer({
         />
         <div className="composer-bar">
           <div className="composer-models">
-            <AttachButton onFiles={draft.add} />
+            <AttachButton onFiles={draft.add} onAttachments={draft.restore} />
             <button
               className="toggle"
               aria-pressed={webSearch}

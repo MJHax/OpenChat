@@ -6,7 +6,7 @@ import { navigate } from '../lib/route';
 import { money } from '../lib/imagePrice';
 import { shrinkFile } from '../lib/shrinkImage';
 import { ImageComposer } from '../components/ImageComposer';
-import { ChatStatsPopover } from '../components/ChatStatsPopover';
+import { MediaStatsPopover } from '../components/MediaStatsPopover';
 import { Lightbox } from '../components/Lightbox';
 import { SiblingNav } from '../components/SiblingNav';
 
@@ -184,7 +184,7 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
       <header className="chat-header">
         <h1>{threadId ? title : 'New image'}</h1>
         <div className="chat-header-tools">
-          {threadId && <ChatStatsPopover chatId={threadId} totalCost={detail?.chat.totalCost ?? 0} refreshKey={detail} />}
+          {threadId && <MediaStatsPopover threadId={threadId} totalCost={detail?.chat.totalCost ?? 0} refreshKey={detail} />}
         </div>
       </header>
       <div className="messages" ref={listRef}>

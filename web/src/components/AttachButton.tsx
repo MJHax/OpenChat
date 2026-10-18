@@ -1,11 +1,22 @@
 import { useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
+import type { Attachment } from '../../../shared/types';
+import { GeneratedPicker } from './GeneratedPicker';
+import { usePopover } from './usePopover';
 
-/** Paperclip that opens the system file picker. */
-export function AttachButton({ onFiles }: { onFiles(files: File[]): void }) {
+/**
+ * Paperclip with a small menu: "From this computer" (the system file picker) or "From my chats" (images and files
+ * OpenChat made). Without `onAttachments` it opens the file picker directly.
+ */
+export function AttachButton({ onFiles, onAttachments }: { onFiles(files: File[]): void; onAttachments?(list: Attachment[]): void }) {
   const input = useRef<HTMLInputElement>(null);
+  const { open, setOpen, root } = usePopover();
+  const [picking, setPicking] = useState(false);
   return (
-    <>
-      <button className="attach-btn" type="button" title="Attach images, PDFs or text files" aria-label="Attach files" onClick={() => input.current?.click()}>
+    <div className="attach-menu" ref={root}>
+      <button
+        className="attach-btn" type="button" title="Attach images, PDFs or text files" aria-label="Attach files" aria-haspopup={onAttachments ? 'menu' : undefined}
+        onClick={() => (onAttachments ? setOpen(!open) : input.current?.click())}
+      >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
         </svg>
@@ -20,7 +31,14 @@ export function AttachButton({ onFiles }: { onFiles(files: File[]): void }) {
           e.target.value = ''; // picking the same file again still fires
         }}
       />
-    </>
+      {open && onAttachments && (
+        <div className="attach-options" role="menu">
+          <button role="menuitem" onClick={() => { setOpen(false); input.current?.click(); }}>From this computer</button>
+          <button role="menuitem" onClick={() => { setOpen(false); setPicking(true); }}>From my chats</button>
+        </div>
+      )}
+      {picking && onAttachments && <GeneratedPicker onAttachments={onAttachments} onFiles={onFiles} onClose={() => setPicking(false)} />}
+    </div>
   );
 }
 
