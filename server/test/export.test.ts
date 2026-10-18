@@ -86,7 +86,14 @@ describe('GET /api/data/export', () => {
 
   it('includes columns added to chats later', async () => {
     const { call, db } = await seed();
-    db.exec("ALTER TABLE chats ADD COLUMN instructions TEXT DEFAULT 'be brief'");
+    db.exec("ALTER TABLE chats ADD COLUMN future_note TEXT DEFAULT 'kept'");
+    const files = readZip(Buffer.from(await (await call('GET', '/api/data/export')).arrayBuffer()));
+    expect(JSON.parse(files.get('openchat-export/data.json')!.toString()).chats[0].future_note).toBe('kept');
+  });
+
+  it("includes each chat's own instructions", async () => {
+    const { call, db } = await seed();
+    db.prepare('UPDATE chats SET instructions = ?').run('be brief');
     const files = readZip(Buffer.from(await (await call('GET', '/api/data/export')).arrayBuffer()));
     expect(JSON.parse(files.get('openchat-export/data.json')!.toString()).chats[0].instructions).toBe('be brief');
   });
