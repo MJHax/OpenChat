@@ -203,6 +203,27 @@ export interface Memory {
   createdAt: number;
 }
 
+/** Bytes on disk, for Settings > Data. `total` is the sum of the parts. */
+export interface StorageUsage {
+  total: number;
+  parts: {
+    /** Message text, including generated files written into replies. */
+    messages: number;
+    /** Files the user attached. */
+    uploads: number;
+    /** Images made in image threads. */
+    images: number;
+    /** Clip files. */
+    videos: number;
+    /** Free pages left by deleted content, plus the WAL file; Clean up gives it back. */
+    reclaimable: number;
+    /** Indexes, stats and settings. */
+    other: number;
+  };
+}
+
+export type DeleteTarget = 'chats' | 'images' | 'videos' | 'all';
+
 export interface SettingsView {
   hasApiKey: boolean;
   apiKeySource: 'settings' | 'env' | 'none';
