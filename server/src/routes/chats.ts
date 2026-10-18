@@ -8,6 +8,7 @@ import { computeChatStats } from '../stats';
 import { loadChatUsageRows } from '../usage';
 import { computeMediaThreadStats, loadMediaEvents } from '../mediaStats';
 import { deleteThreadClips } from '../videoJobs';
+import { purgeDeleted } from '../dataStore';
 import type { ThreadKind } from '../../../shared/types';
 
 const KINDS: ThreadKind[] = ['chat', 'image', 'video'];
@@ -70,6 +71,7 @@ export function chatRoutes(deps: Deps): Hono {
     requireChat(db, id);
     deleteThreadClips(deps, id);
     deleteChat(db, id);
+    purgeDeleted(db);
     return c.json({ ok: true });
   });
 

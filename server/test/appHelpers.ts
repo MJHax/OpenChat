@@ -7,8 +7,8 @@ import type { OpenRouterClient } from '../src/openrouter';
 import type { Env } from '../src/settings';
 import { parseSSE } from '../../shared/sse';
 
-export function makeApp(openrouter: Partial<OpenRouterClient> = {}, env: Env = { OPENROUTER_API_KEY: 'sk-or-test-1234567890' }) {
-  const db = openDb(':memory:');
+export function makeApp(openrouter: Partial<OpenRouterClient> = {}, env: Env = { OPENROUTER_API_KEY: 'sk-or-test-1234567890' }, dbFile = ':memory:') {
+  const db = openDb(dbFile);
   const client: OpenRouterClient = {
     listModels: async () => [],
     listCategory: async () => [],
