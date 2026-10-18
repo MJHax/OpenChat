@@ -265,8 +265,10 @@ export interface Memory {
 export interface StorageUsage {
   total: number;
   parts: {
-    /** Message text, including generated files written into replies. */
+    /** Message text, including generated files written into replies (discussions not included). */
     messages: number;
+    /** Discussion transcripts. */
+    discussions: number;
     /** Files the user attached. */
     uploads: number;
     /** Images made in image threads. */
@@ -280,7 +282,7 @@ export interface StorageUsage {
   };
 }
 
-export type DeleteTarget = 'chats' | 'images' | 'videos' | 'all';
+export type DeleteTarget = 'chats' | 'images' | 'videos' | 'discussions' | 'all';
 
 /** Calendar periods: the local day from midnight, the week from Monday 00:00, the month from the 1st. */
 export type LimitPeriod = 'daily' | 'weekly' | 'monthly';
