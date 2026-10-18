@@ -278,6 +278,14 @@ describe('image generation client', () => {
     expect(out.usage).toBeNull();
   });
 
+  it('never trusts a reported type that is not a plain raster image', async () => {
+    const { fn } = fakeFetch(() => Response.json({ data: [{ b64_json: PNG.toString('base64'), media_type: 'image/svg+xml' }] }));
+    const out = await createOpenRouterClient(fn).generateImage({
+      apiKey: 'k', model: 'm', prompt: 'p', settings: { aspect: '1:1', size: null, quality: null, transparent: false }, references: [],
+    });
+    expect(out.mime).toBe('image/png');
+  });
+
   it('turns a failed generation into an OpenRouterError', async () => {
     const { fn } = fakeFetch(() => new Response(JSON.stringify({ error: { message: 'blocked' } }), { status: 502 }));
     const err = await createOpenRouterClient(fn)

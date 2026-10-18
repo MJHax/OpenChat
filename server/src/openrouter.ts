@@ -138,6 +138,8 @@ export interface GeneratedImage {
   usage: Usage | null;
 }
 
+const RASTER = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+
 /** The image's type from its first bytes; PNG when unrecognised (OpenRouter's default). */
 function sniffImage(b: Buffer): string {
   if (b[0] === 0xff && b[1] === 0xd8) return 'image/jpeg';
@@ -251,7 +253,9 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
       const image = json.data?.[0];
       if (!image?.b64_json) throw new OpenRouterError('The model returned no image.', 502);
       const data = Buffer.from(image.b64_json, 'base64');
-      return { data, mime: image.media_type ?? sniffImage(data), usage: json.usage ? parseUsage(json.usage) : null };
+      // Images are served from OpenChat's own origin, so only plain raster types are trusted (never SVG, which can carry script).
+      const mime = image.media_type && RASTER.has(image.media_type) ? image.media_type : sniffImage(data);
+      return { data, mime, usage: json.usage ? parseUsage(json.usage) : null };
     },
 
     async *streamChat({ apiKey, model, messages, plugins, webSearch, signal }) {
