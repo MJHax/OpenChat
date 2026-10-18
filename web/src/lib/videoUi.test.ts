@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatVideoRate, framesProblem, renderHint, videoBadges } from './videoUi';
+import { formatVideoRate, framesProblem, renderHint, renderingNote, videoBadges } from './videoUi';
 import type { VideoModel } from '../../../shared/videoModels';
 
 const base: VideoModel = {
@@ -24,6 +24,18 @@ describe('formatVideoRate', () => {
     expect(formatVideoRate(base)).toBe('from $0.05/s');
     expect(formatVideoRate({ ...base, skus: { video_tokens: '0.00001' } })).toBe('priced by video tokens');
     expect(formatVideoRate({ ...base, skus: {} })).toBe('Price unknown');
+  });
+});
+
+describe('renderingNote', () => {
+  it('reassures while normal, and says when it is slow', () => {
+    expect(renderingNote(60_000, 'usually 30–45 s', 'in_progress', null)).toBe('usually 30–45 s · safe to leave this page · in progress');
+    expect(renderingNote(31 * 60_000, 'usually 2–4 min', 'pending', null)).toBe('Taking longer than usual · still checking every 5 min · safe to leave this page · pending');
+  });
+
+  it('shows why the last check failed', () => {
+    expect(renderingNote(60_000, 'usually 30–45 s', 'downloading', 'Could not reach OpenRouter.'))
+      .toBe('usually 30–45 s · safe to leave this page · downloading · last check failed: Could not reach OpenRouter. Retrying.');
   });
 });
 

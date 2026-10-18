@@ -193,6 +193,7 @@ a.button { border: 1px solid var(--border); background: var(--surface); border-r
 .frame-slot img { width: 112px; height: 63px; object-fit: cover; border-radius: 8px; display: block; }
 .frame-slot .frame-empty { width: 112px; height: 63px; border: 1px dashed var(--border); border-radius: 8px; background: none; color: var(--muted); font-size: 12px; padding: 0; }
 .frame-slot.off .frame-empty { opacity: 0.45; }
+.frame-slot.dragging .frame-empty { border-color: var(--accent); color: var(--accent); }
 .frame-slot .frame-remove { position: absolute; top: -6px; right: -6px; padding: 0 5px; background: var(--surface); border-radius: 999px; font-size: 11px; }
 .frame-slot .frame-label { line-height: 1; margin-top: 2px; }
 .frame-slot .attach-options { bottom: auto; top: 100%; }

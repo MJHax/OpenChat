@@ -3,7 +3,7 @@ import { defaultVideoSettings, snapVideoSettings, usd, type VideoModel, type Vid
 import type { Attachment, ChatDetail, MediaLibraryModel, PathMessage, SettingsView } from '../../../shared/types';
 import { api, attachmentUrl, videoUrl } from '../api';
 import { navigate } from '../lib/route';
-import { renderHint } from '../lib/videoUi';
+import { renderHint, renderingNote } from '../lib/videoUi';
 import { askNotifyPermission } from '../lib/notify';
 import { VideoComposer } from '../components/VideoComposer';
 import { MediaStatsPopover } from '../components/MediaStatsPopover';
@@ -28,17 +28,20 @@ const clock = (ms: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
-function Rendering({ startedAt, aspect, hint, status }: { startedAt: number; aspect: string; hint: string; status: string | null | undefined }) {
+function Rendering({ startedAt, aspect, hint, status, lastError }: {
+  startedAt: number; aspect: string; hint: string; status: string | null | undefined; lastError: string | null | undefined;
+}) {
   const [, tick] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => tick((n) => n + 1), 1000);
     return () => clearInterval(timer);
   }, []);
   const [w, h] = aspect.split(':').map(Number);
+  const elapsed = Date.now() - startedAt;
   return (
     <div className="image-placeholder video-placeholder shimmer" style={{ aspectRatio: w > 0 && h > 0 ? `${w} / ${h}` : '16 / 9' }}>
-      <div>Rendering… {clock(Date.now() - startedAt)}</div>
-      <div className="small">{hint} · safe to leave this page{status ? ` · ${status.replace('_', ' ')}` : ''}</div>
+      <div>Rendering… {clock(elapsed)}</div>
+      <div className="small">{renderingNote(elapsed, hint, status, lastError)}</div>
     </div>
   );
 }
@@ -55,6 +58,8 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const viewing = useRef(threadId);
+  /** The thread this view just created for a send, so moving to it keeps the composer as it is. */
+  const createdRef = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const reload = async (id: string) => {
@@ -66,6 +71,9 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
   useEffect(() => {
     viewing.current = threadId;
     setError(null);
+    // Photos belong to the thread they were sent in; a different thread starts with empty slots.
+    if (threadId !== createdRef.current) { setStart(null); setEnd(null); }
+    createdRef.current = null;
     if (!threadId) { setDetail(null); return; }
     reload(threadId).catch((e: Error) => setError(e.message));
   }, [threadId, reloadToken]);
@@ -102,6 +110,7 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
       let id = threadId;
       if (!id) {
         id = (await api.createChat('video')).id;
+        createdRef.current = id;
         viewing.current = id;
         navigate(`#/video/${id}`);
         onThreadsChanged();
@@ -171,7 +180,7 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
             return (
               <div key={m.id} className="msg assistant image-reply">
                 {m.status === 'generating' && g && s && (
-                  <Rendering startedAt={g.startedAt} aspect={s.aspect} hint={renderHint(lib?.recentRenderMs ?? [])} status={g.jobStatus} />
+                  <Rendering startedAt={g.startedAt} aspect={s.aspect} hint={renderHint(lib?.recentRenderMs ?? [])} status={g.jobStatus} lastError={g.jobError} />
                 )}
                 {m.status === 'error' && (
                   <div className="error-bubble">

@@ -14,6 +14,6 @@ export function askNotifyPermission(): void {
 /** A system notification when the tab is hidden and the user allowed it; clicking it opens the thread. */
 export function systemNotify(title: string, threadId: string): void {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted' || !document.hidden) return;
-  const n = new Notification('Your clip is ready', { body: title });
+  const n = new Notification('Your clip finished', { body: title });
   n.onclick = () => { window.focus(); window.location.hash = `#/video/${threadId}`; n.close(); };
 }

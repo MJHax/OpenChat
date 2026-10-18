@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type DragEvent } from 'react';
 import type { Attachment } from '../../../shared/types';
 import { attachmentUrl, uploadAttachment } from '../api';
 import { shrinkFile } from '../lib/shrinkImage';
@@ -34,8 +34,25 @@ export function FrameSlot({ label, photo, onPhoto, onAspect, disabledReason, onE
     }
   }
 
+  const [dragging, setDragging] = useState(false);
+  const drop = {
+    onDragOver: (e: DragEvent) => {
+      if (disabledReason || !Array.from(e.dataTransfer.types).includes('Files')) return;
+      e.preventDefault();
+      setDragging(true);
+    },
+    onDragLeave: () => setDragging(false),
+    onDrop: (e: DragEvent) => {
+      setDragging(false);
+      const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith('image/'));
+      if (disabledReason || !file) return;
+      e.preventDefault();
+      void upload(file);
+    },
+  };
+
   return (
-    <div className={`frame-slot${disabledReason ? ' off' : ''}`} ref={root} title={disabledReason ?? undefined}>
+    <div className={`frame-slot${disabledReason ? ' off' : ''}${dragging ? ' dragging' : ''}`} ref={root} title={disabledReason ?? undefined} {...drop}>
       {photo ? (
         <>
           <img src={attachmentUrl(photo.id)} alt={`${label} photo`} onLoad={(e) => onAspect?.(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)} />

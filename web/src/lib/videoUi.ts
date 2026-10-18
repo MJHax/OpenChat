@@ -14,6 +14,15 @@ export function renderHint(pastMs: number[]): string {
   return `usually ${m(lo)}–${m(hi)} min`;
 }
 
+/** The line under "Rendering…": the usual wait (or that this one is slow), the job's status, and any failed check. */
+export function renderingNote(elapsedMs: number, hint: string, status: string | null | undefined, lastError: string | null | undefined): string {
+  const parts = elapsedMs >= 30 * 60_000 ? ['Taking longer than usual', 'still checking every 5 min'] : [hint];
+  parts.push('safe to leave this page');
+  if (status) parts.push(status.replace(/_/g, ' '));
+  if (lastError) parts.push(`last check failed: ${lastError} Retrying.`);
+  return parts.join(' · ');
+}
+
 /** The card's price line: the cheapest silent per-second rate. */
 export function formatVideoRate(m: VideoModel): string {
   const rate = cheapestPerSecond(m);

@@ -30,9 +30,11 @@ export function App() {
       const busy = new Set(list.filter((c) => c.busy).map((c) => c.id));
       for (const id of rendering.current ?? []) {
         if (busy.has(id)) continue;
-        const title = list.find((c) => c.id === id)?.title ?? 'Your clip';
-        setToasts((t) => [...t, { id, title }]);
-        systemNotify(title, id);
+        const thread = list.find((c) => c.id === id);
+        if (!thread) continue; // deleted while rendering
+        // No toast when that thread is already on screen; a hidden tab still gets the system notification.
+        if (window.location.hash !== `#/video/${id}`) setToasts((t) => [...t, { id, title: thread.title }]);
+        systemNotify(thread.title, id);
       }
       rendering.current = busy;
     }).catch(() => {});
@@ -96,7 +98,7 @@ export function App() {
           {toasts.map((t) => (
             <div key={t.id} className="toast">
               <button className="link" onClick={() => { setToasts((x) => x.filter((y) => y.id !== t.id)); openChat(t.id, 'video'); }}>
-                🎬 “{t.title}” is ready
+                🎬 “{t.title}” finished
               </button>
               <button className="icon" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}>✕</button>
             </div>
