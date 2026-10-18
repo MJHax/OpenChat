@@ -1,3 +1,5 @@
+import type { ImageModel } from './imageModels';
+
 export type Role = 'user' | 'assistant';
 /** 'generating' and 'error' only occur in image and video threads. */
 export type MessageStatus = 'complete' | 'stopped' | 'generating' | 'error';
@@ -53,11 +55,35 @@ export interface ChatSummary {
   id: string;
   title: string;
   updatedAt: number;
+  /** Replies and titles, plus image and video generations. */
   totalCost: number;
+  kind: ThreadKind;
+  /** Image threads: the latest generated image, for the sidebar. */
+  thumbnailId: string | null;
+  /** Image and video threads: a generation is still running. */
+  busy: boolean;
+}
+
+export type MediaKind = 'image' | 'video';
+
+/** An image (or video) model in the user's list, with its catalog details when cached. */
+export interface MediaLibraryModel {
+  id: string;
+  displayName: string;
+  kind: MediaKind;
+  model: ImageModel | null;
+  /** The user's own average cost, keyed "size|quality" (e.g. "1K|medium", "2K|"). */
+  avgCost: Record<string, number>;
+}
+
+export interface MediaCatalog {
+  models: ImageModel[];
+  fetchedAt: number;
+  stale: boolean;
 }
 
 export interface ChatDetail {
-  chat: ChatSummary & { activeLeafId: string | null };
+  chat: Omit<ChatSummary, 'thumbnailId' | 'busy'> & { activeLeafId: string | null };
   messages: PathMessage[];
   /** Set while a comparison's replies are waiting for the user to pick one. */
   compare: { parentId: string; replies: Message[] } | null;

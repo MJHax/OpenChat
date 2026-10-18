@@ -7,6 +7,7 @@ import { HttpError } from './http';
 import { settingsRoutes } from './routes/settings';
 import { memoryRoutes } from './routes/memories';
 import { modelRoutes } from './routes/models';
+import { mediaModelRoutes } from './routes/mediaModels';
 import { chatRoutes } from './routes/chats';
 import { searchRoutes } from './routes/search';
 import { generationRoutes } from './routes/generate';
@@ -40,6 +41,7 @@ export function createApp(deps: Deps): Hono {
   app.route('/api/settings', settingsRoutes(deps));
   app.route('/api/memories', memoryRoutes(deps));
   app.route('/api/models', modelRoutes(deps));
+  app.route('/api/media-models', mediaModelRoutes(deps));
   app.route('/api/chats', chatRoutes(deps));
   app.route('/api/chats', generationRoutes(deps));
   app.route('/api/search', searchRoutes(deps));

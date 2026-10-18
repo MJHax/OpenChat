@@ -6,13 +6,26 @@ import { getChatMessages, getMessage } from '../messages';
 import { newestLeafFrom, repliesTo } from '../tree';
 import { computeChatStats } from '../stats';
 import { loadChatUsageRows } from '../usage';
+import type { ThreadKind } from '../../../shared/types';
+
+const KINDS: ThreadKind[] = ['chat', 'image', 'video'];
+
+function threadKind(kind: unknown): ThreadKind {
+  if (kind === undefined || kind === null || kind === '') return 'chat';
+  if (!KINDS.includes(kind as ThreadKind)) throw new HttpError(400, 'Unknown thread kind.');
+  return kind as ThreadKind;
+}
 
 export function chatRoutes({ db }: Deps): Hono {
   const r = new Hono();
 
-  r.get('/', (c) => c.json(listChats(db)));
+  r.get('/', (c) => c.json(listChats(db, threadKind(c.req.query('kind')))));
 
-  r.post('/', (c) => c.json(createChat(db), 201));
+  r.post('/', async (c) => {
+    // A body is optional: a plain POST makes a chat.
+    const kind = c.req.header('content-type') ? (await readJson<{ kind?: string }>(c)).kind : undefined;
+    return c.json(createChat(db, threadKind(kind)), 201);
+  });
 
   r.get('/:id', (c) => c.json(getChatDetail(db, c.req.param('id'))));
 

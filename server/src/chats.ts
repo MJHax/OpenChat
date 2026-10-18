@@ -18,11 +18,11 @@ export interface ChatRow {
   kind: ThreadKind;
 }
 
-export function createChat(db: DB): ChatSummary {
+export function createChat(db: DB, kind: ThreadKind = 'chat'): ChatSummary {
   const id = newId();
   const t = now();
-  db.prepare('INSERT INTO chats (id, title, created_at, updated_at, active_leaf_id) VALUES (?, ?, ?, ?, NULL)').run(id, DEFAULT_TITLE, t, t);
-  return { id, title: DEFAULT_TITLE, updatedAt: t, totalCost: 0 };
+  db.prepare('INSERT INTO chats (id, title, created_at, updated_at, active_leaf_id, kind) VALUES (?, ?, ?, ?, NULL, ?)').run(id, DEFAULT_TITLE, t, t, kind);
+  return { id, title: DEFAULT_TITLE, updatedAt: t, totalCost: 0, kind, thumbnailId: null, busy: false };
 }
 
 export function getChatRow(db: DB, id: string): ChatRow | undefined {
@@ -35,12 +35,19 @@ export function requireChat(db: DB, id: string): ChatRow {
   return row;
 }
 
-export function listChats(db: DB): ChatSummary[] {
-  return db.prepare(
-    `SELECT c.id, c.title, c.updated_at AS updatedAt, COALESCE(SUM(u.cost), 0) AS totalCost
-     FROM chats c LEFT JOIN usage_events u ON u.chat_id = c.id
-     GROUP BY c.id ORDER BY c.updated_at DESC`,
-  ).all() as ChatSummary[];
+const COST = `(SELECT COALESCE(SUM(cost), 0) FROM usage_events WHERE chat_id = c.id)
+  + (SELECT COALESCE(SUM(cost), 0) FROM media_events WHERE thread_id = c.id)`;
+
+export function listChats(db: DB, kind: ThreadKind = 'chat'): ChatSummary[] {
+  const rows = db.prepare(
+    `SELECT c.id, c.title, c.updated_at AS updatedAt, c.kind, ${COST} AS totalCost,
+       (SELECT a.id FROM attachments a JOIN messages m ON m.id = a.message_id
+        WHERE m.chat_id = c.id AND m.role = 'assistant' AND a.kind = 'image' ORDER BY a.created_at DESC LIMIT 1) AS thumbnailId,
+       EXISTS (SELECT 1 FROM media_generations g JOIN messages m ON m.id = g.message_id
+        WHERE m.chat_id = c.id AND g.finished_at IS NULL) AS busy
+     FROM chats c WHERE c.kind = ? ORDER BY c.updated_at DESC`,
+  ).all(kind) as (Omit<ChatSummary, 'busy'> & { busy: number })[];
+  return rows.map((r) => ({ ...r, busy: r.busy === 1 }));
 }
 
 export function renameChat(db: DB, id: string, title: string): void {
@@ -73,9 +80,9 @@ export function deleteChat(db: DB, id: string): void {
   db.prepare('DELETE FROM chats WHERE id = ?').run(id);
 }
 
-/** Everything the chat's calls cost, replies on every branch plus its title, from the usage log. */
+/** Everything the thread's calls cost: replies on every branch, its title, and any images or videos. */
 export function chatCost(db: DB, id: string): number {
-  return (db.prepare('SELECT COALESCE(SUM(cost), 0) AS total FROM usage_events WHERE chat_id = ?').get(id) as { total: number }).total;
+  return (db.prepare(`SELECT ${COST} AS total FROM chats c WHERE c.id = ?`).get(id) as { total: number } | undefined)?.total ?? 0;
 }
 
 export function getChatDetail(db: DB, id: string): ChatDetail {
@@ -84,7 +91,7 @@ export function getChatDetail(db: DB, id: string): ChatDetail {
   const totalCost = chatCost(db, id);
   const choiceParent = pendingChoice(db, row);
   return {
-    chat: { id: row.id, title: row.title, updatedAt: row.updated_at, totalCost, activeLeafId: row.active_leaf_id },
+    chat: { id: row.id, title: row.title, updatedAt: row.updated_at, totalCost, kind: row.kind, activeLeafId: row.active_leaf_id },
     messages: withSiblings(all, activePath(all, row.active_leaf_id)),
     compare: choiceParent ? { parentId: choiceParent, replies: repliesTo(all, choiceParent) } : null,
     chatImages: chatImages(db, id),

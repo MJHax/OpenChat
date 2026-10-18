@@ -2,6 +2,7 @@ import { parseSSE } from '../../shared/sse';
 import type {
   Attachment, CatalogResponse, ChatDetail, ChatSummary, CompareDone, CompareSlotDone, CompareSlotError, CompareStart, LibraryModel, Memory,
   Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle, StatsRange, StatsResponse, ChatStats, ContextUsage,
+  MediaCatalog, MediaKind, MediaLibraryModel, ThreadKind,
 } from '../../shared/types';
 
 async function json<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -16,8 +17,8 @@ async function json<T>(method: string, url: string, body?: unknown): Promise<T> 
 }
 
 export const api = {
-  listChats: () => json<ChatSummary[]>('GET', '/api/chats'),
-  createChat: () => json<ChatSummary>('POST', '/api/chats'),
+  listChats: (kind: ThreadKind = 'chat') => json<ChatSummary[]>('GET', `/api/chats?kind=${kind}`),
+  createChat: (kind: ThreadKind = 'chat') => json<ChatSummary>('POST', '/api/chats', { kind }),
   getChat: (id: string) => json<ChatDetail>('GET', `/api/chats/${id}`),
   renameChat: (id: string, title: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { title }),
   selectMessage: (id: string, messageId: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { selectMessageId: messageId }),
@@ -35,6 +36,12 @@ export const api = {
   addModel: (id: string) => json<LibraryModel[]>('POST', '/api/models', { id }),
   updateModel: (patch: { id: string; displayName?: string; isDefault?: boolean }) => json<LibraryModel[]>('PATCH', '/api/models', patch),
   removeModel: (id: string) => json<LibraryModel[]>('DELETE', `/api/models?id=${encodeURIComponent(id)}`),
+
+  listMediaModels: (kind: MediaKind) => json<MediaLibraryModel[]>('GET', `/api/media-models?kind=${kind}`),
+  mediaCatalog: (kind: MediaKind, refresh = false) => json<MediaCatalog>('GET', `/api/media-models/catalog?kind=${kind}${refresh ? '&refresh=1' : ''}`),
+  addMediaModel: (id: string, kind: MediaKind) => json<MediaLibraryModel[]>('POST', '/api/media-models', { id, kind }),
+  removeMediaModel: (id: string, kind: MediaKind) =>
+    json<MediaLibraryModel[]>('DELETE', `/api/media-models?id=${encodeURIComponent(id)}&kind=${kind}`),
 
   getSettings: () => json<SettingsView>('GET', '/api/settings'),
   updateSettings: (update: SettingsUpdate) => json<SettingsView>('PUT', '/api/settings', update),
