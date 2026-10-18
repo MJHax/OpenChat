@@ -41,6 +41,15 @@ describe('discussion report', () => {
     expect(html).not.toContain('<script');
   });
 
+  it('shows small costs instead of rounding them to $0.00', () => {
+    const d = detail([]);
+    d.participants[0].cost = 0.000041475;
+    d.participants[1].cost = 0;
+    const html = renderReport(d, { generatedAt: 0 });
+    expect(html).toContain('$0.000041');
+    expect(html).toContain('$0.00<');
+  });
+
   it('renders model HTML inert', () => {
     const html = renderReport(detail([msg({ participantId: 'egg', content: '<script>alert(1)</script> [x](javascript:alert(1))' })]), { generatedAt: 0 });
     expect(html).not.toContain('<script>alert');

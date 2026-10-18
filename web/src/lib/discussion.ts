@@ -3,10 +3,14 @@ import type { DiscussionState, LibraryModel } from '../../../shared/types';
 /** A price we can compare: known and not "varies" (negative). */
 const known = (p: number | null) => (p !== null && p >= 0 ? p : Infinity);
 
-/** The library model with the lowest completion price (then prompt price); unknown prices sort last. */
+/** Paid models first, then free ones (often rate-limited), then models whose price is unknown. */
+const tier = (m: LibraryModel) =>
+  known(m.completionPrice) === Infinity ? 2 : m.completionPrice === 0 && (m.promptPrice ?? 0) === 0 ? 1 : 0;
+
+/** The cheapest paid library model by completion price (then prompt price); free and unknown prices sort after. */
 export function cheapestModel(models: LibraryModel[]): LibraryModel | null {
   const sorted = [...models].sort((a, b) =>
-    known(a.completionPrice) - known(b.completionPrice) || known(a.promptPrice) - known(b.promptPrice));
+    tier(a) - tier(b) || known(a.completionPrice) - known(b.completionPrice) || known(a.promptPrice) - known(b.promptPrice));
   return sorted[0] ?? null;
 }
 

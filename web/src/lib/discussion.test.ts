@@ -16,6 +16,11 @@ describe('cheapestModel', () => {
     expect(cheapestModel([model('unknown', null)])?.id).toBe('unknown');
   });
 
+  it('prefers paid models over free ones, which are often rate-limited', () => {
+    expect(cheapestModel([model('free', 0, 0), model('paid', 0.00000006)])?.id).toBe('paid');
+    expect(cheapestModel([model('free', 0, 0), model('unknown', null)])?.id).toBe('free');
+  });
+
   it('returns null for an empty library', () => {
     expect(cheapestModel([])).toBeNull();
   });

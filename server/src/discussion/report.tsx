@@ -5,6 +5,9 @@ import { participantColor } from '../../../shared/discussion';
 import { usd } from '../../../shared/videoModels';
 import type { DiscussionDetail, Message } from '../../../shared/types';
 
+/** Dollars; amounts under a tenth of a cent keep their first significant digits instead of reading $0.00. */
+const cost = (n: number) => (n > 0 && n < 0.001 ? `$${n.toFixed(6).replace(/0+$/, '')}` : usd(n));
+
 /** Served with the report: no scripts, nothing loaded from anywhere but the page itself. */
 export const REPORT_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:";
 
@@ -65,7 +68,7 @@ function Report({ d, generatedAt, modelName }: { d: DiscussionDetail; generatedA
         <h1>{d.topic}</h1>
         <p className="meta">
           {`OpenChat discussion · ${new Date(generatedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`}
-          {` · ${state.turnsTaken} ${state.turnsTaken === 1 ? 'turn' : 'turns'} · ${usd(d.chat.totalCost)} total`}
+          {` · ${state.turnsTaken} ${state.turnsTaken === 1 ? 'turn' : 'turns'} · ${cost(d.chat.totalCost)} total`}
         </p>
         <table>
           <thead><tr><th>Participant</th><th>Model</th><th className="num">Turns</th><th className="num">Cost</th></tr></thead>
@@ -75,7 +78,7 @@ function Report({ d, generatedAt, modelName }: { d: DiscussionDetail; generatedA
                 <td>{p.name}{p.isModerator ? ' (moderator)' : ''}</td>
                 <td>{modelName(p.modelId)}</td>
                 <td className="num">{p.turns}</td>
-                <td className="num">{usd(p.cost)}</td>
+                <td className="num">{cost(p.cost)}</td>
               </tr>
             ))}
           </tbody>
