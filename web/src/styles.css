@@ -334,6 +334,10 @@ button.chip.more { border-style: dashed; color: var(--muted); }
   :root[data-theme='system'] { --ctx-system: #3987e5; --ctx-user: #d95926; --ctx-assistant: #199e70; --ctx-attachments: #c98500; --ctx-search: #d55181; }
 }
 .stats-pop-button.over { color: var(--danger); }
+.instructions-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 4px; vertical-align: 2px; }
+.instructions-panel { width: 360px; }
+.instructions-panel textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; }
+.instructions-panel p { margin: 6px 0; }
 .context-model + .context-model { margin-top: 4px; }
 .context-model .stats-pop-row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .context-model .stats-pop-row > span:last-child { white-space: nowrap; }

@@ -20,7 +20,8 @@ async function json<T>(method: string, url: string, body?: unknown): Promise<T> 
 
 export const api = {
   listChats: (kind: ThreadKind = 'chat') => json<ChatSummary[]>('GET', `/api/chats?kind=${kind}`),
-  createChat: (kind: ThreadKind = 'chat') => json<ChatSummary>('POST', '/api/chats', { kind }),
+  createChat: (kind: ThreadKind = 'chat', instructions?: string) => json<ChatSummary>('POST', '/api/chats', { kind, instructions }),
+  setInstructions: (id: string, instructions: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { instructions }),
   getChat: (id: string) => json<ChatDetail>('GET', `/api/chats/${id}`),
   renameChat: (id: string, title: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { title }),
   selectMessage: (id: string, messageId: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { selectMessageId: messageId }),
@@ -29,8 +30,10 @@ export const api = {
     json<Message[]>('GET', `/api/chats/${chatId}/replies?parentId=${encodeURIComponent(parentId)}`),
   search: (q: string) => json<SearchHit[]>('GET', `/api/search?q=${encodeURIComponent(q)}`),
   chatStats: (id: string) => json<ChatStats>('GET', `/api/chats/${id}/stats`),
-  context: (modelId: string, chatId: string | null) =>
-    json<ContextUsage>('GET', `/api/context?model=${encodeURIComponent(modelId)}${chatId ? `&chat=${encodeURIComponent(chatId)}` : ''}`),
+  /** `instructions` are a new chat's draft; a saved chat's own are read on the server. */
+  context: (modelId: string, chatId: string | null, instructions = '') =>
+    json<ContextUsage>('GET', `/api/context?model=${encodeURIComponent(modelId)}${chatId ? `&chat=${encodeURIComponent(chatId)}`
+      : instructions ? `&instructions=${encodeURIComponent(instructions)}` : ''}`),
   stats: (range: StatsRange, tz: string) => json<StatsResponse>('GET', `/api/stats?range=${range}&tz=${encodeURIComponent(tz)}`),
 
   listModels: () => json<LibraryModel[]>('GET', '/api/models'),

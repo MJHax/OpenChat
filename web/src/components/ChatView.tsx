@@ -8,6 +8,7 @@ import { navigate } from '../lib/route';
 import { AttachmentChips } from './AttachmentChips';
 import { ChatStatsPopover } from './ChatStatsPopover';
 import { ContextPopover } from './ContextPopover';
+import { InstructionsButton } from './InstructionsButton';
 import { CompareColumns, type Column } from './CompareColumns';
 import { Composer } from './Composer';
 import { MessageBody } from './MessageBody';
@@ -69,6 +70,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   const [modelId, setModelId] = useState('');
   const [compare, setCompareState] = useState<CompareState>(COMPARE_OFF);
   const [webSearch, setWebSearchState] = useState(false);
+  /** Instructions set on a new chat before it exists; sent when the first message creates it. */
+  const [draftInstructions, setDraftInstructions] = useState('');
   /** "Compare versions" view: the path index of the reply being compared, and all its versions. */
   const [versions, setVersions] = useState<{ index: number; replies: Message[] } | null>(null);
   /** The file open in the side panel; `messageId` is the reply it came from (null for a streaming file or a snippet). */
@@ -118,6 +121,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     setWebSearchState(chatId ? loadSearch(chatId) : false);
     if (!chatId) {
       setDetail(null);
+      setDraftInstructions('');
       return;
     }
     reload(chatId).catch((e: Error) => setError(e.message));
@@ -141,7 +145,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   async function ensureChat(): Promise<string | null> {
     if (chatId) return chatId;
     try {
-      const id = (await api.createChat()).id;
+      const id = (await api.createChat('chat', draftInstructions)).id;
       createdChatRef.current = id;
       viewChatRef.current = id;
       saveCompare(id, compare);
@@ -285,6 +289,14 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       setError((e as Error).message);
     }
   };
+  const saveInstructions = async (text: string) => {
+    if (!chatId) {
+      setDraftInstructions(text);
+      return;
+    }
+    const next = await api.setInstructions(chatId, text);
+    if (viewChatRef.current === chatId) setDetail(next);
+  };
   const continueWith = async (messageId: string) => {
     await selectSibling(messageId);
     setVersions(null);
@@ -341,7 +353,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
         <header className="chat-header">
           <h1>{chatId ? title : 'New chat'}</h1>
           <div className="chat-header-tools">
-            <ContextPopover chatId={chatId} modelIds={runModels ?? []} nameOf={nameOf} refreshKey={detail} />
+            <InstructionsButton value={chatId ? detail?.chat.instructions ?? '' : draftInstructions} onSave={saveInstructions} />
+            <ContextPopover chatId={chatId} modelIds={runModels ?? []} nameOf={nameOf} refreshKey={detail} draftInstructions={draftInstructions} />
             <ChatStatsPopover chatId={chatId} totalCost={detail?.chat.totalCost ?? 0} refreshKey={detail} />
           </div>
         </header>

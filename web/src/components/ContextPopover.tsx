@@ -12,6 +12,8 @@ export interface ContextPopoverProps {
   nameOf(id: string): string;
   /** Changes whenever the chat reloads (e.g. after a reply), so the numbers tick up. */
   refreshKey: unknown;
+  /** A new chat's draft instructions, counted in its system prompt. */
+  draftInstructions: string;
 }
 
 const PARTS: { key: keyof ContextParts; label: string }[] = [
@@ -51,7 +53,7 @@ function Summary({ usage }: { usage: ContextUsage }) {
   );
 }
 
-export function ContextPopover({ chatId, modelIds, nameOf, refreshKey }: ContextPopoverProps) {
+export function ContextPopover({ chatId, modelIds, nameOf, refreshKey, draftInstructions }: ContextPopoverProps) {
   const { open, setOpen, root } = usePopover();
   const [usages, setUsages] = useState<ContextUsage[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,11 +63,11 @@ export function ContextPopover({ chatId, modelIds, nameOf, refreshKey }: Context
     if (!models) return;
     let current = true;
     setError(null);
-    Promise.all(models.split('\n').map((id) => api.context(id, chatId)))
+    Promise.all(models.split('\n').map((id) => api.context(id, chatId, draftInstructions)))
       .then((u) => current && setUsages(u))
       .catch((e: Error) => current && setError(e.message));
     return () => { current = false; };
-  }, [models, chatId, refreshKey]);
+  }, [models, chatId, refreshKey, chatId ? '' : draftInstructions]);
 
   if (!models) return null;
   // The fullest window is the one that runs out first.
