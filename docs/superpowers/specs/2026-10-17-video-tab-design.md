@@ -65,6 +65,14 @@ OpenRouter's docs only show `frame_images` as **public HTTPS URLs**. Data URLs a
   - The host choice is the builder's, but it must support expiry or deletion and need no account the user doesn't already have.
   - If the probe shows the fallback is needed, **stop and check the host choice with the user** before building it.
 
+### Probe results (2026-10-17, $0.17 spent, user-approved)
+
+- **Data URLs work.** Grok Imagine Video 1.5 Lite (xAI, start frame, 2 s, 480p) and Veo 3.1 Lite (Google, start + end frame, 4 s, 720p) both accepted base64 PNG data URLs in `frame_images` and completed. **No temp-upload fallback is needed.**
+- **`usage.cost` is filled in on completed jobs:** $0.05 and $0.12. Both match `videoPrice` exactly (2 × $0.02 + $0.01 photo fee; 4 × $0.03).
+- **Each job finished in about 30 s.** Poll status went `pending` → `completed`. `polling_url` came back absolute (`https://openrouter.ai/api/v1/videos/<id>`).
+- Completed jobs also return `urls` (signed, about 24 h) and `expires_at`. OpenChat downloads through `/content?index=0` with the key and never stores the signed URLs.
+- Seedance token-formula check: skipped, to stay within budget. Seedance prices stay marked "~".
+
 ## Model Library
 
 - The Library's switch gets a third option: **Chat / Image / Video models**.
