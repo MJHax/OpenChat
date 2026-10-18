@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 import type { Deps } from './app';
 import { newId, now } from './db';
-import { setActiveLeaf, touchChat } from './chats';
+import { getChatRow, setActiveLeaf, touchChat } from './chats';
 import { getChatMessages, insertMessage } from './messages';
 import { OpenRouterError, type Usage, type WebSearchMode } from './openrouter';
 import { chatImageNames, getAttachmentData } from './attachments';
@@ -36,7 +36,8 @@ export function promptFor(deps: Deps, chatId: string, parentId: string, modelId:
   const inputModalities = modelModalities(db, modelId);
   const loadData = (id: string) => getAttachmentData(db, id) ?? Buffer.alloc(0);
   const webSearch = path.at(-1)?.webSearch ? (modelSupportsTools(db, modelId) ? 'tool' : 'plugin') : undefined;
-  const messages = buildMessages(chatPersona(db, chatId), path, { inputModalities, loadData }, { imageNames: chatImageNames(db, chatId) });
+  const note = getChatRow(db, chatId)?.context_note;
+  const messages = buildMessages(chatPersona(db, chatId), path, { inputModalities, loadData }, { imageNames: chatImageNames(db, chatId) }, note);
   return { messages: withCacheMarkers(modelId, messages), plugins: pdfPlugins(path, inputModalities), webSearch };
 }
 

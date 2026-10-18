@@ -92,7 +92,12 @@ function toParts(m: PathEntry, attachments: Attachment[], o: AttachmentOptions):
  * Messages without attachments stay plain strings, so prompts for plain chats are unchanged. With `files` (replies),
  * the system prompt explains file blocks and only the latest version of each file is sent in full.
  */
-export function buildMessages(p: Persona, path: PathEntry[], o?: AttachmentOptions, files?: { imageNames: string[] }): ChatMessage[] {
+/** How a continued chat's summary reaches the model: a user message ahead of everything else. */
+export const noteMessage = (note: string): string => `Context from a previous chat:\n\n${note}`;
+
+export function buildMessages(
+  p: Persona, path: PathEntry[], o?: AttachmentOptions, files?: { imageNames: string[] }, note?: string | null,
+): ChatMessage[] {
   const system = files ? replySystemPrompt(p, files.imageNames) : buildSystemPrompt(p);
   const contents = files ? collapseSuperseded(path) : path.map((m) => m.content);
   const messages: ChatMessage[] = path.map((entry, i) => {
@@ -101,6 +106,7 @@ export function buildMessages(p: Persona, path: PathEntry[], o?: AttachmentOptio
     if (!o || attachments.length === 0) return { role: m.role, content: m.content };
     return { role: m.role, content: toParts(m, attachments, o) };
   });
+  if (note?.trim()) messages.unshift({ role: 'user', content: noteMessage(note.trim()) });
   return system ? [{ role: 'system', content: system }, ...messages] : messages;
 }
 

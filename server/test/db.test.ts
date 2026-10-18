@@ -142,6 +142,39 @@ describe('image and video storage', () => {
   });
 });
 
+describe('summary usage rows', () => {
+  it('migrates usage_events to allow summary rows, keeping old rows', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'openchat-')), 'old.db');
+    const old = new Database(file);
+    old.exec(`
+      CREATE TABLE usage_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, created_at INTEGER NOT NULL,
+        purpose TEXT NOT NULL CHECK (purpose IN ('reply', 'title', 'memory')),
+        chat_id TEXT, message_id TEXT, run_id TEXT, kind TEXT, compare INTEGER NOT NULL DEFAULT 0, model_id TEXT NOT NULL,
+        prompt_tokens INTEGER, completion_tokens INTEGER, cached_tokens INTEGER, cache_write_tokens INTEGER, reasoning_tokens INTEGER,
+        cost REAL, cache_savings REAL, web_search INTEGER NOT NULL DEFAULT 0, web_searches INTEGER, attachments INTEGER NOT NULL DEFAULT 0,
+        first_token_ms INTEGER, duration_ms INTEGER, status TEXT NOT NULL CHECK (status IN ('complete', 'stopped', 'error')),
+        backfilled INTEGER NOT NULL DEFAULT 0, thread_kind TEXT NOT NULL DEFAULT 'chat');
+      CREATE INDEX usage_events_time ON usage_events(created_at);
+      INSERT INTO usage_events (created_at, purpose, chat_id, model_id, cost, status) VALUES (5, 'title', 'c1', 'm/x', 0.25, 'complete');
+    `);
+    old.close();
+    const db = openDb(file);
+    db.prepare("INSERT INTO usage_events (created_at, purpose, model_id, status) VALUES (6, 'summary', 'm/x', 'complete')").run();
+    expect(db.prepare('SELECT purpose, cost FROM usage_events ORDER BY id').all()).toEqual([
+      { purpose: 'title', cost: 0.25 }, { purpose: 'summary', cost: null },
+    ]);
+    expect(() => db.prepare("INSERT INTO usage_events (created_at, purpose, model_id, status) VALUES (7, 'other', 'm/x', 'complete')").run()).toThrow();
+    const indexes = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'usage_events'").all() as { name: string }[]).map((r) => r.name);
+    expect(indexes).toEqual(expect.arrayContaining(['usage_events_time', 'usage_events_chat', 'usage_events_model']));
+    db.close();
+    // Opening again leaves it alone.
+    const again = openDb(file);
+    expect((again.prepare('SELECT count(*) AS n FROM usage_events').get() as { n: number }).n).toBe(2);
+    again.close();
+  });
+});
+
 describe('web search storage', () => {
   it('stores the search flag and sources on messages', () => {
     const db = openDb(':memory:');

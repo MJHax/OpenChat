@@ -18,6 +18,8 @@ export interface ChatRow {
   compare_parent_id: string | null;
   kind: ThreadKind;
   instructions: string;
+  context_note: string | null;
+  continued_from: string | null;
 }
 
 export const MAX_INSTRUCTIONS = 20_000;
@@ -103,6 +105,21 @@ export function chatCost(db: DB, id: string): number {
   return (db.prepare(`SELECT ${COST} AS total FROM chats c WHERE c.id = ?`).get(id) as { total: number } | undefined)?.total ?? 0;
 }
 
+/** The chat this one was continued from; its title is null once that chat is deleted. */
+function continuedFrom(db: DB, row: ChatRow): { id: string; title: string | null } | null {
+  if (!row.continued_from) return null;
+  return { id: row.continued_from, title: getChatRow(db, row.continued_from)?.title ?? null };
+}
+
+/** Edits a continued chat's summary note; only before the chat's first message is sent. */
+export function setContextNote(db: DB, chat: ChatRow, note: string): void {
+  if (chat.context_note === null) throw new HttpError(400, 'Only a continued chat has a context note.');
+  if (db.prepare("SELECT 1 FROM messages WHERE chat_id = ? AND role = 'user' LIMIT 1").get(chat.id)) {
+    throw new HttpError(409, 'The context note can only change before the first message.');
+  }
+  db.prepare('UPDATE chats SET context_note = ? WHERE id = ?').run(note, chat.id);
+}
+
 export function getChatDetail(db: DB, id: string): ChatDetail {
   const row = requireChat(db, id);
   const all = getChatMessages(db, id);
@@ -110,7 +127,7 @@ export function getChatDetail(db: DB, id: string): ChatDetail {
   const choiceParent = pendingChoice(db, row);
   return {
     chat: { id: row.id, title: row.title, updatedAt: row.updated_at, totalCost, kind: row.kind, activeLeafId: row.active_leaf_id,
-      instructions: row.instructions },
+      instructions: row.instructions, contextNote: row.context_note, continuedFrom: continuedFrom(db, row) },
     messages: withSiblings(all, activePath(all, row.active_leaf_id)),
     compare: choiceParent ? { parentId: choiceParent, replies: repliesTo(all, choiceParent) } : null,
     chatImages: chatImages(db, id),

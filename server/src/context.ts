@@ -1,5 +1,6 @@
 import { imageSkippedNote } from '../../shared/attachments';
 import type { ContextParts, ContextUsage, Message } from '../../shared/types';
+import { noteMessage } from './prompt';
 
 // OpenRouter reports one prompt total per reply, so the split is estimated by counting each part ourselves and
 // scaling the counts to that total. A real tokenizer wouldn't buy much: the scaling absorbs most of the error.
@@ -21,6 +22,8 @@ export interface ContextInput {
   modelId: string;
   contextLength: number | null;
   system: string | null;
+  /** A continued chat's summary, sent as a user message ahead of the path. */
+  note?: string | null;
   /** The chat's active path, oldest first; [] for a chat that hasn't started. */
   path: Message[];
   canViewImages: boolean;
@@ -61,6 +64,7 @@ export function estimateContext(o: ContextInput): ContextUsage {
   const base = { modelId: o.modelId, contextLength: o.contextLength };
   const before = zero();
   before.system = o.system ? textTokens(o.system) : 0;
+  if (o.note?.trim()) before.user += textTokens(noteMessage(o.note.trim()));
 
   if (anchorIndex === -1) {
     for (const m of o.path) addMessage(before, m, o);
