@@ -15,7 +15,7 @@ import { deleteThreadClips } from '../videoJobs';
 import { purgeDeleted } from '../dataStore';
 import type { ThreadKind } from '../../../shared/types';
 
-const KINDS: ThreadKind[] = ['chat', 'image', 'video'];
+const KINDS: ThreadKind[] = ['chat', 'image', 'video', 'discussion'];
 
 function threadKind(kind: unknown): ThreadKind {
   if (kind === undefined || kind === null || kind === '') return 'chat';
@@ -32,7 +32,10 @@ export function chatRoutes(deps: Deps): Hono {
   r.post('/', async (c) => {
     // A body is optional: a plain POST makes a chat.
     const body = c.req.header('content-type') ? await readJson<{ kind?: string; instructions?: unknown }>(c) : {};
-    return c.json(createChat(db, threadKind(body.kind), parseInstructions(body.instructions)), 201);
+    const kind = threadKind(body.kind);
+    // A discussion needs its topic and participants, which only /api/discussions takes.
+    if (kind === 'discussion') throw new HttpError(400, 'Create discussions from the Discussion tab.');
+    return c.json(createChat(db, kind, parseInstructions(body.instructions)), 201);
   });
 
   r.get('/:id', (c) => c.json(getChatDetail(db, c.req.param('id'))));
