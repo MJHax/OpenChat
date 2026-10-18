@@ -15,6 +15,12 @@ describe('initialModelId', () => {
     expect(initialModelId([reply('a/one'), { role: 'user', modelId: null }, reply('c/three')], models)).toBe('c/three');
   });
 
+  it('prefers a given model (a continued chat) only until a model has replied', () => {
+    expect(initialModelId([{ role: 'assistant', modelId: null }], models, 'c/three')).toBe('c/three');
+    expect(initialModelId([reply('a/one')], models, 'c/three')).toBe('a/one');
+    expect(initialModelId([], models, 'gone/model')).toBe('b/two');
+  });
+
   it('falls back to the default when the last model was removed from the library', () => {
     expect(initialModelId([reply('gone/model')], models)).toBe('b/two');
   });

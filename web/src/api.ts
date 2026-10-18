@@ -22,6 +22,9 @@ export const api = {
   listChats: (kind: ThreadKind = 'chat') => json<ChatSummary[]>('GET', `/api/chats?kind=${kind}`),
   createChat: (kind: ThreadKind = 'chat', instructions?: string) => json<ChatSummary>('POST', '/api/chats', { kind, instructions }),
   setInstructions: (id: string, instructions: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { instructions }),
+  setContextNote: (id: string, contextNote: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { contextNote }),
+  /** "Summarize and continue": resolves with the new chat once the summary is written. */
+  continueChat: (id: string, modelId: string) => json<ChatSummary>('POST', `/api/chats/${id}/continue`, { modelId }),
   getChat: (id: string) => json<ChatDetail>('GET', `/api/chats/${id}`),
   renameChat: (id: string, title: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { title }),
   selectMessage: (id: string, messageId: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { selectMessageId: messageId }),
