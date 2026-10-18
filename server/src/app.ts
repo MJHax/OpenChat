@@ -9,6 +9,7 @@ import { memoryRoutes } from './routes/memories';
 import { modelRoutes } from './routes/models';
 import { mediaModelRoutes } from './routes/mediaModels';
 import { imageRoutes } from './routes/images';
+import { videoFileRoutes, videoGenerationRoutes } from './routes/videos';
 import { chatRoutes } from './routes/chats';
 import { searchRoutes } from './routes/search';
 import { generationRoutes } from './routes/generate';
@@ -20,6 +21,8 @@ export interface Deps {
   db: DB;
   openrouter: OpenRouterClient;
   env: Env;
+  /** Where finished video clips are stored (`<id>.mp4`). */
+  mediaDir: string;
 }
 
 export function createApp(deps: Deps): Hono {
@@ -46,6 +49,8 @@ export function createApp(deps: Deps): Hono {
   app.route('/api/chats', chatRoutes(deps));
   app.route('/api/chats', generationRoutes(deps));
   app.route('/api/chats', imageRoutes(deps));
+  app.route('/api/chats', videoGenerationRoutes(deps));
+  app.route('/api/videos', videoFileRoutes(deps));
   app.route('/api/search', searchRoutes(deps));
   app.route('/api/attachments', attachmentRoutes(deps));
   app.route('/api/stats', statsRoutes(deps));

@@ -6,6 +6,8 @@ import { createApp } from './app';
 import { createOpenRouterClient } from './openrouter';
 import { cleanupPending } from './attachments';
 import { failInterruptedGenerations } from './imageGen';
+import { createVideoPoller } from './videoJobs';
+import { dirname, join } from 'node:path';
 
 try {
   process.loadEnvFile('.env');
@@ -13,10 +15,14 @@ try {
   // no .env file — the key can be set in Settings instead
 }
 
-const db = openDb(process.env.OPENCHAT_DB ?? 'data/openchat.db');
+const dbFile = process.env.OPENCHAT_DB ?? 'data/openchat.db';
+const db = openDb(dbFile);
 cleanupPending(db);
 failInterruptedGenerations(db);
-const app = createApp({ db, openrouter: createOpenRouterClient(), env: process.env });
+const deps = { db, openrouter: createOpenRouterClient(), env: process.env, mediaDir: join(dirname(dbFile), 'videos') };
+const app = createApp(deps);
+// Video jobs keep running on OpenRouter while OpenChat is off; this checks them at once, then every 15 s.
+createVideoPoller(deps).start();
 
 // In `npm start`, serve the built frontend. In `npm run dev`, Vite serves it instead.
 if (existsSync('dist')) app.use('/*', serveStatic({ root: './dist' }));

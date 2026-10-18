@@ -7,6 +7,7 @@ import { newestLeafFrom, repliesTo } from '../tree';
 import { computeChatStats } from '../stats';
 import { loadChatUsageRows } from '../usage';
 import { computeMediaThreadStats, loadMediaEvents } from '../mediaStats';
+import { deleteThreadClips } from '../videoJobs';
 import type { ThreadKind } from '../../../shared/types';
 
 const KINDS: ThreadKind[] = ['chat', 'image', 'video'];
@@ -17,7 +18,8 @@ function threadKind(kind: unknown): ThreadKind {
   return kind as ThreadKind;
 }
 
-export function chatRoutes({ db }: Deps): Hono {
+export function chatRoutes(deps: Deps): Hono {
+  const { db } = deps;
   const r = new Hono();
 
   r.get('/', (c) => c.json(listChats(db, threadKind(c.req.query('kind')))));
@@ -66,6 +68,7 @@ export function chatRoutes({ db }: Deps): Hono {
   r.delete('/:id', (c) => {
     const id = c.req.param('id');
     requireChat(db, id);
+    deleteThreadClips(deps, id);
     deleteChat(db, id);
     return c.json({ ok: true });
   });

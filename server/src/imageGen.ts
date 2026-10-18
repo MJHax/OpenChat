@@ -10,6 +10,7 @@ import { replyErrorMessage } from './generate';
 import type { Usage } from './openrouter';
 import { getSetting, resolveApiKey } from './settings';
 import { maybeGenerateTitle } from './title';
+import { jobStatusOf } from './videoJobs';
 import { canGenerate, snapSettings, type ImageModel, type ImageSettings } from '../../shared/imageModels';
 import type { ImageGeneration } from '../../shared/types';
 
@@ -165,10 +166,19 @@ export function threadGenerations(db: DB, threadId: string): Record<string, Imag
     `SELECT g.*, m.cost FROM media_generations g JOIN messages m ON m.id = g.message_id WHERE m.chat_id = ?`,
   ).all(threadId) as {
     message_id: string; model_id: string; settings: string; mode: Mode; error: string | null; started_at: number; finished_at: number | null;
-    target_attachment_id: string | null; cost: number | null; prompt: string;
+    target_attachment_id: string | null; cost: number | null; prompt: string; kind: string; reference_ids: string;
   }[];
-  return Object.fromEntries(rows.map((r) => [r.message_id, {
-    modelId: r.model_id, prompt: r.prompt, settings: JSON.parse(r.settings) as ImageSettings, mode: r.mode, error: r.error, startedAt: r.started_at,
-    finishedAt: r.finished_at, targetAttachmentId: r.target_attachment_id, cost: r.cost,
-  }]));
+  return Object.fromEntries(rows.map((r) => {
+    const g: ImageGeneration = {
+      modelId: r.model_id, prompt: r.prompt, settings: JSON.parse(r.settings) as ImageSettings, mode: r.mode, error: r.error, startedAt: r.started_at,
+      finishedAt: r.finished_at, targetAttachmentId: r.target_attachment_id, cost: r.cost,
+    };
+    if (r.kind === 'video') {
+      // Video settings are VideoSettings; reference_ids holds [start photo, end photo].
+      const [start = null, end = null] = JSON.parse(r.reference_ids) as (string | null)[];
+      g.frames = { start, end };
+      g.jobStatus = r.finished_at === null ? jobStatusOf(r.message_id) : null;
+    }
+    return [r.message_id, g];
+  }));
 }

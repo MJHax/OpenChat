@@ -167,6 +167,19 @@ CREATE TABLE IF NOT EXISTS media_events (
   duration_ms INTEGER,
   status TEXT NOT NULL CHECK (status IN ('complete', 'error'))
 );
+-- Video jobs running on OpenRouter. No foreign keys: a job is paid for even if its thread is deleted, so it is polled to the end.
+CREATE TABLE IF NOT EXISTS video_jobs (
+  job_id TEXT PRIMARY KEY,
+  thread_id TEXT,
+  message_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  settings TEXT NOT NULL,
+  photos INTEGER NOT NULL DEFAULT 0,
+  polling_url TEXT NOT NULL,
+  started_at INTEGER NOT NULL,
+  next_poll_at INTEGER NOT NULL,
+  finished_at INTEGER
+);
 CREATE INDEX IF NOT EXISTS media_events_time ON media_events(created_at);
 CREATE INDEX IF NOT EXISTS media_events_thread ON media_events(thread_id);
 `;

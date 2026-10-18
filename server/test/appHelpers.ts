@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { openDb } from '../src/db';
 import { createApp } from '../src/app';
 import type { OpenRouterClient } from '../src/openrouter';
@@ -20,7 +23,8 @@ export function makeApp(openrouter: Partial<OpenRouterClient> = {}, env: Env = {
     downloadVideo: async () => { throw new Error('downloadVideo is not scripted in this test'); },
     ...openrouter,
   };
-  const app = createApp({ db, openrouter: client, env });
+  const deps = { db, openrouter: client, env, mediaDir: mkdtempSync(join(tmpdir(), 'openchat-media-')) };
+  const app = createApp(deps);
   const call = (method: string, path: string, body?: unknown) =>
     app.request(path, {
       method,
@@ -34,7 +38,7 @@ export function makeApp(openrouter: Partial<OpenRouterClient> = {}, env: Env = {
     form.append('file', new File([new Uint8Array(bytes)], filename));
     return app.request('/api/attachments', { method: 'POST', body: form });
   };
-  return { db, app, call, upload };
+  return { db, app, call, upload, deps };
 }
 
 export async function readEvents(res: Response): Promise<{ event: string; data: any }[]> {

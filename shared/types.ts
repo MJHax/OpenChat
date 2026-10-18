@@ -102,7 +102,12 @@ export interface ChatDetail {
 export interface ImageGeneration {
   modelId: string;
   prompt: string;
+  /** ImageSettings in image threads, VideoSettings in video threads. */
   settings: ImageSettings;
+  /** Video threads: the start and end photo attachment ids. */
+  frames?: { start: string | null; end: string | null };
+  /** Video threads: OpenRouter's job status while rendering. */
+  jobStatus?: string | null;
   /** 'new' image, an edit of a generated one, or an edit of an uploaded photo. */
   mode: 'new' | 'edit_generated' | 'edit_upload';
   error: string | null;
