@@ -105,6 +105,43 @@ describe('database', () => {
   });
 });
 
+describe('image and video storage', () => {
+  it('creates media tables', () => {
+    const db = openDb(':memory:');
+    const chat = createChat(db);
+    const m = insertMessage(db, { chatId: chat.id, parentId: null, role: 'assistant', content: '' });
+    db.prepare("INSERT INTO media_models (id, kind, display_name, added_at) VALUES ('x/img', 'image', 'Img', 1)").run();
+    db.prepare("INSERT INTO media_models (id, kind, display_name, added_at) VALUES ('x/img', 'video', 'Img', 1)").run();
+    db.prepare("INSERT INTO media_catalog_cache (kind, fetched_at, json) VALUES ('image', 1, '[]')").run();
+    db.prepare("INSERT INTO media_generations (message_id, kind, model_id, prompt, settings, mode, started_at) VALUES (?, 'image', 'x/img', 'p', '{}', 'new', 1)").run(m.id);
+    db.prepare("INSERT INTO media_events (created_at, kind, thread_id, message_id, model_id, settings, status) VALUES (1, 'image', ?, ?, 'x/img', '{}', 'complete')").run(chat.id, m.id);
+    deleteChat(db, chat.id);
+    expect((db.prepare('SELECT count(*) AS n FROM media_generations').get() as { n: number }).n).toBe(0);
+    expect((db.prepare('SELECT count(*) AS n FROM media_events').get() as { n: number }).n).toBe(1);
+    expect(getChatRow(db, createChat(db).id)).toMatchObject({ kind: 'chat' });
+  });
+
+  it('migrates existing rows', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'openchat-')), 'old.db');
+    const old = new Database(file);
+    old.exec(`
+      CREATE TABLE chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, active_leaf_id TEXT);
+      CREATE TABLE usage_events (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at INTEGER NOT NULL, purpose TEXT NOT NULL, chat_id TEXT,
+        message_id TEXT, run_id TEXT, kind TEXT, compare INTEGER NOT NULL DEFAULT 0, model_id TEXT NOT NULL, prompt_tokens INTEGER,
+        completion_tokens INTEGER, cached_tokens INTEGER, cache_write_tokens INTEGER, reasoning_tokens INTEGER, cost REAL, cache_savings REAL,
+        web_search INTEGER NOT NULL DEFAULT 0, web_searches INTEGER, attachments INTEGER NOT NULL DEFAULT 0, first_token_ms INTEGER,
+        duration_ms INTEGER, status TEXT NOT NULL, backfilled INTEGER NOT NULL DEFAULT 0);
+      INSERT INTO chats VALUES ('c1', 'Old', 1, 1, NULL);
+      INSERT INTO usage_events (created_at, purpose, chat_id, model_id, status) VALUES (1, 'reply', 'c1', 'm/x', 'complete');
+    `);
+    old.close();
+    const db = openDb(file);
+    expect(db.prepare("SELECT kind FROM chats WHERE id = 'c1'").get()).toEqual({ kind: 'chat' });
+    expect(db.prepare('SELECT thread_kind FROM usage_events').get()).toEqual({ thread_kind: 'chat' });
+    db.close();
+  });
+});
+
 describe('web search storage', () => {
   it('stores the search flag and sources on messages', () => {
     const db = openDb(':memory:');

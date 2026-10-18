@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS chats (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   active_leaf_id TEXT,
-  compare_parent_id TEXT
+  compare_parent_id TEXT,
+  kind TEXT NOT NULL DEFAULT 'chat'
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -103,7 +104,9 @@ CREATE TABLE IF NOT EXISTS usage_events (
   first_token_ms INTEGER,
   duration_ms INTEGER,
   status TEXT NOT NULL CHECK (status IN ('complete', 'stopped', 'error')),
-  backfilled INTEGER NOT NULL DEFAULT 0
+  backfilled INTEGER NOT NULL DEFAULT 0,
+  -- Which kind of thread the call belonged to ('chat', 'image', 'video'), so title calls count under the right stats.
+  thread_kind TEXT NOT NULL DEFAULT 'chat'
 );
 CREATE INDEX IF NOT EXISTS usage_events_time ON usage_events(created_at);
 CREATE INDEX IF NOT EXISTS usage_events_chat ON usage_events(chat_id);
@@ -114,6 +117,58 @@ CREATE TABLE IF NOT EXISTS model_catalog_cache (
   fetched_at INTEGER NOT NULL,
   json TEXT NOT NULL
 );
+
+-- Image and video models the user added; separate from chat models, and one id may be in both kinds.
+CREATE TABLE IF NOT EXISTS media_models (
+  id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('image', 'video')),
+  display_name TEXT NOT NULL,
+  added_at INTEGER NOT NULL,
+  PRIMARY KEY (id, kind)
+);
+
+CREATE TABLE IF NOT EXISTS media_catalog_cache (
+  kind TEXT PRIMARY KEY,
+  fetched_at INTEGER NOT NULL,
+  json TEXT NOT NULL
+);
+
+-- The request behind each generated image or video (one per assistant message in an image or video thread).
+CREATE TABLE IF NOT EXISTS media_generations (
+  message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  settings TEXT NOT NULL,
+  target_attachment_id TEXT,
+  reference_ids TEXT NOT NULL DEFAULT '[]',
+  mode TEXT NOT NULL,
+  job_id TEXT,
+  error TEXT,
+  started_at INTEGER NOT NULL,
+  finished_at INTEGER
+);
+
+-- One row per paid image or video call. Never deleted; no foreign keys, like usage_events.
+CREATE TABLE IF NOT EXISTS media_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  thread_id TEXT,
+  message_id TEXT,
+  model_id TEXT NOT NULL,
+  mode TEXT,
+  settings TEXT NOT NULL,
+  prompt_tokens INTEGER,
+  completion_tokens INTEGER,
+  cost REAL,
+  cost_estimated INTEGER NOT NULL DEFAULT 0,
+  seconds REAL,
+  duration_ms INTEGER,
+  status TEXT NOT NULL CHECK (status IN ('complete', 'error'))
+);
+CREATE INDEX IF NOT EXISTS media_events_time ON media_events(created_at);
+CREATE INDEX IF NOT EXISTS media_events_thread ON media_events(thread_id);
 `;
 
 export function openDb(file: string): DB {
@@ -130,6 +185,9 @@ export function openDb(file: string): DB {
 function migrate(db: DB): void {
   const chatColumns = (db.prepare('PRAGMA table_info(chats)').all() as { name: string }[]).map((c) => c.name);
   if (!chatColumns.includes('compare_parent_id')) db.exec('ALTER TABLE chats ADD COLUMN compare_parent_id TEXT');
+  if (!chatColumns.includes('kind')) db.exec("ALTER TABLE chats ADD COLUMN kind TEXT NOT NULL DEFAULT 'chat'");
+  const usageColumns = (db.prepare('PRAGMA table_info(usage_events)').all() as { name: string }[]).map((c) => c.name);
+  if (!usageColumns.includes('thread_kind')) db.exec("ALTER TABLE usage_events ADD COLUMN thread_kind TEXT NOT NULL DEFAULT 'chat'");
   const modelColumns = (db.prepare('PRAGMA table_info(models)').all() as { name: string }[]).map((c) => c.name);
   if (!modelColumns.includes('input_modalities')) db.exec('ALTER TABLE models ADD COLUMN input_modalities TEXT');
   if (!modelColumns.includes('supports_tools')) db.exec('ALTER TABLE models ADD COLUMN supports_tools INTEGER');

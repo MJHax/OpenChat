@@ -4,7 +4,7 @@ import { HttpError } from './http';
 import { chatImages } from './attachments';
 import { getChatMessages } from './messages';
 import { activePath, repliesTo, withSiblings } from './tree';
-import type { ChatDetail, ChatSummary } from '../../shared/types';
+import type { ChatDetail, ChatSummary, ThreadKind } from '../../shared/types';
 
 export const DEFAULT_TITLE = 'New chat';
 
@@ -15,6 +15,7 @@ export interface ChatRow {
   updated_at: number;
   active_leaf_id: string | null;
   compare_parent_id: string | null;
+  kind: ThreadKind;
 }
 
 export function createChat(db: DB): ChatSummary {

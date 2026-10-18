@@ -1,5 +1,8 @@
 export type Role = 'user' | 'assistant';
-export type MessageStatus = 'complete' | 'stopped';
+/** 'generating' and 'error' only occur in image and video threads. */
+export type MessageStatus = 'complete' | 'stopped' | 'generating' | 'error';
+/** What a thread is for: a conversation, or making images or videos. */
+export type ThreadKind = 'chat' | 'image' | 'video';
 export type Theme = 'light' | 'dark' | 'system';
 export type AttachmentKind = 'image' | 'pdf' | 'text';
 
