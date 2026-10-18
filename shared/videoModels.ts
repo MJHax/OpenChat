@@ -99,11 +99,20 @@ function rate(skus: Sku[], kind: 'perSecond' | 'tokens', s: VideoSettings, hasSt
 }
 
 /** Width×height for the chosen resolution and shape, from the model's exact sizes. */
+/** A resolution's short side in pixels: "720p" → 720, "2K" → 1440, "4K" → 2160; null when it can't be told. */
+const SHORT_SIDE_K: Record<string, number> = { '1k': 1080, '2k': 1440, '4k': 2160 };
+const shortSide = (res: string | null): number | null => {
+  const p = /^(\d+)p$/i.exec(res ?? '');
+  return p ? Number(p[1]) : SHORT_SIDE_K[(res ?? '').toLowerCase()] ?? null;
+};
+
 function frameSize(m: VideoModel, s: VideoSettings): [number, number] | null {
-  const short = Number(/^(\d+)p$/.exec(s.resolution ?? '')?.[1] ?? NaN);
+  const short = shortSide(s.resolution);
+  if (s.resolution && short === null) return null;
   const [aw, ah] = s.aspect.split(':').map(Number);
   const sizes = m.sizes.map((x) => x.split('x').map(Number) as [number, number]).filter(([w, h]) => w > 0 && h > 0);
-  const fit = sizes.filter(([w, h]) => Math.min(w, h) === short || Number.isNaN(short));
+  // With a resolution, only sizes of exactly that height count; no match means the price can't be worked out.
+  const fit = sizes.filter(([w, h]) => short === null || Math.min(w, h) === short);
   const target = aw > 0 && ah > 0 ? aw / ah : 16 / 9;
   return [...fit].sort((a, b) => Math.abs(a[0] / a[1] - target) - Math.abs(b[0] / b[1] - target))[0] ?? null;
 }
@@ -165,8 +174,11 @@ export function videoPrice(m: VideoModel, s: VideoSettings, photos: number): Vid
 
 /** The lowest per-second rate without sound, for the card's "from $X/s". */
 export function cheapestPerSecond(m: VideoModel): number | null {
-  const rates = Object.entries(m.skus).map(([k, v]) => classify(k, v))
-    .flatMap((k) => (k.kind === 'perSecond' && k.audio !== true ? [k.usd] : []));
+  const skus = Object.entries(m.skus).map(([k, v]) => classify(k, v));
+  if (skus.some((k) => k.kind === 'unknown')) return null;
+  // Only rates for sizes the model actually offers: a 480p key on a model without 480p would understate it.
+  const offered = new Set(m.resolutions.map((r) => r.toLowerCase()));
+  const rates = skus.flatMap((k) => (k.kind === 'perSecond' && k.audio !== true && (!k.res || offered.size === 0 || offered.has(k.res)) ? [k.usd] : []));
   return rates.length ? Math.min(...rates) : null;
 }
 

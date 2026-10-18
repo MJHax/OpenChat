@@ -54,6 +54,18 @@ describe('videoPrice', () => {
     expect(p.cost).toBeCloseTo((0.0000107 * 1280 * 720 * 24 * 5) / 1024);
   });
 
+  it('estimates 4K token prices from a 4K frame', () => {
+    const p = videoPrice(model('bytedance/seedance-2.0'), s({ duration: 4, resolution: '4K' }), 0);
+    expect(p.cost).toBeCloseTo((0.000004 * 3840 * 2160 * 24 * 4) / 1024);
+    const hd = videoPrice(model('bytedance/seedance-2.0'), s({ duration: 4, resolution: '1080p' }), 0);
+    expect(hd.nextSteps.find((n) => n.label === '4K')!.extra).toBeGreaterThan(0);
+  });
+
+  it('has no price for a size it cannot work out', () => {
+    const odd: VideoModel = { ...model('bytedance/seedance-2.0'), sizes: ['640x480'] };
+    expect(videoPrice(odd, s({ resolution: '4K' }), 0).cost).toBeNull();
+  });
+
   it('knows when it cannot price', () => {
     const odd: VideoModel = { ...model('kwaivgi/kling-v3.0-std'), skus: { mystery_fee: '1' } };
     expect(videoPrice(odd, s({}), 0).cost).toBeNull();
@@ -62,6 +74,14 @@ describe('videoPrice', () => {
   it('gives the cheapest rate for the card', () => {
     expect(cheapestPerSecond(model('google/veo-3.1-lite'))).toBeCloseTo(0.03);
     expect(cheapestPerSecond(model('x-ai/grok-imagine-video-1.5-lite'))).toBeCloseTo(0.02);
+  });
+
+  it('only quotes resolutions the model offers', () => {
+    expect(cheapestPerSecond(model('alibaba/wan-2.6'))).toBeCloseTo(0.08); // its 480p key is for a size it doesn't offer
+  });
+
+  it('gives no "from" price when a key is unknown', () => {
+    expect(cheapestPerSecond({ ...model('google/veo-3.1-lite'), skus: { duration_seconds: '0.05', mystery_fee: '1' } })).toBeNull();
   });
 
   it('prices every in-scope model without unknown keys, or says so', () => {
