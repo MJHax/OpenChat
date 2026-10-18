@@ -8,7 +8,7 @@ import type { DB } from './db';
 import { newId, now as realNow } from './db';
 import { HttpError } from './http';
 import { attachToMessage, getAttachmentData, getAttachmentRow, type AttachmentRow } from './attachments';
-import { getChatRow, requireChat, setActiveLeaf, touchChat } from './chats';
+import { getChatRow, requireChat, type ChatRow, setActiveLeaf, touchChat } from './chats';
 import { getMessage, insertMessage } from './messages';
 import { cachedMediaModel, getMediaCatalog, listMediaLibrary } from './mediaLibrary';
 import { OpenRouterError, type Usage } from './openrouter';
@@ -52,7 +52,7 @@ function framePhoto(db: DB, threadId: string, id: string | null): AttachmentRow 
  * prompt, its photos and a rendering reply. The poller finishes it.
  */
 export async function startVideoGeneration(deps: Deps, threadId: string, req: VideoRequest): Promise<{ userMessageId: string; assistantMessageId: string }> {
-  const { db, openrouter, env } = deps;
+  const { db, openrouter } = deps;
   const thread = requireChat(db, threadId);
   if (thread.kind !== 'video') throw new HttpError(400, 'This is not a video thread.');
   if (!listMediaLibrary(db, 'video').some((m) => m.id === req.modelId)) throw new HttpError(400, 'Add this model to your video models first.');
@@ -61,9 +61,24 @@ export async function startVideoGeneration(deps: Deps, threadId: string, req: Vi
   if (!model) throw new HttpError(400, 'That model is no longer offered by OpenRouter.');
   const prompt = String(req.prompt ?? '').trim();
   if (!prompt) throw new HttpError(400, 'Describe what should happen in the clip.');
-  if (db.prepare('SELECT 1 FROM video_jobs WHERE thread_id = ? AND finished_at IS NULL').get(threadId)) {
+  if (claimed.has(threadId) || db.prepare('SELECT 1 FROM video_jobs WHERE thread_id = ? AND finished_at IS NULL').get(threadId)) {
     throw new HttpError(409, 'A clip is still rendering in this thread.');
   }
+  // Held across the submit, so a second request (another tab) can't also be charged; the job row takes over once saved.
+  claimed.add(threadId);
+  try {
+    return await submitAndSave(deps, thread, model, prompt, req);
+  } finally {
+    claimed.delete(threadId);
+  }
+}
+
+/** Threads with a video submit in flight. */
+const claimed = new Set<string>();
+
+async function submitAndSave(deps: Deps, thread: ChatRow, model: VideoModel, prompt: string, req: VideoRequest) {
+  const { db, openrouter, env } = deps;
+  const threadId = thread.id;
   const start = framePhoto(db, threadId, req.startAttachmentId);
   const end = framePhoto(db, threadId, req.endAttachmentId);
   if (start && !model.frames.first) throw new HttpError(400, "This model can't start from a photo.");

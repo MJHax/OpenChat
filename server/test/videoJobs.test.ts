@@ -257,6 +257,27 @@ describe('video jobs', () => {
     expect((await s.start(other, { prompt: '  ' })).status).toBe(400);
   });
 
+  it('two simultaneous requests submit one clip', async () => {
+    const s = setup();
+    const id = await s.thread();
+    const original = s.deps.openrouter.submitVideo;
+    s.deps.openrouter.submitVideo = async (o) => { await new Promise((r) => setTimeout(r, 20)); return original(o); };
+    const statuses = (await Promise.all([s.start(id), s.start(id)])).map((r) => r.status).sort();
+    expect(statuses).toEqual([202, 409]);
+    expect(s.submitted).toHaveLength(1);
+  });
+
+  it('a refused submit frees the thread', async () => {
+    const s = setup();
+    const id = await s.thread();
+    const original = s.deps.openrouter.submitVideo;
+    s.deps.openrouter.submitVideo = async () => { throw new OpenRouterError('nope', 400); };
+    expect((await s.start(id)).status).toBe(400);
+    expect((await s.start(id, { startAttachmentId: 'missing' })).status).toBe(400);
+    s.deps.openrouter.submitVideo = original;
+    expect((await s.start(id)).status).toBe(202);
+  });
+
   it('tweak and retry reuses photos already in the thread', async () => {
     const s = setup();
     const id = await s.thread();
