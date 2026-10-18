@@ -37,7 +37,7 @@ describe('pickImageModel', () => {
   const m = (id: string): ImageModel => ({
     id, name: id, description: '', created: null, aspects: [], resolutions: [], qualities: [], transparent: false, maxRefs: 0, minRefs: 0, price: { kind: 'unknown' },
   });
-  const entry = (id: string, model: ImageModel | null): MediaLibraryModel => ({ id, displayName: id, kind: 'image', model, avgCost: {} });
+  const entry = (id: string, model: ImageModel | null): MediaLibraryModel => ({ id, displayName: id, kind: 'image', model, avgCost: {}, avgRenderMs: null });
 
   it('uses the saved model when the catalog still has it', () => {
     expect(pickImageModel([entry('a', m('a')), entry('b', m('b'))], 'b')?.id).toBe('b');

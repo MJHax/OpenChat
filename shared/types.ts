@@ -1,4 +1,7 @@
 import type { ImageModel, ImageSettings } from './imageModels';
+import type { VideoModel } from './videoModels';
+
+export type MediaModel = ImageModel | VideoModel;
 
 export type Role = 'user' | 'assistant';
 /** 'generating' and 'error' only occur in image and video threads. */
@@ -71,13 +74,16 @@ export interface MediaLibraryModel {
   id: string;
   displayName: string;
   kind: MediaKind;
-  model: ImageModel | null;
+  /** ImageModel for kind 'image', VideoModel for kind 'video'; null when the catalog no longer lists it. */
+  model: MediaModel | null;
+  /** Average time to generate, from completed calls; null before the first. */
+  avgRenderMs: number | null;
   /** The user's own average cost, keyed "size|quality" (e.g. "1K|medium", "2K|"). */
   avgCost: Record<string, number>;
 }
 
 export interface MediaCatalog {
-  models: ImageModel[];
+  models: MediaModel[];
   fetchedAt: number;
   stale: boolean;
 }

@@ -64,7 +64,7 @@ export function ImageModelLibrary() {
     api.listMediaModels('image').then(setLibrary).catch((e: Error) => setError(e.message));
   }, []);
 
-  const all = catalog?.models ?? [];
+  const all = (catalog?.models ?? []) as ImageModel[]; // kind=image catalog
   const providerList = useMemo(() => [...new Set(all.map((m) => provider(m.id)))].sort(), [catalog]);
   const q = query.trim().toLowerCase();
   const results = all.filter((m) => (!q || `${m.name} ${m.id}`.toLowerCase().includes(q)) && (providers.length === 0 || providers.includes(provider(m.id))));
@@ -94,7 +94,7 @@ export function ImageModelLibrary() {
             <li key={e.id} className="model-row">
               <div className="model-main"><span>{e.displayName}</span><code>{e.id}</code></div>
               <div className="model-side">
-                <span className="muted small">{e.model ? formatImagePrice(e.model, avgFor(e)) : ''}</span>
+                <span className="muted small">{e.model ? formatImagePrice(e.model as ImageModel, avgFor(e)) : ''}</span>
                 <button className="link danger" disabled={busy === e.id} onClick={() => act(e.id, () => api.removeMediaModel(e.id, 'image'))}>Remove</button>
               </div>
             </li>

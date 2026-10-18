@@ -3,6 +3,7 @@ import { makeApp } from './appHelpers';
 import { listLibrary } from '../src/library';
 import { addMediaModel, getMediaCatalog, listMediaLibrary, removeMediaModel } from '../src/mediaLibrary';
 import type { ImageModel } from '../../shared/imageModels';
+import type { VideoModel } from '../../shared/videoModels';
 import type { ChatSummary } from '../../shared/types';
 
 const img = (id: string, extra: Partial<ImageModel> = {}): ImageModel => ({
@@ -60,6 +61,31 @@ describe('media library', () => {
     expect((await call('DELETE', '/api/media-models?id=g%2Fbanana&kind=image')).status).toBe(200);
     expect((await call('GET', '/api/media-models/catalog?kind=image')).status).toBe(200);
     expect((await call('GET', '/api/media-models?kind=bogus')).status).toBe(400);
+  });
+});
+
+describe('video models', () => {
+  const vid = (id: string): VideoModel => ({
+    id, name: id.toUpperCase(), description: '', created: null, durations: [4, 8], resolutions: ['720p'], aspects: ['16:9'], sizes: [],
+    frames: { first: true, last: true }, sound: false, skus: { duration_seconds: '0.05' },
+  });
+
+  it('caches the video catalog, apart from images', async () => {
+    const { db, call } = makeApp({ listVideoModels: async () => [vid('g/veo')], listImageModels: async () => [img('g/banana')] });
+    const video = (await (await call('GET', '/api/media-models/catalog?kind=video')).json()) as { models: { id: string }[] };
+    expect(video.models.map((m) => m.id)).toEqual(['g/veo']);
+    const image = (await (await call('GET', '/api/media-models/catalog?kind=image')).json()) as { models: { id: string }[] };
+    expect(image.models.map((m) => m.id)).toEqual(['g/banana']);
+    expect(db.prepare('SELECT count(*) AS n FROM media_catalog_cache').get()).toEqual({ n: 2 });
+  });
+
+  it('keeps the video list apart and averages render time', async () => {
+    const { db, call } = makeApp({ listVideoModels: async () => [vid('g/veo')] });
+    expect((await call('POST', '/api/media-models', { id: 'g/veo', kind: 'video' })).status).toBe(201);
+    expect(listMediaLibrary(db, 'image')).toEqual([]);
+    db.prepare("INSERT INTO media_events (created_at, kind, model_id, settings, cost, duration_ms, status) VALUES (1, 'video', 'g/veo', '{}', 0.2, 120000, 'complete')").run();
+    db.prepare("INSERT INTO media_events (created_at, kind, model_id, settings, cost, duration_ms, status) VALUES (2, 'video', 'g/veo', '{}', 0.2, 180000, 'complete')").run();
+    expect(listMediaLibrary(db, 'video')[0]).toMatchObject({ id: 'g/veo', kind: 'video', avgRenderMs: 150000, model: { id: 'g/veo' } });
   });
 });
 

@@ -10,7 +10,7 @@ import { replyErrorMessage } from './generate';
 import type { Usage } from './openrouter';
 import { getSetting, resolveApiKey } from './settings';
 import { maybeGenerateTitle } from './title';
-import { canGenerate, snapSettings, type ImageSettings } from '../../shared/imageModels';
+import { canGenerate, snapSettings, type ImageModel, type ImageSettings } from '../../shared/imageModels';
 import type { ImageGeneration } from '../../shared/types';
 
 export interface ImageRequest {
@@ -78,8 +78,8 @@ export async function startImageGeneration(deps: Deps, threadId: string, req: Im
   const thread = requireChat(db, threadId);
   if (thread.kind !== 'image') throw new HttpError(400, 'This is not an image thread.');
   if (!listMediaLibrary(db, 'image').some((m) => m.id === req.modelId)) throw new HttpError(400, 'Add this model to your image models first.');
-  const model = cachedMediaModel(db, 'image', req.modelId)
-    ?? (await getMediaCatalog(db, openrouter, 'image', false)).models.find((m) => m.id === req.modelId);
+  const model = (cachedMediaModel(db, 'image', req.modelId)
+    ?? (await getMediaCatalog(db, openrouter, 'image', false)).models.find((m) => m.id === req.modelId)) as ImageModel | undefined; // the image catalog holds only image models
   if (!model) throw new HttpError(400, 'That model is no longer offered by OpenRouter.');
   if (busy(db, threadId)) throw new HttpError(409, 'An image is still being made in this thread.');
   const { key } = resolveApiKey(db, env);

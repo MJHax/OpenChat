@@ -20,5 +20,5 @@ export function editTarget(o: { picked: string | null; newImage: boolean; upload
 
 /** The model to use: the saved one if the catalog still has it, else the first usable one in the list. */
 export function pickImageModel(library: MediaLibraryModel[], savedId: string): ImageModel | undefined {
-  return (library.find((e) => e.id === savedId && e.model) ?? library.find((e) => e.model))?.model ?? undefined;
+  return (library.find((e) => e.id === savedId && e.model) ?? library.find((e) => e.model))?.model as ImageModel | undefined;
 }

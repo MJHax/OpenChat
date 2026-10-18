@@ -3,7 +3,7 @@ import { now } from './db';
 import { HttpError } from './http';
 import { CATALOG_TTL_MS } from './catalog';
 import type { OpenRouterClient } from './openrouter';
-import type { ImageModel } from '../../shared/imageModels';
+import type { MediaModel } from '../../shared/types';
 import type { MediaCatalog, MediaKind, MediaLibraryModel } from '../../shared/types';
 
 export const MEDIA_KINDS: MediaKind[] = ['image', 'video'];
@@ -13,14 +13,14 @@ export function requireMediaKind(kind: unknown): MediaKind {
   return kind as MediaKind;
 }
 
-function readCache(db: DB, kind: MediaKind): { models: ImageModel[]; fetchedAt: number } | undefined {
+function readCache(db: DB, kind: MediaKind): { models: MediaModel[]; fetchedAt: number } | undefined {
   const row = db.prepare('SELECT fetched_at, json FROM media_catalog_cache WHERE kind = ?').get(kind) as { fetched_at: number; json: string } | undefined;
-  return row && { models: JSON.parse(row.json) as ImageModel[], fetchedAt: row.fetched_at };
+  return row && { models: JSON.parse(row.json) as MediaModel[], fetchedAt: row.fetched_at };
 }
 
-const FETCHERS: Record<MediaKind, ((o: OpenRouterClient) => Promise<ImageModel[]>) | null> = {
+const FETCHERS: Record<MediaKind, (o: OpenRouterClient) => Promise<MediaModel[]>> = {
   image: (o) => o.listImageModels(),
-  video: null,
+  video: (o) => o.listVideoModels(),
 };
 
 /** OpenRouter's image (or video) models, cached for a day; a failed refresh falls back to the cache, marked stale. */
@@ -28,7 +28,6 @@ export async function getMediaCatalog(db: DB, openrouter: OpenRouterClient, kind
   const cached = readCache(db, kind);
   if (cached && !refresh && Date.now() - cached.fetchedAt < CATALOG_TTL_MS) return { ...cached, stale: false };
   const fetch = FETCHERS[kind];
-  if (!fetch) return { models: [], fetchedAt: Date.now(), stale: false };
   try {
     const models = (await fetch(openrouter)).sort((a, b) => a.name.localeCompare(b.name));
     const fetchedAt = Date.now();
@@ -43,7 +42,7 @@ export async function getMediaCatalog(db: DB, openrouter: OpenRouterClient, kind
 }
 
 /** A catalog model by id from the cache, however old; null when it isn't cached. */
-export function cachedMediaModel(db: DB, kind: MediaKind, id: string): ImageModel | null {
+export function cachedMediaModel(db: DB, kind: MediaKind, id: string): MediaModel | null {
   return readCache(db, kind)?.models.find((m) => m.id === id) ?? null;
 }
 
@@ -67,8 +66,12 @@ export function listMediaLibrary(db: DB, kind: MediaKind): MediaLibraryModel[] {
   const rows = db.prepare('SELECT id, display_name FROM media_models WHERE kind = ? ORDER BY added_at, id').all(kind) as { id: string; display_name: string }[];
   const catalog = readCache(db, kind)?.models ?? [];
   const avg = averages(db, kind);
+  const render = new Map((db.prepare(
+    "SELECT model_id, AVG(duration_ms) AS ms FROM media_events WHERE kind = ? AND status = 'complete' AND duration_ms IS NOT NULL GROUP BY model_id",
+  ).all(kind) as { model_id: string; ms: number }[]).map((r) => [r.model_id, r.ms]));
   return rows.map((r) => ({
     id: r.id, displayName: r.display_name, kind, model: catalog.find((m) => m.id === r.id) ?? null, avgCost: avg.get(r.id) ?? {},
+    avgRenderMs: render.get(r.id) ?? null,
   }));
 }
 
