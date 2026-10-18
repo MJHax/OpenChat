@@ -178,7 +178,9 @@ CREATE TABLE IF NOT EXISTS video_jobs (
   polling_url TEXT NOT NULL,
   started_at INTEGER NOT NULL,
   next_poll_at INTEGER NOT NULL,
-  finished_at INTEGER
+  finished_at INTEGER,
+  -- When downloading the finished clip first failed (null while it never has).
+  download_failed_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS media_events_time ON media_events(created_at);
 CREATE INDEX IF NOT EXISTS media_events_thread ON media_events(thread_id);
@@ -208,6 +210,8 @@ function migrate(db: DB): void {
   if (!messageColumns.includes('web_search')) db.exec('ALTER TABLE messages ADD COLUMN web_search INTEGER NOT NULL DEFAULT 0');
   if (!messageColumns.includes('sources')) db.exec('ALTER TABLE messages ADD COLUMN sources TEXT');
   if (!messageColumns.includes('web_searches')) db.exec('ALTER TABLE messages ADD COLUMN web_searches INTEGER');
+  const videoJobColumns = (db.prepare('PRAGMA table_info(video_jobs)').all() as { name: string }[]).map((c) => c.name);
+  if (!videoJobColumns.includes('download_failed_at')) db.exec('ALTER TABLE video_jobs ADD COLUMN download_failed_at INTEGER');
   backfillUsage(db);
 }
 

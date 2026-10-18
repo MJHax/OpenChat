@@ -138,7 +138,7 @@ describe('video jobs', () => {
     expect(s.polls).toHaveLength(3);
   });
 
-  it('never gives up', async () => {
+  it('never gives up on a render', async () => {
     const s = setup();
     const id = await s.thread();
     const { assistantMessageId } = (await (await s.start(id)).json()) as { assistantMessageId: string };
@@ -176,6 +176,35 @@ describe('video jobs', () => {
     await p.tick();
     expect((await s.detail(id)).messages.find((m) => m.id === assistantMessageId)!.status).toBe('complete');
     expect(s.events()).toHaveLength(1);
+  });
+
+  it('gives up on a download that keeps failing for a day, and records it as paid', async () => {
+    const s = setup();
+    const id = await s.thread();
+    const { assistantMessageId } = (await (await s.start(id)).json()) as { assistantMessageId: string };
+    const p = s.poller();
+    s.advance(31_000);
+    s.job.status = 'completed';
+    s.job.usage = usage(0.12);
+    s.job.downloadFails = true;
+    await p.tick(); // the first failed download
+    for (let i = 0; i < 287; i++) { s.advance(5 * MIN); await p.tick(); } // 23 h 55 min later
+    expect((await s.detail(id)).messages.find((m) => m.id === assistantMessageId)!.status).toBe('generating');
+    expect(s.events()).toEqual([]);
+    s.advance(5 * MIN);
+    await p.tick();
+    const d = await s.detail(id);
+    expect(d.messages.find((m) => m.id === assistantMessageId)).toMatchObject({ status: 'error', cost: 0.12 });
+    expect(d.generations[assistantMessageId].error).toMatch(/likely charged/);
+    expect(s.events()).toMatchObject([{ status: 'complete', cost: 0.12, message_id: assistantMessageId }]);
+    expect(existsSync(join(s.deps.mediaDir, `${assistantMessageId}.mp4`))).toBe(false);
+    expect(existsSync(join(s.deps.mediaDir, `${assistantMessageId}.mp4.part`))).toBe(false);
+    const polls = s.polls.length;
+    s.advance(5 * MIN);
+    await p.tick();
+    expect(s.polls).toHaveLength(polls); // stopped trying
+    s.job.downloadFails = false;
+    expect((await s.start(id)).status).toBe(202); // the thread is free again
   });
 
   it('thread deleted mid-render', async () => {
@@ -255,6 +284,27 @@ describe('video jobs', () => {
     const res = await s.start(other, { modelId: 'x/grok', startAttachmentId: s.photo().id, endAttachmentId: s.photo().id });
     expect(res.status).toBe(400);
     expect((await s.start(other, { prompt: '  ' })).status).toBe(400);
+  });
+
+  it('two simultaneous requests submit one clip', async () => {
+    const s = setup();
+    const id = await s.thread();
+    const original = s.deps.openrouter.submitVideo;
+    s.deps.openrouter.submitVideo = async (o) => { await new Promise((r) => setTimeout(r, 20)); return original(o); };
+    const statuses = (await Promise.all([s.start(id), s.start(id)])).map((r) => r.status).sort();
+    expect(statuses).toEqual([202, 409]);
+    expect(s.submitted).toHaveLength(1);
+  });
+
+  it('a refused submit frees the thread', async () => {
+    const s = setup();
+    const id = await s.thread();
+    const original = s.deps.openrouter.submitVideo;
+    s.deps.openrouter.submitVideo = async () => { throw new OpenRouterError('nope', 400); };
+    expect((await s.start(id)).status).toBe(400);
+    expect((await s.start(id, { startAttachmentId: 'missing' })).status).toBe(400);
+    s.deps.openrouter.submitVideo = original;
+    expect((await s.start(id)).status).toBe(202);
   });
 
   it('tweak and retry reuses photos already in the thread', async () => {

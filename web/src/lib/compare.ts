@@ -6,7 +6,7 @@ export interface CompareState {
 export const COMPARE_OFF: CompareState = { enabled: false, modelIds: [] };
 export const MAX_COMPARE = 4;
 
-const storageKey = (chatId: string) => `openchat.compare.${chatId}`;
+export const compareKey = (chatId: string) => `openchat.compare.${chatId}`;
 
 export function parseCompareState(raw: string | null): CompareState {
   try {
@@ -33,7 +33,7 @@ export function toggleModel(state: CompareState, id: string): CompareState {
 
 export function loadCompare(chatId: string): CompareState {
   try {
-    return parseCompareState(localStorage.getItem(storageKey(chatId)));
+    return parseCompareState(localStorage.getItem(compareKey(chatId)));
   } catch {
     return COMPARE_OFF;
   }
@@ -41,7 +41,7 @@ export function loadCompare(chatId: string): CompareState {
 
 export function saveCompare(chatId: string, state: CompareState): void {
   try {
-    localStorage.setItem(storageKey(chatId), JSON.stringify(state));
+    localStorage.setItem(compareKey(chatId), JSON.stringify(state));
   } catch {
     // storage unavailable (private window); compare mode just won't be remembered
   }
