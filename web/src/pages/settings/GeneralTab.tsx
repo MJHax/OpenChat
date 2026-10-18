@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { LibraryModel, SettingsUpdate, SettingsView, Theme } from '../../../../shared/types';
 import { api } from '../../api';
 import { SEARCH_NOTE } from '../../lib/search';
+import { SpendingLimitsSection } from './SpendingLimitsSection';
 
 export interface GeneralTabProps {
   view: SettingsView;
@@ -87,6 +88,8 @@ export function GeneralTab({ view, models, section, update }: GeneralTabProps) {
           <button className="primary" onClick={savePersonalization}>Save</button>
         </div>
       </div>
+
+      <SpendingLimitsSection limits={view.spendingLimits} update={update} />
 
       <h2>Other</h2>
       <div className="card">

@@ -426,3 +426,11 @@ button.danger-button:not(:disabled):hover { background: var(--danger); color: #f
 .modal { max-width: 480px; width: 100%; max-height: calc(100vh - 32px); overflow-y: auto; }
 .modal h3 { margin: 0; }
 .modal p, .modal ul { margin: 0; }
+
+/* Spending limits */
+.limit-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.limit-toggle { display: flex; align-items: center; gap: 6px; min-width: 90px; }
+.limit-amount { display: inline-flex; align-items: center; gap: 4px; }
+.limit-amount input { width: 90px; }
+.spend-notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--ctx-attachments); border-radius: 10px; padding: 6px 10px; font-size: 13px; }
+.page h2[id] { scroll-margin-top: 16px; }

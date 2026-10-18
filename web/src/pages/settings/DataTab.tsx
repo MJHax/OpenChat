@@ -86,7 +86,7 @@ function ConfirmDelete({ target, view, onClose, onDone }: {
         <p className="small"><strong>This can't be undone.</strong> Export first if you might want any of it.</p>
         <label className="field">
           Type DELETE to confirm
-          <input type="text" value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus autoComplete="off" spellCheck={false} />
+          <input type="text" aria-label="Type DELETE to confirm" value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus autoComplete="off" spellCheck={false} />
         </label>
         {error && <p className="error-text small">{error}</p>}
         <div className="row">

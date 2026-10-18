@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { ErrorText } from './ErrorText';
 
 /** Asks the memory model to condense `text` into a fact, lets the user edit it, and saves it to Memory. */
 export function RememberBox({ text, onClose }: { text: string; onClose(saved: boolean): void }) {
@@ -35,7 +36,7 @@ export function RememberBox({ text, onClose }: { text: string; onClose(saved: bo
         <span className="muted small">Suggesting a memory…</span>
       ) : (
         <>
-          {error && <span className="error-text small">{error}</span>}
+          {error && <span className="error-text small"><ErrorText message={error} /></span>}
           <input type="text" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Type the fact to remember" autoFocus />
           <div className="row">
             <button onClick={() => onClose(false)}>Cancel</button>

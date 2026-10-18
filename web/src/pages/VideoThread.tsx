@@ -6,6 +6,8 @@ import { navigate } from '../lib/route';
 import { renderHint, renderingNote } from '../lib/videoUi';
 import { askNotifyPermission } from '../lib/notify';
 import { VideoComposer } from '../components/VideoComposer';
+import { ErrorText } from '../components/ErrorText';
+import { SpendNotice } from '../components/SpendNotice';
 import { MediaStatsPopover } from '../components/MediaStatsPopover';
 import { SiblingNav } from '../components/SiblingNav';
 
@@ -205,7 +207,8 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
               </div>
             );
           })}
-          {error && <div className="error-bubble"><span>{error}</span></div>}
+          {error && <div className="error-bubble"><ErrorText message={error} /></div>}
+          <SpendNotice refreshKey={detail} />
         </div>
       </div>
       {settings && model ? (

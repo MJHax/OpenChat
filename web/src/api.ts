@@ -2,7 +2,7 @@ import { parseSSE } from '../../shared/sse';
 import type {
   Attachment, CatalogResponse, ChatDetail, ChatSummary, CompareDone, CompareSlotDone, CompareSlotError, CompareStart, LibraryModel, Memory,
   Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle, StatsRange, StatsResponse, ChatStats, ContextUsage,
-  GeneratedItems, MediaCatalog, MediaKind, MediaLibraryModel, MediaStatsResponse, MediaThreadStats, ThreadKind, StorageUsage, DeleteTarget,
+  GeneratedItems, MediaCatalog, MediaKind, MediaLibraryModel, MediaStatsResponse, MediaThreadStats, ThreadKind, StorageUsage, DeleteTarget, LimitStatus,
 } from '../../shared/types';
 import type { ImageSettings } from '../../shared/imageModels';
 import type { VideoSettings } from '../../shared/videoModels';
@@ -60,6 +60,7 @@ export const api = {
   getSettings: () => json<SettingsView>('GET', '/api/settings'),
   updateSettings: (update: SettingsUpdate) => json<SettingsView>('PUT', '/api/settings', update),
   testKey: () => json<{ ok: boolean; error?: string }>('POST', '/api/settings/test-key'),
+  limits: () => json<LimitStatus[]>('GET', '/api/settings/limits'),
 
   storage: () => json<StorageUsage>('GET', '/api/data/storage'),
   cleanUp: () => json<StorageUsage>('POST', '/api/data/cleanup'),

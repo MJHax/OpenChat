@@ -10,6 +10,8 @@ import { ChatStatsPopover } from './ChatStatsPopover';
 import { ContextPopover } from './ContextPopover';
 import { CompareColumns, type Column } from './CompareColumns';
 import { Composer } from './Composer';
+import { ErrorText } from './ErrorText';
+import { SpendNotice } from './SpendNotice';
 import { MessageBody } from './MessageBody';
 import { FilePanel } from './FilePanel';
 import { FilePanelContext, type FilePanelApi } from './FilePanelContext';
@@ -401,7 +403,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
 
             {error && !pending && (
               <div className="error-bubble">
-                <span>{error}</span>
+                <ErrorText message={error} />
                 {messages.length > 0 && <button onClick={retry} disabled={!runModels}>Retry</button>}
               </div>
             )}
@@ -411,6 +413,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
                 <button onClick={retry} disabled={!!disabledReason}>Generate reply</button>
               </div>
             )}
+            <SpendNotice refreshKey={detail} />
           </div>
         </div>
 
