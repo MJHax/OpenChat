@@ -9,7 +9,7 @@ import type { ZipEntry } from './zip';
 import type { Message, ThreadKind } from '../../shared/types';
 
 const ROOT = 'openchat-export';
-const FOLDER: Record<ThreadKind, string> = { chat: 'chats', image: 'images', video: 'videos' };
+const FOLDER: Record<ThreadKind, string> = { chat: 'chats', image: 'images', video: 'videos', discussion: 'discussions' };
 
 /** A file name that is safe on Windows, macOS and Linux; never empty. */
 export function safeName(name: string, max = 60): string {

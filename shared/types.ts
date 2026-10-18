@@ -6,8 +6,8 @@ export type MediaModel = ImageModel | VideoModel;
 export type Role = 'user' | 'assistant';
 /** 'generating' and 'error' only occur in image and video threads. */
 export type MessageStatus = 'complete' | 'stopped' | 'generating' | 'error';
-/** What a thread is for: a conversation, or making images or videos. */
-export type ThreadKind = 'chat' | 'image' | 'video';
+/** What a thread is for: a conversation, making images or videos, or watching models discuss. */
+export type ThreadKind = 'chat' | 'image' | 'video' | 'discussion';
 export type Theme = 'light' | 'dark' | 'system';
 export type AttachmentKind = 'image' | 'pdf' | 'text';
 
@@ -46,6 +46,56 @@ export interface Message {
   sources: Source[];
   /** Assistant messages: how many searches ran, when known. */
   webSearches: number | null;
+  /** Discussions: who said it; null for host lines and in other threads. */
+  participantId: string | null;
+  /** Discussions: the participant a moderator turn handed the floor to; null otherwise. */
+  handoffTo: string | null;
+}
+
+export interface DiscussionParticipant {
+  id: string;
+  position: number;
+  name: string;
+  modelId: string;
+  /** Only this participant's model sees them. */
+  instructions: string;
+  isModerator: boolean;
+}
+
+/** 'active' discussions can take turns; the client decides whether it is running or paused. */
+export type DiscussionStatus = 'active' | 'ended';
+export type DiscussionEndReason = 'limit' | 'stopped' | 'moderator';
+
+export interface DiscussionState {
+  status: DiscussionStatus;
+  endReason: DiscussionEndReason | null;
+  /** The moderator's end_discussion reason. */
+  endNote: string | null;
+  turnLimit: number;
+  turnsTaken: number;
+}
+
+export interface DiscussionSummary {
+  text: string;
+  modelId: string;
+  cost: number | null;
+  createdAt: number;
+}
+
+export interface DiscussionDetail {
+  chat: { id: string; title: string; updatedAt: number; totalCost: number };
+  topic: string;
+  participants: (DiscussionParticipant & { turns: number; cost: number })[];
+  /** Oldest first; a discussion is one linear transcript. */
+  messages: Message[];
+  state: DiscussionState;
+  summary: DiscussionSummary | null;
+}
+
+export interface NewDiscussion {
+  topic: string;
+  turnLimit: number;
+  participants: { name: string; modelId: string; instructions: string; isModerator: boolean }[];
 }
 
 /** A message on the active path, with its sibling versions (same parent), oldest first. */
@@ -308,6 +358,11 @@ export interface CompareSlotText { slot: number; text: string }
 export interface CompareSlotDone { slot: number; message: Message }
 export interface CompareSlotError { slot: number; message: string; partial: Message | null }
 export interface CompareDone { compareParentId: string | null }
+
+// Server-sent events emitted by POST /api/discussions/:id/turn
+export interface DiscussionTurnStart { messageId: string; participantId: string }
+export interface DiscussionTurnDone { message: Message; state: DiscussionState }
+export interface DiscussionTurnError { message: string; partial: Message | null; state: DiscussionState }
 
 /** Time range the Stats page shows. */
 export type StatsRange = 'all' | 'year' | 'month' | 'week' | 'today';

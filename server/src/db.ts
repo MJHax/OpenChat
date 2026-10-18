@@ -55,7 +55,10 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at INTEGER NOT NULL,
   web_search INTEGER NOT NULL DEFAULT 0,
   sources TEXT,
-  web_searches INTEGER
+  web_searches INTEGER,
+  -- Discussions: who said it (null for host lines), and whom a moderator turn handed the floor to.
+  participant_id TEXT,
+  handoff_to TEXT
 );
 CREATE INDEX IF NOT EXISTS messages_chat ON messages(chat_id, created_at);
 
@@ -188,6 +191,30 @@ CREATE TABLE IF NOT EXISTS video_jobs (
 );
 CREATE INDEX IF NOT EXISTS media_events_time ON media_events(created_at);
 CREATE INDEX IF NOT EXISTS media_events_thread ON media_events(thread_id);
+
+-- One row per discussion thread (chats.kind = 'discussion'): its setup, where it stands, and its summary.
+CREATE TABLE IF NOT EXISTS discussions (
+  chat_id TEXT PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,
+  topic TEXT NOT NULL,
+  turn_limit INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('active', 'ended')),
+  end_reason TEXT CHECK (end_reason IN ('limit', 'stopped', 'moderator')),
+  end_note TEXT,
+  summary TEXT,
+  summary_model_id TEXT,
+  summary_cost REAL,
+  summary_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS discussion_participants (
+  id TEXT PRIMARY KEY,
+  chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  instructions TEXT NOT NULL DEFAULT '',
+  is_moderator INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS discussion_participants_chat ON discussion_participants(chat_id, position);
 `;
 
 export function openDb(file: string): DB {
@@ -220,6 +247,8 @@ function migrate(db: DB): void {
   if (!messageColumns.includes('web_search')) db.exec('ALTER TABLE messages ADD COLUMN web_search INTEGER NOT NULL DEFAULT 0');
   if (!messageColumns.includes('sources')) db.exec('ALTER TABLE messages ADD COLUMN sources TEXT');
   if (!messageColumns.includes('web_searches')) db.exec('ALTER TABLE messages ADD COLUMN web_searches INTEGER');
+  if (!messageColumns.includes('participant_id')) db.exec('ALTER TABLE messages ADD COLUMN participant_id TEXT');
+  if (!messageColumns.includes('handoff_to')) db.exec('ALTER TABLE messages ADD COLUMN handoff_to TEXT');
   const videoJobColumns = (db.prepare('PRAGMA table_info(video_jobs)').all() as { name: string }[]).map((c) => c.name);
   if (!videoJobColumns.includes('download_failed_at')) db.exec('ALTER TABLE video_jobs ADD COLUMN download_failed_at INTEGER');
   backfillUsage(db);

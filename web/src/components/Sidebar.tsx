@@ -16,7 +16,7 @@ export interface SidebarProps {
 }
 
 const MODES: { id: ThreadKind; label: string }[] = [{ id: 'chat', label: 'Chats' }, { id: 'image', label: 'Images' }, { id: 'video', label: 'Video' }];
-const HOME: Record<ThreadKind, string> = { chat: '#/', image: '#/images', video: '#/video' };
+const HOME: Record<ThreadKind, string> = { chat: '#/', image: '#/images', video: '#/video', discussion: '#/discussions' };
 export const threadHref = (kind: ThreadKind, id: string) => (kind === 'chat' ? `#/chat/${id}` : `${HOME[kind]}/${id}`);
 
 export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat }: SidebarProps) {
