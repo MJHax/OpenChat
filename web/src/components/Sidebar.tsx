@@ -15,8 +15,11 @@ export interface SidebarProps {
   onOpenChat(chatId: string, kind: ThreadKind): void;
 }
 
-const MODES: { id: ThreadKind; label: string }[] = [{ id: 'chat', label: 'Chats' }, { id: 'image', label: 'Images' }, { id: 'video', label: 'Video' }];
-const HOME: Record<ThreadKind, string> = { chat: '#/', image: '#/images', video: '#/video' };
+const MODES: { id: ThreadKind; label: string }[] = [
+  { id: 'chat', label: 'Chats' }, { id: 'image', label: 'Images' }, { id: 'video', label: 'Video' }, { id: 'discussion', label: 'Discussions' },
+];
+const NEW_LABEL: Record<ThreadKind, string> = { chat: 'New chat', image: 'New image', video: 'New video', discussion: 'New discussion' };
+const HOME: Record<ThreadKind, string> = { chat: '#/', image: '#/images', video: '#/video', discussion: '#/discussions' };
 export const threadHref = (kind: ThreadKind, id: string) => (kind === 'chat' ? `#/chat/${id}` : `${HOME[kind]}/${id}`);
 
 export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat }: SidebarProps) {
@@ -61,7 +64,7 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
     onChatsChanged();
   }
 
-  const newLabel = mode === 'image' ? 'New image' : mode === 'video' ? 'New video' : 'New chat';
+  const newLabel = NEW_LABEL[mode];
 
   if (collapsed) {
     return (
@@ -117,7 +120,7 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
                 ) : (
                   <div key={chat.id} className={`chat-item${chat.id === activeChatId ? ' active' : ''}`}>
                     <a href={threadHref(chat.kind, chat.id)} title={chat.title}>
-                      {chat.kind !== 'chat' && (
+                      {(chat.kind === 'image' || chat.kind === 'video') && (
                         <span className="thread-thumb">
                           {chat.thumbnailId ? <img src={attachmentUrl(chat.thumbnailId)} alt="" /> : chat.kind === 'video' ? '🎬' : null}
                         </span>

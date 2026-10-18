@@ -237,6 +237,47 @@ describe('streamChat web search', () => {
   });
 });
 
+describe('streamChat function tools', () => {
+  const passTo = { name: 'pass_to', description: 'Give the floor to the next speaker.', parameters: { type: 'object', properties: {} } };
+  const bodyOf = async (o: Partial<Parameters<ReturnType<typeof createOpenRouterClient>['streamChat']>[0]>) => {
+    const { fn, calls } = fakeFetch(() => sse('data: [DONE]'));
+    await collect(createOpenRouterClient(fn).streamChat({ apiKey: 'k', model: 'm', messages: [], ...o }));
+    return JSON.parse(String(calls[0].init.body));
+  };
+  const toolChunk = (tool: object, finish?: string) =>
+    `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [tool] }, finish_reason: finish ?? null }] })}`;
+
+  it('sends function tools alongside web search', async () => {
+    const body = await bodyOf({ tools: [passTo], webSearch: 'tool' });
+    expect(body.tools).toEqual([
+      { type: 'openrouter:web_search', parameters: { max_results: 5 } },
+      { type: 'function', function: passTo },
+    ]);
+    expect(body.tool_choice).toBe('auto');
+    expect(await bodyOf({})).not.toHaveProperty('tool_choice');
+  });
+
+  it('assembles streamed tool call arguments', async () => {
+    const { fn } = fakeFetch(() => sse(
+      `data: ${JSON.stringify({ choices: [{ delta: { content: 'Over to you.' } }] })}`,
+      toolChunk({ index: 0, id: 'c1', type: 'function', function: { name: 'pass_to', arguments: '{"na' } }),
+      toolChunk({ index: 0, function: { arguments: 'me":"Egg"}' } }),
+      `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] })}`,
+      'data: [DONE]',
+    ));
+    const events = await collect(createOpenRouterClient(fn).streamChat({ apiKey: 'k', model: 'm', messages: [], tools: [passTo] }));
+    const calls = events.filter((e) => e.type === 'tool_call');
+    expect(calls).toEqual([{ type: 'tool_call', name: 'pass_to', arguments: '{"name":"Egg"}' }]);
+    expect(events.findIndex((e) => e.type === 'tool_call')).toBeGreaterThan(events.findIndex((e) => e.type === 'delta'));
+  });
+
+  it('emits tool calls when the stream ends without [DONE]', async () => {
+    const { fn } = fakeFetch(() => sse(toolChunk({ index: 0, function: { name: 'end_discussion', arguments: '{"reason":"done"}' } })));
+    const events = await collect(createOpenRouterClient(fn).streamChat({ apiKey: 'k', model: 'm', messages: [], tools: [passTo] }));
+    expect(events).toEqual([{ type: 'tool_call', name: 'end_discussion', arguments: '{"reason":"done"}' }]);
+  });
+});
+
 describe('toSources', () => {
   const cite = (url: string, title?: string) => ({ type: 'url_citation', url_citation: { url, title } });
   it('keeps only http(s) citations, as url and title', () => {

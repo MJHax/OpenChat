@@ -24,6 +24,11 @@ describe('parseHash', () => {
     expect(parseHash('#/video/v1')).toEqual({ page: 'video', threadId: 'v1' });
   });
 
+  it('maps discussions', () => {
+    expect(parseHash('#/discussions')).toEqual({ page: 'discussions', discussionId: null });
+    expect(parseHash('#/discussions/abc')).toEqual({ page: 'discussions', discussionId: 'abc' });
+  });
+
   it('maps image threads', () => {
     expect(parseHash('#/images')).toEqual({ page: 'images', threadId: null });
     expect(parseHash('#/images/abc')).toEqual({ page: 'images', threadId: 'abc' });

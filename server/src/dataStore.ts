@@ -6,9 +6,11 @@ import { HttpError } from './http';
 import { deleteThreadClips } from './videoJobs';
 import type { DeleteTarget, StorageUsage, ThreadKind } from '../../shared/types';
 
-export const DELETE_TARGETS: DeleteTarget[] = ['chats', 'images', 'videos', 'all'];
+export const DELETE_TARGETS: DeleteTarget[] = ['chats', 'images', 'videos', 'discussions', 'all'];
 
-const THREAD_KIND: Record<Exclude<DeleteTarget, 'all'>, ThreadKind> = { chats: 'chat', images: 'image', videos: 'video' };
+const THREAD_KIND: Record<Exclude<DeleteTarget, 'all'>, ThreadKind> = {
+  chats: 'chat', images: 'image', videos: 'video', discussions: 'discussion',
+};
 
 /**
  * Makes a delete final on disk. secure_delete zeroes freed pages, but the search index keeps deleted words in old
@@ -30,14 +32,19 @@ export function storageUsage({ db, mediaDir }: Deps): StorageUsage {
   const pageSize = db.pragma('page_size', { simple: true }) as number;
   const database = (db.pragma('page_count', { simple: true }) as number) * pageSize;
   const wal = db.memory ? 0 : fileSize(`${db.name}-wal`);
-  const messages = one(db, 'SELECT SUM(length(CAST(content AS BLOB)) + COALESCE(length(CAST(sources AS BLOB)), 0)) AS n FROM messages');
+  const text = 'SUM(length(CAST(m.content AS BLOB)) + COALESCE(length(CAST(m.sources AS BLOB)), 0))';
+  const discussions = one(db, `SELECT ${text} AS n FROM messages m JOIN chats c ON c.id = m.chat_id WHERE c.kind = 'discussion'`);
+  const messages = one(db, `SELECT ${text} AS n FROM messages m`) - discussions;
   const images = one(db,
     "SELECT SUM(a.size) AS n FROM attachments a JOIN messages m ON m.id = a.message_id WHERE m.role = 'assistant' AND a.kind = 'image'");
   const uploads = one(db, 'SELECT SUM(size) AS n FROM attachments') - images;
   const videos = clipFiles(mediaDir).reduce((t, f) => t + fileSize(join(mediaDir, f)), 0);
   const reclaimable = (db.pragma('freelist_count', { simple: true }) as number) * pageSize + wal;
-  const other = Math.max(0, database + wal + videos - messages - images - uploads - videos - reclaimable);
-  return { total: messages + uploads + images + videos + reclaimable + other, parts: { messages, uploads, images, videos, reclaimable, other } };
+  const other = Math.max(0, database + wal + videos - messages - discussions - images - uploads - videos - reclaimable);
+  return {
+    total: messages + discussions + uploads + images + videos + reclaimable + other,
+    parts: { messages, discussions, uploads, images, videos, reclaimable, other },
+  };
 }
 
 /** Gives the space of deleted content back to the disk. VACUUM rewrites the whole file, so it can take a while. */

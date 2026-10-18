@@ -58,7 +58,8 @@ a { color: var(--accent); }
 .thread-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .spinner { flex-shrink: 0; width: 12px; height: 12px; margin-left: auto; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.sidebar > .segmented { align-self: flex-start; }
+.sidebar > .segmented { align-self: stretch; }
+.sidebar > .segmented button { flex: 1 1 auto; padding: 4px 6px; }
 .chat-item:hover, .chat-item.active { background: var(--hover); }
 .chat-actions { display: none; }
 .chat-item:hover .chat-actions { display: flex; }
@@ -432,6 +433,7 @@ button.chip.more { border-style: dashed; color: var(--muted); }
 .store-videos { background: var(--ctx-assistant); }
 .store-reclaimable { background: var(--ctx-user); }
 .store-other { background: var(--muted); }
+.store-discussions { background: #7f6fd6; }
 a.button-link { display: inline-block; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 6px 12px; color: var(--text); text-decoration: none; }
 a.button-link:hover { border-color: var(--accent); }
 .data-delete-row { justify-content: space-between; align-items: center; }
@@ -451,3 +453,41 @@ button.danger-button:not(:disabled):hover { background: var(--danger); color: #f
 .limit-amount input { width: 90px; }
 .spend-notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--ctx-attachments); border-radius: 10px; padding: 6px 10px; font-size: 13px; }
 .page h2[id] { scroll-margin-top: 16px; }
+
+/* Discussions */
+.avatar { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex: none; }
+.avatar.small { width: 22px; height: 22px; font-size: 10px; }
+.avatar-stack { display: inline-flex; align-items: center; gap: 0; font-size: 13px; }
+.avatar-stack .avatar + .avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--bg); }
+.discussion-tools { align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.discussion .chat-header { align-items: center; }
+.turn { display: flex; gap: 10px; align-items: flex-start; }
+.turn-main { min-width: 0; flex: 1; }
+.turn-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.turn-name .muted { font-weight: 400; }
+.turn.host { flex-direction: column; align-items: flex-end; gap: 2px; }
+.turn.host .bubble { max-width: 85%; }
+.turn.queued { opacity: 0.7; }
+.handoff-tag { margin-left: 6px; font-weight: 500; font-size: 12px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 8px; }
+.turn-handoff { font-size: 13px; padding-left: 38px; }
+.discussion-end { text-align: center; font-size: 13px; }
+.summary-card h3 { margin: 0; font-size: 15px; }
+.participants-panel { width: 320px; }
+.participant-pop-row { padding: 6px 0; border-top: 1px solid var(--border); }
+.participant-pop-row:first-of-type { border-top: none; }
+.participant-pop-name { display: flex; gap: 8px; align-items: flex-start; }
+.participant-instructions p { white-space: pre-wrap; margin: 4px 0 0; }
+.summary-pick { display: flex; gap: 6px; }
+.summary-pick select { flex: 1; min-width: 0; }
+.discussion-setup { display: flex; flex-direction: column; gap: 12px; }
+.discussion-setup h2 { margin: 12px 0 0; }
+.participant-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.participant-row { gap: 8px; padding: 12px; }
+.participant-row-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.participant-row-top input:not([type='checkbox']) { flex: 1 1 160px; min-width: 0; }
+.participant-row-top select { flex: 1 1 160px; min-width: 0; }
+.moderator-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap; }
+.discussion-setup > button { align-self: flex-start; }
+.setup-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.turn-limit { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+.turn-limit input { width: 80px; }

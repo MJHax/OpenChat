@@ -25,7 +25,8 @@ export function statsRoutes({ db }: Deps): Hono {
     const events = loadMediaEvents(db, null);
     const total = allSpend(usage, events, range, now, tz);
     if (view === 'chats') {
-      const rows = usage.filter((u) => u.threadKind === 'chat');
+      // Discussions are conversations too: their replies count with chats.
+      const rows = usage.filter((u) => u.threadKind === 'chat' || u.threadKind === 'discussion');
       return c.json({ ...computeStats({ rows, range, now, tz, chatTitles: chatTitles(db), modelNames: mediaAwareNames(db) }), allSpend: total });
     }
     return c.json({

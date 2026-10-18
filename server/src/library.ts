@@ -73,6 +73,7 @@ export function listLibrary(db: DB): LibraryModel[] {
     completionPrice: r.completion_price,
     isDefault: r.id === defaultId,
     inputModalities: parseModalities(r.input_modalities),
+    supportsTools: r.supports_tools === 1,
   }));
 }
 

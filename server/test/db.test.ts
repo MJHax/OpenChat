@@ -214,3 +214,48 @@ describe('web search storage', () => {
     db.close();
   });
 });
+
+describe('discussion storage', () => {
+  const cols = (db: ReturnType<typeof openDb>, table: string) =>
+    (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+
+  it('creates discussion tables and message columns', () => {
+    const db = openDb(':memory:');
+    expect(cols(db, 'discussions')).toEqual(expect.arrayContaining([
+      'chat_id', 'topic', 'turn_limit', 'status', 'end_reason', 'end_note', 'summary', 'summary_model_id', 'summary_cost', 'summary_at',
+    ]));
+    expect(cols(db, 'discussion_participants')).toEqual(expect.arrayContaining([
+      'id', 'chat_id', 'position', 'name', 'model_id', 'instructions', 'is_moderator',
+    ]));
+    expect(cols(db, 'messages')).toEqual(expect.arrayContaining(['participant_id', 'handoff_to']));
+  });
+
+  it('adds participant columns to an old messages table', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'openchat-')), 'old.db');
+    const old = new Database(file);
+    old.exec(`
+      CREATE TABLE chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, active_leaf_id TEXT);
+      CREATE TABLE messages (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, chat_id TEXT NOT NULL, parent_id TEXT,
+        role TEXT NOT NULL, content TEXT NOT NULL, model_id TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, cost REAL,
+        status TEXT NOT NULL DEFAULT 'complete', created_at INTEGER NOT NULL);
+      INSERT INTO chats VALUES ('c1', 'Old', 1, 1, 'm1');
+      INSERT INTO messages (id, chat_id, parent_id, role, content, created_at) VALUES ('m1', 'c1', NULL, 'user', 'hi', 1);
+    `);
+    old.close();
+    const db = openDb(file);
+    expect(cols(db, 'messages')).toEqual(expect.arrayContaining(['participant_id', 'handoff_to']));
+    expect(getMessage(db, 'm1')).toMatchObject({ participantId: null, handoffTo: null });
+    db.close();
+  });
+
+  it('deleting a discussion chat removes its discussion and participants', () => {
+    const db = openDb(':memory:');
+    const chat = createChat(db, 'discussion');
+    db.prepare("INSERT INTO discussions (chat_id, topic, turn_limit, status) VALUES (?, 'T', 10, 'active')").run(chat.id);
+    db.prepare("INSERT INTO discussion_participants (id, chat_id, position, name, model_id, instructions, is_moderator) VALUES ('p1', ?, 0, 'A', 'm', '', 0)")
+      .run(chat.id);
+    deleteChat(db, chat.id);
+    expect(db.prepare('SELECT count(*) AS n FROM discussions').get()).toEqual({ n: 0 });
+    expect(db.prepare('SELECT count(*) AS n FROM discussion_participants').get()).toEqual({ n: 0 });
+  });
+});

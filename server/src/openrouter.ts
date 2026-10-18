@@ -80,11 +80,20 @@ export interface Usage {
 /** 'tool': the model decides when to search (needs tool support). 'plugin': one search per reply, any model. */
 export type WebSearchMode = 'tool' | 'plugin';
 
+/** A function the model may call; `parameters` is a JSON Schema object. */
+export interface FunctionTool {
+  name: string;
+  description: string;
+  parameters: object;
+}
+
 export type StreamEvent =
   | { type: 'delta'; text: string }
   | { type: 'reasoning'; text: string }
   | { type: 'sources'; sources: Source[] }
-  | { type: 'usage'; usage: Usage };
+  | { type: 'usage'; usage: Usage }
+  /** A finished function call, emitted once the stream ends; `arguments` is the model's raw JSON text. */
+  | { type: 'tool_call'; name: string; arguments: string };
 
 const isWebUrl = (url: string): boolean => {
   try {
@@ -105,16 +114,22 @@ export function toSources(annotations: unknown): Source[] {
   });
 }
 
-/** Request fields for web search. The tool's 3-call cap bounds the cost of one reply. */
-function searchFields(mode: WebSearchMode | undefined, plugins: Plugin[] | undefined): Record<string, unknown> {
+/** Request fields for web search and function tools. The search tool's 3-call cap bounds the cost of one reply. */
+function toolFields(mode: WebSearchMode | undefined, plugins: Plugin[] | undefined, functions: FunctionTool[] | undefined): Record<string, unknown> {
   const all: object[] = [...(plugins ?? [])];
+  const tools: object[] = [];
   const fields: Record<string, unknown> = {};
   if (mode === 'tool') {
-    fields.tools = [{ type: 'openrouter:web_search', parameters: { max_results: 5 } }];
+    tools.push({ type: 'openrouter:web_search', parameters: { max_results: 5 } });
     fields.max_tool_calls = 3;
   } else if (mode === 'plugin') {
     all.push({ id: 'web', max_results: 5 });
   }
+  if (functions?.length) {
+    tools.push(...functions.map((f) => ({ type: 'function', function: f })));
+    fields.tool_choice = 'auto';
+  }
+  if (tools.length) fields.tools = tools;
   if (all.length) fields.plugins = all;
   return fields;
 }
@@ -125,7 +140,7 @@ export interface OpenRouterClient {
   checkKey(apiKey: string): Promise<void>;
   complete(o: { apiKey: string; model: string; messages: ChatMessage[]; maxTokens?: number; onUsage?: (usage: Usage) => void }): Promise<string>;
   streamChat(o: {
-    apiKey: string; model: string; messages: ChatMessage[]; plugins?: Plugin[]; webSearch?: WebSearchMode; signal?: AbortSignal;
+    apiKey: string; model: string; messages: ChatMessage[]; plugins?: Plugin[]; webSearch?: WebSearchMode; tools?: FunctionTool[]; signal?: AbortSignal;
   }): AsyncGenerator<StreamEvent>;
   /** Image models with their pricing; a model whose pricing can't be fetched is listed with an unknown price. */
   listImageModels(): Promise<ImageModel[]>;
@@ -296,16 +311,24 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
       return { data, mime, usage: json.usage ? parseUsage(json.usage) : null };
     },
 
-    async *streamChat({ apiKey, model, messages, plugins, webSearch, signal }) {
+    async *streamChat({ apiKey, model, messages, plugins, webSearch, tools, signal }) {
       const res = await request('/chat/completions', {
         method: 'POST',
         apiKey,
         signal,
-        body: JSON.stringify({ model, messages, stream: true, usage: { include: true }, ...searchFields(webSearch, plugins) }),
+        body: JSON.stringify({ model, messages, stream: true, usage: { include: true }, ...toolFields(webSearch, plugins, tools) }),
       });
       if (!res.body) throw new OpenRouterError('Empty response from OpenRouter.', 502);
+      // Function calls stream in pieces by index: the name once, the arguments as text fragments.
+      const calls: { name: string; arguments: string }[] = [];
+      const finishedCalls = function* (): Generator<StreamEvent> {
+        for (const call of calls) if (call?.name) yield { type: 'tool_call', name: call.name, arguments: call.arguments };
+      };
       for await (const { data } of parseSSE(res.body)) {
-        if (data === '[DONE]') return;
+        if (data === '[DONE]') {
+          yield* finishedCalls();
+          return;
+        }
         let chunk: any;
         try {
           chunk = JSON.parse(data);
@@ -323,8 +346,17 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
           const sources = toSources(delta.annotations);
           if (sources.length) yield { type: 'sources', sources };
         }
+        if (Array.isArray(delta?.tool_calls)) {
+          for (const part of delta.tool_calls) {
+            const i = typeof part?.index === 'number' ? part.index : 0;
+            calls[i] ??= { name: '', arguments: '' };
+            if (typeof part.function?.name === 'string') calls[i].name += part.function.name;
+            if (typeof part.function?.arguments === 'string') calls[i].arguments += part.function.arguments;
+          }
+        }
         if (chunk.usage) yield { type: 'usage', usage: parseUsage(chunk.usage) };
       }
+      yield* finishedCalls();
     },
   };
 }

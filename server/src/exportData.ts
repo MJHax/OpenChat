@@ -6,10 +6,11 @@ import { getChatMessages } from './messages';
 import { activePath } from './tree';
 import { clipPath } from './videoJobs';
 import type { ZipEntry } from './zip';
-import type { Message, ThreadKind } from '../../shared/types';
+import { getDiscussionDetail } from './discussion/store';
+import type { DiscussionDetail, Message, ThreadKind } from '../../shared/types';
 
 const ROOT = 'openchat-export';
-const FOLDER: Record<ThreadKind, string> = { chat: 'chats', image: 'images', video: 'videos' };
+const FOLDER: Record<ThreadKind, string> = { chat: 'chats', image: 'images', video: 'videos', discussion: 'discussions' };
 
 /** A file name that is safe on Windows, macOS and Linux; never empty. */
 export function safeName(name: string, max = 60): string {
@@ -40,6 +41,24 @@ export function threadMarkdown(chat: ChatRow, all: Message[], hasClip: (messageI
   return `${lines.join('\n').trimEnd()}\n`;
 }
 
+/** One discussion as Markdown: who said what, in order, then the summary if there is one. */
+export function discussionMarkdown(d: DiscussionDetail): string {
+  const lines = [`# ${d.chat.title}`, '', `Exported from OpenChat. Topic: "${d.topic}".`, '', '## Participants', ''];
+  for (const p of d.participants) lines.push(`- **${p.name}**${p.isModerator ? ' (moderator)' : ''}: ${p.modelId}`);
+  lines.push('', '## Transcript');
+  for (const m of d.messages) {
+    const who = d.participants.find((p) => p.id === m.participantId);
+    const handoff = d.participants.find((p) => p.id === m.handoffTo);
+    if (who && !m.content.trim()) {
+      if (handoff) lines.push('', `_${who.name} passed the floor to ${handoff.name}._`);
+      continue;
+    }
+    lines.push('', who ? `**${who.name}** (${who.modelId}): ${m.content}` : `**Host**: ${m.content}`);
+  }
+  if (d.summary) lines.push('', '## Summary', '', d.summary.text);
+  return `${lines.join('\n').trimEnd()}\n`;
+}
+
 /**
  * Everything to put in the export zip, one entry at a time. Rows and blobs are read when each entry is reached
  * (never through an open iterator, which would block the database for other requests while the download runs).
@@ -56,6 +75,8 @@ export async function* exportEntries(deps: Deps): AsyncGenerator<ZipEntry> {
     messages: db.prepare('SELECT * FROM messages ORDER BY seq').all(),
     attachments: db.prepare('SELECT id, message_id, position, kind, filename, mime, size, created_at FROM attachments WHERE message_id IS NOT NULL ORDER BY created_at').all(),
     mediaGenerations: db.prepare('SELECT * FROM media_generations').all(),
+    discussions: db.prepare('SELECT * FROM discussions').all(),
+    discussionParticipants: db.prepare('SELECT * FROM discussion_participants ORDER BY chat_id, position').all(),
     memories: db.prepare('SELECT * FROM memories ORDER BY created_at, id').all(),
     // Personalization (about_me, custom_instructions) and every other setting, but never the API key.
     settings: Object.fromEntries((db.prepare("SELECT key, value FROM settings WHERE key != 'api_key'").all() as { key: string; value: string }[]).map((r) => [r.key, r.value])),
@@ -64,7 +85,9 @@ export async function* exportEntries(deps: Deps): AsyncGenerator<ZipEntry> {
 
   for (const chat of chats) {
     if (!db.prepare('SELECT 1 FROM chats WHERE id = ?').get(chat.id)) continue; // deleted while exporting
-    const md = threadMarkdown(chat, getChatMessages(db, chat.id), hasClip);
+    const md = chat.kind === 'discussion'
+      ? discussionMarkdown(getDiscussionDetail(db, chat.id))
+      : threadMarkdown(chat, getChatMessages(db, chat.id), hasClip);
     yield { name: `${ROOT}/${threadPath(chat)}`, data: () => [Buffer.from(md)] };
   }
 
