@@ -52,5 +52,7 @@ describe('formatBytes', () => {
     expect(formatBytes(1536)).toBe('1.5 KB');
     expect(formatBytes(5 * 1024 * 1024)).toBe('5 MB');
     expect(formatBytes(20.25 * 1024 * 1024)).toBe('20.3 MB');
+    expect(formatBytes(1.5 * 1024 ** 3)).toBe('1.5 GB');
+    expect(formatBytes(0)).toBe('0 B');
   });
 });
