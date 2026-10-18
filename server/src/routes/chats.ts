@@ -6,6 +6,7 @@ import { getChatMessages, getMessage } from '../messages';
 import { newestLeafFrom, repliesTo } from '../tree';
 import { computeChatStats } from '../stats';
 import { loadChatUsageRows } from '../usage';
+import { computeMediaThreadStats, loadMediaEvents } from '../mediaStats';
 import type { ThreadKind } from '../../../shared/types';
 
 const KINDS: ThreadKind[] = ['chat', 'image', 'video'];
@@ -31,7 +32,8 @@ export function chatRoutes({ db }: Deps): Hono {
 
   r.get('/:id/stats', (c) => {
     const id = c.req.param('id');
-    requireChat(db, id);
+    const chat = requireChat(db, id);
+    if (chat.kind !== 'chat') return c.json(computeMediaThreadStats(loadMediaEvents(db, chat.kind, id), loadChatUsageRows(db, id)));
     return c.json(computeChatStats(loadChatUsageRows(db, id)));
   });
 

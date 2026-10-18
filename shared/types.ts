@@ -309,6 +309,47 @@ export interface StatsResponse {
   biggestByLength: BigChat[];
   /** When cache, speed, error and feature tracking began (first non-backfilled call); null if never. */
   trackingSince: number | null;
+  /** Everything OpenChat spent in the range, chats, images and videos together: matches the OpenRouter bill. */
+  allSpend: number;
+}
+
+/** The Images (or Video) view of the Stats page. */
+export interface MediaStatsResponse {
+  range: StatsRange;
+  tiles: {
+    /** Images or clips made (failures not included). */
+    count: number;
+    /** Generations plus title calls for these threads. */
+    spend: number;
+    avgCost: number | null;
+    avgDurationMs: number | null;
+    /** Only models that report tokens count here; `tokenModels` says how many did. */
+    promptTokens: number;
+    completionTokens: number;
+    tokenModels: number;
+    failures: number;
+    /** Video only. */
+    seconds?: number;
+    avgCostPerSecond?: number | null;
+  };
+  heatmap: HeatDay[];
+  buckets: { key: string; label: string; count: number; cost: number }[];
+  models: {
+    id: string; name: string; count: number; spend: number; avgCost: number | null; avgDurationMs: number | null;
+    promptTokens: number | null; completionTokens: number | null; failures: number; seconds?: number;
+  }[];
+  /** Images only: fresh images, edits of generated ones, edits of uploaded photos. */
+  modes: { new: number; editGenerated: number; editUpload: number } | null;
+  /** Everything OpenChat spent in the range, every kind: matches the OpenRouter bill. */
+  allSpend: number;
+}
+
+export interface MediaThreadStats {
+  count: number;
+  spend: number;
+  avgCost: number | null;
+  avgDurationMs: number | null;
+  failures: number;
 }
 
 export interface ChatStats {

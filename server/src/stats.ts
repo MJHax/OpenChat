@@ -106,7 +106,7 @@ function biggestChats(rows: UsageRow[], titles: Map<string, string>): { byCost: 
   };
 }
 
-export function computeStats({ rows, range, now, tz, chatTitles, modelNames }: StatsInput): StatsResponse {
+export function computeStats({ rows, range, now, tz, chatTitles, modelNames }: StatsInput): Omit<StatsResponse, 'allSpend'> {
   const window = rangeWindow(range, now, tz);
   const inRange = rows.filter((r) => (window.start === null || r.createdAt >= window.start) && r.createdAt <= now);
   const replies = inRange.filter(counted);
