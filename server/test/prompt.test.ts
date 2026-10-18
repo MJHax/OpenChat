@@ -16,6 +16,14 @@ describe('buildSystemPrompt', () => {
     );
     expect(buildSystemPrompt({ ...empty, customInstructions: 'Be brief.' })).toBe('Instructions:\nBe brief.');
   });
+
+  it('adds per-chat instructions after the global ones', () => {
+    expect(buildSystemPrompt({ ...empty, customInstructions: 'Be brief.', chatInstructions: ' Use French. ', memories: ['Likes tea'] })).toBe(
+      'Instructions:\nBe brief.\n\nInstructions for this chat:\nUse French.\n\nThings to remember about the user:\n- Likes tea',
+    );
+    expect(buildSystemPrompt({ ...empty, chatInstructions: 'Use French.' })).toBe('Instructions for this chat:\nUse French.');
+    expect(buildSystemPrompt({ ...empty, chatInstructions: '  ' })).toBeNull();
+  });
 });
 
 describe('buildMessages', () => {

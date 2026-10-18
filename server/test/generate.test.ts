@@ -61,6 +61,15 @@ describe('send', () => {
     expect(calls[1].at(-1)!.content).toBe('Hi');
   });
 
+  it("sends the chat's instructions after the global ones", async () => {
+    const { streamChat, calls } = scripted([{ chunks: ['ok'] }]);
+    const { call, db } = makeApp({ streamChat });
+    updateSettings(db, { customInstructions: 'Be brief.' });
+    const chatId = ((await (await call('POST', '/api/chats', { instructions: 'Use French.' })).json()) as ChatSummary).id;
+    await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: 'm/x' }));
+    expect(calls[0][0].content).toContain('Instructions:\nBe brief.\n\nInstructions for this chat:\nUse French.');
+  });
+
   it('includes the persona and only enabled memories in the prompt', async () => {
     const { streamChat, calls } = scripted([{ chunks: ['ok'] }]);
     const { call, db } = makeApp({ streamChat });

@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import type { Deps } from '../app';
 import { HttpError, readJson } from '../http';
-import { createChat, deleteChat, getChatDetail, listChats, renameChat, requireChat, setActiveLeaf, setCompareParent } from '../chats';
+import {
+  createChat, deleteChat, getChatDetail, listChats, parseInstructions, renameChat, requireChat, setActiveLeaf, setCompareParent, setInstructions,
+} from '../chats';
 import { getChatMessages, getMessage } from '../messages';
 import { newestLeafFrom, repliesTo } from '../tree';
 import { computeChatStats } from '../stats';
@@ -26,8 +28,8 @@ export function chatRoutes(deps: Deps): Hono {
 
   r.post('/', async (c) => {
     // A body is optional: a plain POST makes a chat.
-    const kind = c.req.header('content-type') ? (await readJson<{ kind?: string }>(c)).kind : undefined;
-    return c.json(createChat(db, threadKind(kind)), 201);
+    const body = c.req.header('content-type') ? await readJson<{ kind?: string; instructions?: unknown }>(c) : {};
+    return c.json(createChat(db, threadKind(body.kind), parseInstructions(body.instructions)), 201);
   });
 
   r.get('/:id', (c) => c.json(getChatDetail(db, c.req.param('id'))));
@@ -42,7 +44,9 @@ export function chatRoutes(deps: Deps): Hono {
   r.patch('/:id', async (c) => {
     const id = c.req.param('id');
     requireChat(db, id);
-    const body = await readJson<{ title?: string; selectMessageId?: string }>(c);
+    const body = await readJson<{ title?: string; selectMessageId?: string; instructions?: unknown }>(c);
+    const instructions = parseInstructions(body.instructions);
+    if (instructions !== undefined) setInstructions(db, id, instructions);
     if (body.title !== undefined) {
       const title = String(body.title).trim();
       if (!title) throw new HttpError(400, 'Title cannot be empty.');

@@ -135,3 +135,26 @@ describe('chat images', () => {
     expect(detail.chatImages).toEqual([]);
   });
 });
+
+describe('per-chat instructions', () => {
+  it('stores instructions on create and patch', async () => {
+    const { call } = makeApp();
+    const chat = (await (await call('POST', '/api/chats', { instructions: '  Use French.  ' })).json()) as ChatSummary;
+    let detail = (await (await call('GET', `/api/chats/${chat.id}`)).json()) as ChatDetail;
+    expect(detail.chat.instructions).toBe('Use French.');
+    detail = (await (await call('PATCH', `/api/chats/${chat.id}`, { instructions: 'Be terse.' })).json()) as ChatDetail;
+    expect(detail.chat.instructions).toBe('Be terse.');
+    detail = (await (await call('PATCH', `/api/chats/${chat.id}`, { instructions: '' })).json()) as ChatDetail;
+    expect(detail.chat.instructions).toBe('');
+    const plain = (await (await call('POST', '/api/chats')).json()) as ChatSummary;
+    expect(((await (await call('GET', `/api/chats/${plain.id}`)).json()) as ChatDetail).chat.instructions).toBe('');
+  });
+
+  it('rejects instructions that are too long or not text', async () => {
+    const { call } = makeApp();
+    const chat = (await (await call('POST', '/api/chats')).json()) as ChatSummary;
+    expect((await call('PATCH', `/api/chats/${chat.id}`, { instructions: 'x'.repeat(20_001) })).status).toBe(400);
+    expect((await call('PATCH', `/api/chats/${chat.id}`, { instructions: 42 })).status).toBe(400);
+    expect((await call('POST', '/api/chats', { instructions: ['a'] })).status).toBe(400);
+  });
+});

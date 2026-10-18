@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS chats (
   updated_at INTEGER NOT NULL,
   active_leaf_id TEXT,
   compare_parent_id TEXT,
-  kind TEXT NOT NULL DEFAULT 'chat'
+  kind TEXT NOT NULL DEFAULT 'chat',
+  instructions TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -199,6 +200,7 @@ function migrate(db: DB): void {
   const chatColumns = (db.prepare('PRAGMA table_info(chats)').all() as { name: string }[]).map((c) => c.name);
   if (!chatColumns.includes('compare_parent_id')) db.exec('ALTER TABLE chats ADD COLUMN compare_parent_id TEXT');
   if (!chatColumns.includes('kind')) db.exec("ALTER TABLE chats ADD COLUMN kind TEXT NOT NULL DEFAULT 'chat'");
+  if (!chatColumns.includes('instructions')) db.exec("ALTER TABLE chats ADD COLUMN instructions TEXT NOT NULL DEFAULT ''");
   const usageColumns = (db.prepare('PRAGMA table_info(usage_events)').all() as { name: string }[]).map((c) => c.name);
   if (!usageColumns.includes('thread_kind')) db.exec("ALTER TABLE usage_events ADD COLUMN thread_kind TEXT NOT NULL DEFAULT 'chat'");
   const modelColumns = (db.prepare('PRAGMA table_info(models)').all() as { name: string }[]).map((c) => c.name);

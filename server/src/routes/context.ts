@@ -9,10 +9,13 @@ import { estimateContext } from '../context';
 import { modelContextLength, modelModalities } from '../library';
 import { getChatMessages } from '../messages';
 import { replySystemPrompt } from '../prompt';
-import { getPersona } from '../settings';
+import { chatPersona } from '../settings';
 import { activePath } from '../tree';
 
-/** GET /api/context?model=…[&chat=…]: how full `model`'s window is for the chat's active path (or a new chat). */
+/**
+ * GET /api/context?model=…[&chat=…][&instructions=…]: how full `model`'s window is for the chat's active path, or for
+ * a new chat with draft instructions.
+ */
 export function contextRoutes({ db }: Deps): Hono {
   const r = new Hono();
 
@@ -26,7 +29,7 @@ export function contextRoutes({ db }: Deps): Hono {
     return c.json(estimateContext({
       modelId,
       contextLength: modelContextLength(db, modelId),
-      system: replySystemPrompt(getPersona(db), chatId ? chatImageNames(db, chatId) : []),
+      system: replySystemPrompt(chatPersona(db, chatId ?? null, c.req.query('instructions') ?? ''), chatId ? chatImageNames(db, chatId) : []),
       path: path.map((m, i) => ({ ...m, content: sent[i] })),
       canViewImages: canViewImages(modelModalities(db, modelId)),
       loadData: (id) => getAttachmentData(db, id) ?? Buffer.alloc(0),

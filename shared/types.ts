@@ -91,7 +91,11 @@ export interface MediaCatalog {
 }
 
 export interface ChatDetail {
-  chat: Omit<ChatSummary, 'thumbnailId' | 'busy'> & { activeLeafId: string | null };
+  chat: Omit<ChatSummary, 'thumbnailId' | 'busy'> & {
+    activeLeafId: string | null;
+    /** This chat's own instructions, sent after the global custom instructions; '' when none. */
+    instructions: string;
+  };
   messages: PathMessage[];
   /** Set while a comparison's replies are waiting for the user to pick one. */
   compare: { parentId: string; replies: Message[] } | null;

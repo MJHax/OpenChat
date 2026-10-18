@@ -17,12 +17,25 @@ export interface ChatRow {
   active_leaf_id: string | null;
   compare_parent_id: string | null;
   kind: ThreadKind;
+  instructions: string;
 }
 
-export function createChat(db: DB, kind: ThreadKind = 'chat'): ChatSummary {
+export const MAX_INSTRUCTIONS = 20_000;
+
+/** Per-chat instructions (or a context note) from a request body, trimmed; undefined when absent. */
+export function parseInstructions(value: unknown, what = 'Instructions'): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') throw new HttpError(400, `${what} must be text.`);
+  const text = value.trim();
+  if (text.length > MAX_INSTRUCTIONS) throw new HttpError(400, `${what} can be at most ${MAX_INSTRUCTIONS.toLocaleString('en-US')} characters.`);
+  return text;
+}
+
+export function createChat(db: DB, kind: ThreadKind = 'chat', instructions = ''): ChatSummary {
   const id = newId();
   const t = now();
-  db.prepare('INSERT INTO chats (id, title, created_at, updated_at, active_leaf_id, kind) VALUES (?, ?, ?, ?, NULL, ?)').run(id, DEFAULT_TITLE, t, t, kind);
+  db.prepare('INSERT INTO chats (id, title, created_at, updated_at, active_leaf_id, kind, instructions) VALUES (?, ?, ?, ?, NULL, ?, ?)')
+    .run(id, DEFAULT_TITLE, t, t, kind, instructions);
   return { id, title: DEFAULT_TITLE, updatedAt: t, totalCost: 0, kind, thumbnailId: null, busy: false };
 }
 
@@ -53,6 +66,10 @@ export function listChats(db: DB, kind: ThreadKind = 'chat'): ChatSummary[] {
 
 export function renameChat(db: DB, id: string, title: string): void {
   db.prepare('UPDATE chats SET title = ? WHERE id = ?').run(title, id);
+}
+
+export function setInstructions(db: DB, id: string, instructions: string): void {
+  db.prepare('UPDATE chats SET instructions = ? WHERE id = ?').run(instructions, id);
 }
 
 export function setActiveLeaf(db: DB, id: string, leafId: string | null): void {
@@ -92,7 +109,8 @@ export function getChatDetail(db: DB, id: string): ChatDetail {
   const totalCost = chatCost(db, id);
   const choiceParent = pendingChoice(db, row);
   return {
-    chat: { id: row.id, title: row.title, updatedAt: row.updated_at, totalCost, kind: row.kind, activeLeafId: row.active_leaf_id },
+    chat: { id: row.id, title: row.title, updatedAt: row.updated_at, totalCost, kind: row.kind, activeLeafId: row.active_leaf_id,
+      instructions: row.instructions },
     messages: withSiblings(all, activePath(all, row.active_leaf_id)),
     compare: choiceParent ? { parentId: choiceParent, replies: repliesTo(all, choiceParent) } : null,
     chatImages: chatImages(db, id),

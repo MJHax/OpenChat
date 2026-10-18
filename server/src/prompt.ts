@@ -5,6 +5,8 @@ import type { Attachment, Message } from '../../shared/types';
 export interface Persona {
   aboutMe: string;
   customInstructions: string;
+  /** This chat's own instructions; replies only, never titles or memory suggestions. */
+  chatInstructions?: string;
   memories: string[];
 }
 
@@ -35,6 +37,7 @@ export function buildSystemPrompt(p: Persona): string | null {
   const sections: string[] = [];
   if (p.aboutMe.trim()) sections.push(`About the user:\n${p.aboutMe.trim()}`);
   if (p.customInstructions.trim()) sections.push(`Instructions:\n${p.customInstructions.trim()}`);
+  if (p.chatInstructions?.trim()) sections.push(`Instructions for this chat:\n${p.chatInstructions.trim()}`);
   const memories = p.memories.map((m) => m.trim()).filter(Boolean);
   if (memories.length) sections.push(`Things to remember about the user:\n${memories.map((m) => `- ${m}`).join('\n')}`);
   return sections.length ? sections.join('\n\n') : null;
