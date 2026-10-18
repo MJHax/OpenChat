@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { makeApp, readEvents } from './appHelpers';
 import { insertMessage } from '../src/messages';
-import { setActiveLeaf } from '../src/chats';
+import { getChatRow, setActiveLeaf } from '../src/chats';
 import { SUMMARY_PROMPT, seedContent } from '../src/continue';
 import { loadChatUsageRows } from '../src/usage';
 import { OpenRouterError, type OpenRouterClient, type StreamEvent } from '../src/openrouter';
@@ -79,6 +79,20 @@ describe('POST /api/chats/:id/continue', () => {
     const rows = loadChatUsageRows(ctx.db, old.id);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ purpose: 'summary', modelId: 'anthropic/claude-haiku-4.5', cost: 0.002, cachedTokens: 800, status: 'complete' });
+  });
+
+  it('treats an unanswered last message as an open question instead of sending it to be answered', async () => {
+    const { complete, calls } = summarizer();
+    const ctx = makeApp({ complete });
+    const old = await seededChat(ctx, false);
+    const leaf = getChatRow(ctx.db, old.id)!.active_leaf_id!;
+    const u3 = insertMessage(ctx.db, { chatId: old.id, parentId: leaf, role: 'user', content: 'Which font should we use?' });
+    setActiveLeaf(ctx.db, old.id, u3.id);
+
+    expect((await ctx.call('POST', `/api/chats/${old.id}/continue`, { modelId: 'm/x' })).status).toBe(201);
+    const sent = calls[0].messages;
+    expect(sent.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user', 'assistant', 'user']);
+    expect(sent.at(-1)!.content).toBe(`${SUMMARY_PROMPT}\n\nThe user's last message never got a reply; include it as an open question:\n\nWhich font should we use?`);
   });
 
   it('continues without a seed when no files were made', async () => {

@@ -50,11 +50,16 @@ export async function continueChat(deps: Deps, chatId: string, modelId: string):
   const { key } = resolveApiKey(db, env);
   if (!key) throw new HttpError(400, 'No OpenRouter API key set. Add one in Settings.');
 
-  // The same prompt a reply would get, plus the request: its prefix is likely still cached from the last reply.
+  // The same prompt a reply would get, plus the request: its prefix is likely still cached from the last reply. A last
+  // message whose reply was lost goes into the request as an open question; sent as is, the model answers it first.
+  const unanswered = path.at(-1)?.role === 'user' ? path.at(-1)! : null;
   const loadData = (id: string) => getAttachmentData(db, id) ?? Buffer.alloc(0);
-  const history = buildMessages(chatPersona(db, chatId), path, { inputModalities: modelModalities(db, modelId), loadData },
-    { imageNames: chatImageNames(db, chatId) }, chat.context_note);
-  const messages = withCacheMarkers(modelId, [...history, { role: 'user', content: SUMMARY_PROMPT }]);
+  const history = buildMessages(chatPersona(db, chatId), unanswered ? path.slice(0, -1) : path,
+    { inputModalities: modelModalities(db, modelId), loadData }, { imageNames: chatImageNames(db, chatId) }, chat.context_note);
+  const request = unanswered
+    ? `${SUMMARY_PROMPT}\n\nThe user's last message never got a reply; include it as an open question:\n\n${unanswered.content}`
+    : SUMMARY_PROMPT;
+  const messages = withCacheMarkers(modelId, [...history, { role: 'user', content: request }]);
 
   const startedAt = now();
   const t0 = Date.now();
