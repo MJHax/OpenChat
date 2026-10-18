@@ -11,7 +11,8 @@ import type { Usage } from './openrouter';
 import { getSetting, resolveApiKey } from './settings';
 import { maybeGenerateTitle } from './title';
 import { jobErrorOf, jobStatusOf } from './videoJobs';
-import { canGenerate, snapSettings, type ImageModel, type ImageSettings } from '../../shared/imageModels';
+import { canGenerate, estimateImageCost, snapSettings, type ImageModel, type ImageSettings } from '../../shared/imageModels';
+import { checkSpend } from './limits';
 import type { ImageGeneration } from '../../shared/types';
 
 export interface ImageRequest {
@@ -98,6 +99,7 @@ export async function startImageGeneration(deps: Deps, threadId: string, req: Im
   const blocked = canGenerate(model, refIds.length);
   if (blocked) throw new HttpError(400, blocked);
   const settings = snapSettings(model, req.settings);
+  checkSpend(db, { estimate: estimateImageCost(model, settings, null).cost });
   const uploadedRef = uploads.length > 0 || (parent?.attachments.length ?? 0) > 0
     || (target !== null && getMessage(db, target.messageId!)?.role === 'user');
   const mode: Mode = refIds.length === 0 ? 'new' : uploadedRef ? 'edit_upload' : 'edit_generated';

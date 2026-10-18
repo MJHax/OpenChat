@@ -9,6 +9,7 @@ import { streamComparison } from '../compare';
 import type { DB } from '../db';
 import type { Message } from '../../../shared/types';
 import type { ReplyKind } from '../usage';
+import { checkSpend } from '../limits';
 
 const requireText = (value: unknown, error: string): string => {
   if (typeof value !== 'string' || !value.trim()) throw new HttpError(400, error);
@@ -53,8 +54,12 @@ export function generationRoutes(deps: Deps): Hono {
   // Chats with a reply currently streaming; a second generation would fork the tree mid-reply.
   const inFlight = new Set<string>();
 
-  /** Reserves the chat for one generation. A running generation wins over a pending choice (it sets that choice). */
+  /**
+   * Reserves the chat for one generation. A running generation wins over a pending choice (it sets that choice).
+   * A reached spending limit refuses new work here, before anything is saved; work already running is never stopped.
+   */
   function claim(chat: ChatRow): void {
+    checkSpend(db);
     if (inFlight.has(chat.id)) throw new HttpError(409, 'A reply is still being generated in this chat. Wait for it to finish.');
     if (pendingChoice(db, chat)) throw new HttpError(409, 'Pick a reply to continue.');
     inFlight.add(chat.id);

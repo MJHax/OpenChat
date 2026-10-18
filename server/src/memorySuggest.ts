@@ -3,6 +3,7 @@ import { HttpError } from './http';
 import { OpenRouterError, type Usage } from './openrouter';
 import { now } from './db';
 import { recordUsage, type UsageStatus } from './usage';
+import { spendBlock } from './limits';
 import { getSetting, resolveApiKey } from './settings';
 
 export const MEMORY_PROMPT =
@@ -27,6 +28,8 @@ export async function suggestMemory(deps: Deps, text: unknown): Promise<string> 
   if (!model) throw new HttpError(400, 'Add a model in the Model Library first.');
   const { key } = resolveApiKey(db, env);
   if (!key) throw new HttpError(400, 'No OpenRouter API key set. Add one in Settings.');
+  const block = spendBlock(db);
+  if (block) throw new HttpError(402, `${block.short}. Type the fact yourself.`);
 
   const startedAt = now();
   const t0 = Date.now();

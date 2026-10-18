@@ -7,6 +7,7 @@ import { activePath, repliesTo } from './tree';
 import { now } from './db';
 import type { Usage } from './openrouter';
 import { recordUsage, type UsageStatus } from './usage';
+import { spendBlock } from './limits';
 
 export function cleanTitle(raw: string): string {
   const firstLine = raw.trim().split('\n')[0] ?? '';
@@ -55,6 +56,8 @@ async function generateTitle(deps: Deps, chatId: string, apiKey: string, fallbac
     .map((m) => `${m.role}: ${m.role === 'assistant' ? copyText(m.content) : m.content}${m.attachments.length ? ` [attached: ${m.attachments.map((a) => a.filename).join(', ')}]` : ''}`)
     .join('\n\n')
     .slice(0, 4000);
+  // Over a spending limit the chat just keeps its default title.
+  if (spendBlock(db)) return null;
   const model = getSetting(db, 'title_model_id') || fallbackModel;
   const startedAt = now();
   const t0 = Date.now();
