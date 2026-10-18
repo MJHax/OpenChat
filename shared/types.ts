@@ -91,7 +91,15 @@ export interface MediaCatalog {
 }
 
 export interface ChatDetail {
-  chat: Omit<ChatSummary, 'thumbnailId' | 'busy'> & { activeLeafId: string | null };
+  chat: Omit<ChatSummary, 'thumbnailId' | 'busy'> & {
+    activeLeafId: string | null;
+    /** This chat's own instructions, sent after the global custom instructions; '' when none. */
+    instructions: string;
+    /** A chat made by "Summarize and continue": the summary sent ahead of its messages; null otherwise. */
+    contextNote: string | null;
+    /** The chat it was continued from; `title` is null once that chat is deleted. */
+    continuedFrom: { id: string; title: string | null } | null;
+  };
   messages: PathMessage[];
   /** Set while a comparison's replies are waiting for the user to pick one. */
   compare: { parentId: string; replies: Message[] } | null;

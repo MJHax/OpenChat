@@ -33,7 +33,11 @@ CREATE TABLE IF NOT EXISTS chats (
   updated_at INTEGER NOT NULL,
   active_leaf_id TEXT,
   compare_parent_id TEXT,
-  kind TEXT NOT NULL DEFAULT 'chat'
+  kind TEXT NOT NULL DEFAULT 'chat',
+  instructions TEXT NOT NULL DEFAULT '',
+  -- Set on a chat made by "Summarize and continue": the editable summary, and the chat it came from (no foreign key).
+  context_note TEXT,
+  continued_from TEXT
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -84,7 +88,7 @@ CREATE INDEX IF NOT EXISTS attachments_message ON attachments(message_id, positi
 CREATE TABLE IF NOT EXISTS usage_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at INTEGER NOT NULL,
-  purpose TEXT NOT NULL CHECK (purpose IN ('reply', 'title', 'memory')),
+  purpose TEXT NOT NULL CHECK (purpose IN ('reply', 'title', 'memory', 'summary')),
   chat_id TEXT,
   message_id TEXT,
   run_id TEXT,
@@ -201,6 +205,10 @@ function migrate(db: DB): void {
   const chatColumns = (db.prepare('PRAGMA table_info(chats)').all() as { name: string }[]).map((c) => c.name);
   if (!chatColumns.includes('compare_parent_id')) db.exec('ALTER TABLE chats ADD COLUMN compare_parent_id TEXT');
   if (!chatColumns.includes('kind')) db.exec("ALTER TABLE chats ADD COLUMN kind TEXT NOT NULL DEFAULT 'chat'");
+  if (!chatColumns.includes('instructions')) db.exec("ALTER TABLE chats ADD COLUMN instructions TEXT NOT NULL DEFAULT ''");
+  if (!chatColumns.includes('context_note')) db.exec('ALTER TABLE chats ADD COLUMN context_note TEXT');
+  if (!chatColumns.includes('continued_from')) db.exec('ALTER TABLE chats ADD COLUMN continued_from TEXT');
+  allowSummaryUsage(db);
   const usageColumns = (db.prepare('PRAGMA table_info(usage_events)').all() as { name: string }[]).map((c) => c.name);
   if (!usageColumns.includes('thread_kind')) db.exec("ALTER TABLE usage_events ADD COLUMN thread_kind TEXT NOT NULL DEFAULT 'chat'");
   const modelColumns = (db.prepare('PRAGMA table_info(models)').all() as { name: string }[]).map((c) => c.name);
@@ -213,6 +221,23 @@ function migrate(db: DB): void {
   const videoJobColumns = (db.prepare('PRAGMA table_info(video_jobs)').all() as { name: string }[]).map((c) => c.name);
   if (!videoJobColumns.includes('download_failed_at')) db.exec('ALTER TABLE video_jobs ADD COLUMN download_failed_at INTEGER');
   backfillUsage(db);
+}
+
+/**
+ * Widens usage_events' purpose check to allow 'summary'. SQLite can't alter a CHECK, so the table is rebuilt from its
+ * own stored definition (which includes any columns added since) and the indexes are recreated.
+ */
+function allowSummaryUsage(db: DB): void {
+  const { sql } = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'usage_events'").get() as { sql: string };
+  const old = "'reply', 'title', 'memory')";
+  if (!sql.includes(old)) return;
+  db.transaction(() => {
+    db.exec('ALTER TABLE usage_events RENAME TO usage_events_old');
+    db.exec(sql.replace(old, "'reply', 'title', 'memory', 'summary')"));
+    db.exec('INSERT INTO usage_events SELECT * FROM usage_events_old');
+    db.exec('DROP TABLE usage_events_old');
+    db.exec(SCHEMA);
+  })();
 }
 
 /**

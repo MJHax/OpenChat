@@ -43,7 +43,7 @@ export function UsageChart({ buckets }: { buckets: UsageBucket[] }) {
           </div>
           <div className="chart-legend small muted">
             <span><i className="swatch reply" />Chat replies</span>
-            <span><i className="swatch background" />Background (titles, memory)</span>
+            <span><i className="swatch background" />Background (titles, memory, summaries)</span>
           </div>
         </>
       )}

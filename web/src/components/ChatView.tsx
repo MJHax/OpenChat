@@ -7,7 +7,10 @@ import { loadSearch, saveSearch } from '../lib/search';
 import { navigate } from '../lib/route';
 import { AttachmentChips } from './AttachmentChips';
 import { ChatStatsPopover } from './ChatStatsPopover';
-import { ContextPopover } from './ContextPopover';
+import { ContextPopover, percent, useContextUsages } from './ContextPopover';
+import { ContextNote } from './ContextNote';
+import { contextLevel } from '../lib/context';
+import { InstructionsButton } from './InstructionsButton';
 import { CompareColumns, type Column } from './CompareColumns';
 import { Composer } from './Composer';
 import { MessageBody } from './MessageBody';
@@ -60,6 +63,9 @@ type RunOptions =
   | { kind: 'regenerate'; parentId: string; baseLength: number; models: string[] }
   | { kind: 'edit'; messageId: string; text: string; attachments: Attachment[]; baseLength: number; models: string[] };
 
+/** The model that summarized each chat continued in this session, so the new chat starts on it. */
+const continuedModels = new Map<string, string>();
+
 export function ChatView({ chatId, title, reloadToken, models, settings, onChatsChanged }: ChatViewProps) {
   const [detail, setDetail] = useState<ChatDetail | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -69,6 +75,13 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   const [modelId, setModelId] = useState('');
   const [compare, setCompareState] = useState<CompareState>(COMPARE_OFF);
   const [webSearch, setWebSearchState] = useState(false);
+  /** Instructions set on a new chat before it exists; sent when the first message creates it. */
+  const [draftInstructions, setDraftInstructions] = useState('');
+  /** A continued chat's summary note as being edited; null when the chat has none. */
+  const [noteDraft, setNoteDraft] = useState<string | null>(null);
+  const [continuing, setContinuing] = useState(false);
+  /** Chats whose context warning was dismissed (until reload). */
+  const [warningDismissed, setWarningDismissed] = useState<Set<string>>(() => new Set());
   /** "Compare versions" view: the path index of the reply being compared, and all its versions. */
   const [versions, setVersions] = useState<{ index: number; replies: Message[] } | null>(null);
   /** The file open in the side panel; `messageId` is the reply it came from (null for a streaming file or a snippet). */
@@ -118,6 +131,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     setWebSearchState(chatId ? loadSearch(chatId) : false);
     if (!chatId) {
       setDetail(null);
+      setDraftInstructions('');
       return;
     }
     reload(chatId).catch((e: Error) => setError(e.message));
@@ -125,8 +139,12 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
 
   // New chats start on the default model; existing chats continue with the last model that replied.
   useEffect(() => {
-    setModelId(initialModelId(messages, models));
+    setModelId(initialModelId(messages, models, chatId ? continuedModels.get(chatId) : null));
   }, [detail, models]);
+
+  useEffect(() => {
+    setNoteDraft(detail?.chat.contextNote ?? null);
+  }, [detail?.chat.id, detail?.chat.contextNote]);
 
   // Keep the newest content in view.
   useEffect(() => {
@@ -141,7 +159,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   async function ensureChat(): Promise<string | null> {
     if (chatId) return chatId;
     try {
-      const id = (await api.createChat()).id;
+      const id = (await api.createChat('chat', draftInstructions)).id;
       createdChatRef.current = id;
       viewChatRef.current = id;
       saveCompare(id, compare);
@@ -257,8 +275,43 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   /** Library entries for the models the next generation uses, for the composer's image checks. */
   const replyModels = (runModels ?? []).map((id) => models.find((m) => m.id === id)).filter((m): m is LibraryModel => !!m);
 
+  const context = useContextUsages(chatId, runModels ?? [], detail, draftInstructions);
+  const level = contextLevel(context.fill);
+  const noteEditable = !!detail && detail.chat.contextNote !== null && !messages.some((m) => m.role === 'user');
+
+  /** Saves an edited summary note before the first message goes out; false if that failed. */
+  async function saveNote(): Promise<boolean> {
+    if (!chatId || !noteEditable || noteDraft === null || noteDraft.trim() === detail?.chat.contextNote) return true;
+    try {
+      setDetail(await api.setContextNote(chatId, noteDraft));
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
+    }
+  }
+
   const send = async (text: string, attachments: Attachment[]) =>
-    !!runModels && run({ kind: 'send', text, attachments, baseLength: messages.length, models: runModels });
+    !!runModels && (await saveNote()) && run({ kind: 'send', text, attachments, baseLength: messages.length, models: runModels });
+
+  /** "Summarize and continue" with the chat's current model; opens the new chat when the summary is ready. */
+  const summarize = async () => {
+    const model = modelId || runModels?.[0];
+    if (!chatId || !model) return;
+    setContinuing(true);
+    setError(null);
+    try {
+      const created = await api.continueChat(chatId, model);
+      continuedModels.set(created.id, model);
+      onChatsChanged();
+      navigate(`#/chat/${created.id}`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setContinuing(false);
+    }
+  };
+  const canContinue = !!chatId && messages.some((m) => m.role === 'user') && !streaming && !(settings !== null && !settings.hasApiKey);
   const regenerate = (index: number, model: string | null) => {
     const list = model ? [model] : compareList;
     if (list) run({ kind: 'regenerate', parentId: messages[index].parentId!, baseLength: index, models: list });
@@ -284,6 +337,14 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     } catch (e) {
       setError((e as Error).message);
     }
+  };
+  const saveInstructions = async (text: string) => {
+    if (!chatId) {
+      setDraftInstructions(text);
+      return;
+    }
+    const next = await api.setInstructions(chatId, text);
+    if (viewChatRef.current === chatId) setDetail(next);
   };
   const continueWith = async (messageId: string) => {
     await selectSibling(messageId);
@@ -341,7 +402,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
         <header className="chat-header">
           <h1>{chatId ? title : 'New chat'}</h1>
           <div className="chat-header-tools">
-            <ContextPopover chatId={chatId} modelIds={runModels ?? []} nameOf={nameOf} refreshKey={detail} />
+            <InstructionsButton value={chatId ? detail?.chat.instructions ?? '' : draftInstructions} onSave={saveInstructions} />
+            <ContextPopover context={context} show={!!runModels?.length} nameOf={nameOf} onContinue={canContinue ? summarize : null} continuing={continuing} />
             <ChatStatsPopover chatId={chatId} totalCost={detail?.chat.totalCost ?? 0} refreshKey={detail} />
           </div>
         </header>
@@ -355,6 +417,10 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
               </div>
             )}
             {!chatId && !pending && !noKey && !noModels && <div className="empty">How can I help you today?</div>}
+
+            {noteDraft !== null && (
+              <ContextNote draft={noteDraft} from={detail?.chat.continuedFrom ?? null} editable={noteEditable && !streaming} onChange={setNoteDraft} />
+            )}
 
             {shown.map((m, i) => (
               <MessageItem
@@ -409,6 +475,18 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
               <div className="no-reply">
                 <span className="muted">No reply yet. It was stopped before any text arrived.</span>
                 <button onClick={retry} disabled={!!disabledReason}>Generate reply</button>
+              </div>
+            )}
+            {chatId && canContinue && level !== 'ok' && !warningDismissed.has(chatId) && context.fullest && (
+              <div className={`context-warning${level === 'full' ? ' full' : ''}`} role="status">
+                <span>
+                  {level === 'full'
+                    ? `This chat has filled ${nameOf(context.fullest.modelId)}'s context window, so replies may fail or lose earlier messages.`
+                    : `This chat is using ${percent(context.fill)} of ${nameOf(context.fullest.modelId)}'s context window.`}
+                </span>
+                <button onClick={summarize} disabled={continuing}>{continuing ? 'Summarizing…' : 'Summarize and continue'}</button>
+                <button className="link" aria-label="Dismiss" title="Dismiss"
+                  onClick={() => setWarningDismissed((s) => new Set(s).add(chatId))}>✕</button>
               </div>
             )}
           </div>

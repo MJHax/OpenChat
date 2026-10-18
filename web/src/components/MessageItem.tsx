@@ -119,6 +119,15 @@ export function MessageItem({
     );
   }
 
+  // A reply with no message before it is a continued chat's seed: the previous chat's files, written by no model here.
+  if (message.parentId === null) {
+    return (
+      <div className="msg assistant seed">
+        <div className="msg-body"><MessageBody text={message.content} messageId={message.id} streaming={false} /></div>
+      </div>
+    );
+  }
+
   const tokens = (message.promptTokens ?? 0) + (message.completionTokens ?? 0);
   const regenerateChoices = [...models].sort((a, b) => Number(b.id === message.modelId) - Number(a.id === message.modelId));
 

@@ -3,7 +3,7 @@ import { cachedPrices } from './catalog';
 import type { Usage } from './openrouter';
 import type { ThreadKind } from '../../shared/types';
 
-export type UsagePurpose = 'reply' | 'title' | 'memory';
+export type UsagePurpose = 'reply' | 'title' | 'memory' | 'summary';
 export type ReplyKind = 'send' | 'edit' | 'regenerate';
 export type UsageStatus = 'complete' | 'stopped' | 'error';
 

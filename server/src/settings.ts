@@ -85,3 +85,9 @@ export function getPersona(db: DB): Persona {
     memories: rows.map((r) => r.content),
   };
 }
+
+/** The persona for a reply in `chatId`: the global one plus that chat's instructions, or `draft` for a chat not made yet. */
+export function chatPersona(db: DB, chatId: string | null, draft = ''): Persona {
+  const row = chatId ? (db.prepare('SELECT instructions FROM chats WHERE id = ?').get(chatId) as { instructions: string } | undefined) : undefined;
+  return { ...getPersona(db), chatInstructions: chatId ? row?.instructions ?? '' : draft };
+}

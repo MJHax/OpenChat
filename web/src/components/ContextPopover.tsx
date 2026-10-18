@@ -1,17 +1,51 @@
 import { useEffect, useState } from 'react';
 import type { ContextParts, ContextUsage } from '../../../shared/types';
 import { api } from '../api';
+import { contextLevel } from '../lib/context';
 import { compactNumber, formatPercent } from '../lib/stats';
 import { usePopover } from './usePopover';
 
+export interface ContextState {
+  usages: ContextUsage[] | null;
+  error: string | null;
+  /** The window that runs out first, and how full it is (null when its size is unknown). */
+  fullest: ContextUsage | null;
+  fill: number | null;
+}
+
+const fill = (u: ContextUsage) => (u.contextLength ? u.used / u.contextLength : null);
+
+/**
+ * How full each model's window is for the chat. `chatId` is null for a chat that hasn't been created yet (only the
+ * system prompt and `draftInstructions` count); `refreshKey` changes whenever the chat reloads, so the numbers tick up.
+ */
+export function useContextUsages(chatId: string | null, modelIds: string[], refreshKey: unknown, draftInstructions: string): ContextState {
+  const [usages, setUsages] = useState<ContextUsage[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const models = modelIds.join('\n');
+
+  useEffect(() => {
+    if (!models) return;
+    let current = true;
+    setError(null);
+    Promise.all(models.split('\n').map((id) => api.context(id, chatId, draftInstructions)))
+      .then((u) => current && setUsages(u))
+      .catch((e: Error) => current && setError(e.message));
+    return () => { current = false; };
+  }, [models, chatId, refreshKey, chatId ? '' : draftInstructions]);
+
+  const fullest = usages?.reduce<ContextUsage | null>((a, u) => (a && (fill(a) ?? 0) >= (fill(u) ?? 0) ? a : u), null) ?? null;
+  return { usages: models ? usages : null, error, fullest, fill: fullest ? fill(fullest) : null };
+}
+
 export interface ContextPopoverProps {
-  /** null for a chat that hasn't been created yet: only the system prompt counts. */
-  chatId: string | null;
-  /** The models the next message goes to: one, or each model being compared. */
-  modelIds: string[];
+  context: ContextState;
+  /** False when nothing goes to a model yet (no model picked). */
+  show: boolean;
   nameOf(id: string): string;
-  /** Changes whenever the chat reloads (e.g. after a reply), so the numbers tick up. */
-  refreshKey: unknown;
+  /** Offered once the chat has messages; null hides the button. */
+  onContinue: (() => void) | null;
+  continuing: boolean;
 }
 
 const PARTS: { key: keyof ContextParts; label: string }[] = [
@@ -22,9 +56,8 @@ const PARTS: { key: keyof ContextParts; label: string }[] = [
   { key: 'search', label: 'Web search results' },
 ];
 
-const fill = (u: ContextUsage) => (u.contextLength ? u.used / u.contextLength : null);
 /** Like formatPercent, but a chat that has started never reads 0%. */
-const percent = (f: number | null) => (f !== null && f > 0 && f < 0.005 ? '<1%' : formatPercent(f));
+export const percent = (f: number | null) => (f !== null && f > 0 && f < 0.005 ? '<1%' : formatPercent(f));
 const tilde = (u: ContextUsage) => (u.estimated ? '~' : '');
 
 function Bar({ usage }: { usage: ContextUsage }) {
@@ -51,32 +84,18 @@ function Summary({ usage }: { usage: ContextUsage }) {
   );
 }
 
-export function ContextPopover({ chatId, modelIds, nameOf, refreshKey }: ContextPopoverProps) {
+export function ContextPopover({ context, show, nameOf, onContinue, continuing }: ContextPopoverProps) {
   const { open, setOpen, root } = usePopover();
-  const [usages, setUsages] = useState<ContextUsage[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const models = modelIds.join('\n');
+  const { usages, error, fullest, fill: f } = context;
 
-  useEffect(() => {
-    if (!models) return;
-    let current = true;
-    setError(null);
-    Promise.all(models.split('\n').map((id) => api.context(id, chatId)))
-      .then((u) => current && setUsages(u))
-      .catch((e: Error) => current && setError(e.message));
-    return () => { current = false; };
-  }, [models, chatId, refreshKey]);
-
-  if (!models) return null;
-  // The fullest window is the one that runs out first.
-  const fullest = usages?.reduce<ContextUsage | null>((a, u) => (a && (fill(a) ?? 0) >= (fill(u) ?? 0) ? a : u), null) ?? null;
+  if (!show) return null;
   const shown = usages?.[0] ?? null;
-  const f = fullest ? fill(fullest) : null;
   const free = shown?.contextLength ? shown.contextLength - shown.used : null;
+  const level = contextLevel(f);
 
   return (
     <div className="stats-pop" ref={root}>
-      <button type="button" className={`link stats-pop-button${f !== null && f > 1 ? ' over' : ''}`} aria-expanded={open}
+      <button type="button" className={`link stats-pop-button${level === 'full' ? ' over' : level === 'warn' ? ' warn' : ''}`} aria-expanded={open}
         aria-haspopup="dialog" onClick={() => setOpen(!open)}>
         Context {fullest ? (f !== null ? `${tilde(fullest)}${percent(f)}` : `${tilde(fullest)}${compactNumber(fullest.used)}`) : '…'} ▾
       </button>
@@ -113,6 +132,14 @@ export function ContextPopover({ chatId, modelIds, nameOf, refreshKey }: Context
                   : 'Total is from the latest reply; the split by part is an estimate.'}
                 {usages.length > 1 ? ` Parts shown for ${nameOf(shown.modelId)}.` : ''}
               </p>
+              {onContinue && (
+                <div className="context-continue">
+                  <button onClick={() => { setOpen(false); onContinue(); }} disabled={continuing}>
+                    {continuing ? 'Summarizing…' : 'Summarize and continue'}
+                  </button>
+                  <p className="muted small">Starts a new chat from a short summary of this one, with its latest files. Costs about one reply.</p>
+                </div>
+              )}
             </>
           )}
         </div>

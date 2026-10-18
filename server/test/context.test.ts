@@ -105,4 +105,16 @@ describe('GET /api/context', () => {
     expect((await call('GET', '/api/context')).status).toBe(400);
     expect((await call('GET', '/api/context?model=m%2Fx&chat=nope')).status).toBe(404);
   });
+
+  it("counts the chat's instructions, or a new chat's draft, in the system prompt", async () => {
+    const { call } = makeApp();
+    const system = async (query: string) => ((await (await call('GET', `/api/context?model=m%2Fx${query}`)).json()) as ContextUsage).parts.system;
+    const base = await system('');
+    const words = 'Answer in French. '.repeat(20);
+    expect(await system(`&instructions=${encodeURIComponent(words)}`)).toBeGreaterThan(base + 50);
+    const chatId = ((await (await call('POST', '/api/chats', { instructions: words })).json()) as ChatSummary).id;
+    expect(await system(`&chat=${chatId}`)).toBeGreaterThan(base + 50);
+    // A saved chat's own instructions win over a draft.
+    expect(await system(`&chat=${chatId}&instructions=x`)).toBe(await system(`&chat=${chatId}`));
+  });
 });

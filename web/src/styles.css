@@ -1,20 +1,20 @@
 :root {
   --bg: #faf9f5; --sidebar: #f3f1ea; --surface: #ffffff; --text: #29261b; --muted: #6f6c63;
   --border: #e2dfd4; --hover: #e9e6dc; --accent: #c96442; --accent-text: #ffffff; --user-bubble: #eceae1;
-  --danger: #b42318; --mark: #f6e3a1; --code-bg: #1e1e1e;
+  --danger: #b42318; --warn: #b54708; --mark: #f6e3a1; --code-bg: #1e1e1e;
   color-scheme: light;
 }
 :root[data-theme='dark'] {
   --bg: #262624; --sidebar: #1f1e1d; --surface: #30302e; --text: #ece9e1; --muted: #a19d94;
   --border: #3d3c38; --hover: #353532; --accent: #d97757; --accent-text: #1f1e1d; --user-bubble: #393937;
-  --danger: #f97066; --mark: #6b5a1e; --code-bg: #171716;
+  --danger: #f97066; --warn: #fdb022; --mark: #6b5a1e; --code-bg: #171716;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
   :root[data-theme='system'] {
     --bg: #262624; --sidebar: #1f1e1d; --surface: #30302e; --text: #ece9e1; --muted: #a19d94;
     --border: #3d3c38; --hover: #353532; --accent: #d97757; --accent-text: #1f1e1d; --user-bubble: #393937;
-    --danger: #f97066; --mark: #6b5a1e; --code-bg: #171716;
+    --danger: #f97066; --warn: #fdb022; --mark: #6b5a1e; --code-bg: #171716;
     color-scheme: dark;
   }
 }
@@ -334,6 +334,23 @@ button.chip.more { border-style: dashed; color: var(--muted); }
   :root[data-theme='system'] { --ctx-system: #3987e5; --ctx-user: #d95926; --ctx-assistant: #199e70; --ctx-attachments: #c98500; --ctx-search: #d55181; }
 }
 .stats-pop-button.over { color: var(--danger); }
+.stats-pop-button.warn { color: var(--warn); }
+.context-continue { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px; }
+.context-continue p { margin: 4px 0 0; }
+.context-warning { position: sticky; bottom: 0; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--warn); border-radius: 10px; font-size: 13px; background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+.context-warning > span { flex: 1; min-width: 0; }
+.context-warning.full { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
+.context-note-card { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin-bottom: 16px; background: var(--surface); font-size: 14px; }
+.context-note-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.context-note-head a { color: var(--accent); font-weight: 400; }
+.context-note-card textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; }
+.context-note-card p { margin: 4px 0 0; }
+.context-note-body { white-space: pre-wrap; }
+.msg.assistant.seed { border-left: 3px solid var(--border); padding-left: 12px; }
+.instructions-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 4px; vertical-align: 2px; }
+.instructions-panel { width: 360px; }
+.instructions-panel textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; }
+.instructions-panel p { margin: 6px 0; }
 .context-model + .context-model { margin-top: 4px; }
 .context-model .stats-pop-row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .context-model .stats-pop-row > span:last-child { white-space: nowrap; }

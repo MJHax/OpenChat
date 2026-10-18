@@ -2,13 +2,13 @@ import type { Context } from 'hono';
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 import type { Deps } from './app';
 import { newId, now } from './db';
-import { setActiveLeaf, touchChat } from './chats';
+import { getChatRow, setActiveLeaf, touchChat } from './chats';
 import { getChatMessages, insertMessage } from './messages';
 import { OpenRouterError, type Usage, type WebSearchMode } from './openrouter';
 import { chatImageNames, getAttachmentData } from './attachments';
 import { modelModalities, modelSupportsTools } from './library';
-import { buildMessages, pdfPlugins, type ChatMessage, type Plugin } from './prompt';
-import { getPersona, resolveApiKey } from './settings';
+import { buildMessages, pdfPlugins, withCacheMarkers, type ChatMessage, type Plugin } from './prompt';
+import { chatPersona, resolveApiKey } from './settings';
 import { maybeGenerateTitle } from './title';
 import { activePath } from './tree';
 import { recordUsage, type ReplyKind, type UsageStatus } from './usage';
@@ -36,8 +36,9 @@ export function promptFor(deps: Deps, chatId: string, parentId: string, modelId:
   const inputModalities = modelModalities(db, modelId);
   const loadData = (id: string) => getAttachmentData(db, id) ?? Buffer.alloc(0);
   const webSearch = path.at(-1)?.webSearch ? (modelSupportsTools(db, modelId) ? 'tool' : 'plugin') : undefined;
-  const messages = buildMessages(getPersona(db), path, { inputModalities, loadData }, { imageNames: chatImageNames(db, chatId) });
-  return { messages, plugins: pdfPlugins(path, inputModalities), webSearch };
+  const note = getChatRow(db, chatId)?.context_note;
+  const messages = buildMessages(chatPersona(db, chatId), path, { inputModalities, loadData }, { imageNames: chatImageNames(db, chatId) }, note);
+  return { messages: withCacheMarkers(modelId, messages), plugins: pdfPlugins(path, inputModalities), webSearch };
 }
 
 /** Adds sources not seen yet (by URL), keeping arrival order and the first title. */
