@@ -4,6 +4,7 @@ import { api, attachmentUrl } from '../api';
 import { Segmented } from './stats/Segmented';
 import { groupByDate, splitSnippet } from '../lib/format';
 import { navigate } from '../lib/route';
+import { forgetChatPrefs } from '../lib/chatPrefs';
 
 export interface SidebarProps {
   /** Which threads the list shows: chats or image threads. */
@@ -55,7 +56,7 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
 
   async function remove(chat: ChatSummary) {
     if (!window.confirm(`Delete "${chat.title}"? This cannot be undone.`)) return;
-    await api.deleteChat(chat.id).catch(() => {});
+    await api.deleteChat(chat.id).then(() => forgetChatPrefs([chat.id])).catch(() => {});
     if (chat.id === activeChatId) navigate(HOME[mode]);
     onChatsChanged();
   }
