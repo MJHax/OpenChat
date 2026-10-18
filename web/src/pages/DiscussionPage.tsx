@@ -31,14 +31,11 @@ export function DiscussionPage({ discussionId, models, settings, onDiscussionsCh
 
   if (!discussionId) {
     return (
-      <>
-        {settings && !settings.hasApiKey && <div className="banner">Add your OpenRouter API key in <a href="#/settings">Settings</a>.</div>}
-        <DiscussionSetup models={models} onCreated={(d) => {
-          justCreated.set(d.chat.id, d);
-          onDiscussionsChanged();
-          navigate(`#/discussions/${d.chat.id}`);
-        }} />
-      </>
+      <DiscussionSetup models={models} noKey={!!settings && !settings.hasApiKey} onCreated={(d) => {
+        justCreated.set(d.chat.id, d);
+        onDiscussionsChanged();
+        navigate(`#/discussions/${d.chat.id}`);
+      }} />
     );
   }
   if (error) return <div className="page"><div className="page-inner"><p className="error-text">{error}</p></div></div>;

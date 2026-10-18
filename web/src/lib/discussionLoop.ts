@@ -56,7 +56,7 @@ export function loopReducer(s: LoopState, e: LoopEvent): LoopState {
     case 'hostFailed':
       return { ...s, queued: s.queued.slice(1), mode: paused(s.mode), error: e.message };
     case 'stopped':
-      return { ...s, mode: 'ended', streaming: false };
+      return { ...s, mode: 'ended', streaming: false, error: null, spendBlocked: false };
     case 'turnsAdded':
       return e.wasEnded && e.state.status === 'active' ? { ...s, mode: 'running', error: null, spendBlocked: false } : s;
   }
