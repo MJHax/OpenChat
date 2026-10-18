@@ -83,9 +83,9 @@ describe('discussion loop', () => {
     expect(s).toMatchObject({ error: null, spendBlocked: false });
   });
 
-  it('turnsAdded on an ended discussion resumes running, and leaves a paused one paused', () => {
-    expect(run(initialLoop(ended, false), { type: 'turnsAdded', state: { ...active, turnLimit: 12 }, wasEnded: true }).mode).toBe('running');
-    expect(run(initialLoop(active, false), { type: 'turnsAdded', state: { ...active, turnLimit: 12 }, wasEnded: false }).mode).toBe('paused');
+  it('turnsAdded starts turns again from ended or paused, as the spec says', () => {
+    expect(run(initialLoop(ended, false), { type: 'turnsAdded', state: { ...active, turnLimit: 12 } }).mode).toBe('running');
+    expect(run(initialLoop(active, false), { type: 'turnsAdded', state: { ...active, turnLimit: 12 } }).mode).toBe('running');
   });
 
   it('does not resume an ended discussion', () => {

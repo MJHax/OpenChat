@@ -27,7 +27,7 @@ export type LoopEvent =
   | { type: 'hostSent' }
   | { type: 'hostFailed'; message: string }
   | { type: 'stopped' }
-  | { type: 'turnsAdded'; state: DiscussionState; wasEnded: boolean };
+  | { type: 'turnsAdded'; state: DiscussionState };
 
 /** A discussion just created starts running; one opened later waits for Resume, so nothing spends unwatched. */
 export function initialLoop(state: DiscussionState, justCreated: boolean): LoopState {
@@ -57,8 +57,8 @@ export function loopReducer(s: LoopState, e: LoopEvent): LoopState {
       return { ...s, queued: s.queued.slice(1), mode: paused(s.mode), error: e.message };
     case 'stopped':
       return { ...s, mode: 'ended', streaming: false, error: null, spendBlocked: false };
-    case 'turnsAdded':
-      return e.wasEnded && e.state.status === 'active' ? { ...s, mode: 'running', error: null, spendBlocked: false } : s;
+    case 'turnsAdded': // +2 turns starts turns again, from paused or ended
+      return e.state.status === 'active' ? { ...s, mode: 'running', error: null, spendBlocked: false } : s;
   }
 }
 

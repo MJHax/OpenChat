@@ -202,6 +202,41 @@ describe('discussion turns', () => {
     expect(await res.json()).toEqual({ error: 'The model returned an empty summary. Try again or pick another model.' });
   });
 
+  it('ends at the limit when the last allowed turn fails with a partial, and refuses another', async () => {
+    const s = await setup([{ text: ['The eg'], fail: new OpenRouterError('The model provider returned an error.', 502) }], newDiscussion({ turnLimit: 1 }));
+    const { events } = await s.turn();
+    expect(ev(events, 'error').state).toMatchObject({ status: 'ended', endReason: 'limit', turnsTaken: 1 });
+    expect(await s.turn()).toMatchObject({ status: 409, error: 'This discussion has ended. Add turns to continue.' });
+    expect(s.calls).toHaveLength(1);
+  });
+
+  it('refuses a turn on an active discussion that has already used its turns', async () => {
+    const s = await setup([], newDiscussion({ turnLimit: 1 }));
+    await s.turn();
+    s.db.prepare("UPDATE discussions SET status = 'active', end_reason = NULL").run();
+    expect(await s.turn()).toMatchObject({ status: 409, error: 'This discussion has ended. Add turns to continue.' });
+    expect((await s.detail()).state).toMatchObject({ status: 'ended', endReason: 'limit' });
+    expect(s.calls).toHaveLength(1);
+  });
+
+  it('cleans a stopped partial like a finished reply', async () => {
+    const s = await setup([{ text: ['The egg.\n**Chicken-Defender:** No!'], fail: new OpenRouterError('The model provider returned an error.', 502) }]);
+    const { events } = await s.turn();
+    expect(ev(events, 'error').partial.content).toBe('The egg.');
+  });
+
+  it('keeps the stop reason when a turn finishes after Stop', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => (release = r));
+    const s = await setup([{ text: ['Last words'], hold }], newDiscussion({ turnLimit: 1 }));
+    const running = s.call('POST', `/api/discussions/${s.id}/turn`);
+    await new Promise((r) => setTimeout(r, 20));
+    await s.call('POST', `/api/discussions/${s.id}/stop`);
+    release();
+    const events = await readEvents(await running);
+    expect(ev(events, 'done').state).toMatchObject({ status: 'ended', endReason: 'stopped' });
+  });
+
   it('records usage with threadKind discussion', async () => {
     const s = await setup([]);
     const { events } = await s.turn();

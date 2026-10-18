@@ -82,6 +82,7 @@ export function DiscussionView({ initial, justCreated, models, onChanged }: Disc
       outcome = { type: 'hostSent' };
     } catch (e) {
       outcome = { type: 'hostFailed', message: (e as Error).message };
+      setDraft((d) => (d.trim() ? `${text}\n${d}` : text)); // give the text back so nothing typed is lost
     }
     busy.current = false;
     dispatch(outcome);
@@ -109,6 +110,7 @@ export function DiscussionView({ initial, justCreated, models, onChanged }: Disc
   }, [detail.messages.length, live?.text]);
 
   async function stop() {
+    dispatch({ type: 'pause' }); // no new turn may start while the stop request is on its way
     abort.current?.abort();
     try {
       setState(await api.stopDiscussion(id));
@@ -120,11 +122,10 @@ export function DiscussionView({ initial, justCreated, models, onChanged }: Disc
   }
 
   async function moreTurns() {
-    const wasEnded = loop.mode === 'ended';
     try {
       const state = await api.moreTurns(id);
       setState(state);
-      dispatch({ type: 'turnsAdded', state, wasEnded });
+      dispatch({ type: 'turnsAdded', state });
     } catch (e) {
       dispatch({ type: 'turnFailed', message: (e as Error).message, spend: false });
     }

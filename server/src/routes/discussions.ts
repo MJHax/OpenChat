@@ -30,7 +30,14 @@ export function discussionRoutes(deps: Deps): Hono {
     const discussion = getDiscussionRow(db, id);
     checkSpend(db);
     if (inFlight.has(id)) throw new HttpError(409, 'A turn is still running in this discussion.');
-    if (discussion.status === 'ended') throw new HttpError(409, 'This discussion has ended. Add turns to continue.');
+    const ended = 'This discussion has ended. Add turns to continue.';
+    if (discussion.status === 'ended') throw new HttpError(409, ended);
+    // A turn cut off at the limit already counts; close the discussion rather than pay for one more.
+    const state = discussionState(db, id);
+    if (state.turnsTaken >= state.turnLimit) {
+      setStatus(db, id, 'ended', 'limit');
+      throw new HttpError(409, ended);
+    }
     inFlight.add(id);
     try {
       return streamTurn(c, deps, id, () => inFlight.delete(id));

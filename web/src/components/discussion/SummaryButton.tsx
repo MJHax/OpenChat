@@ -10,7 +10,9 @@ export function SummaryButton({ discussionId, models, disabled, onSummary }: {
   discussionId: string; models: LibraryModel[]; disabled: boolean; onSummary(s: DiscussionSummary): void;
 }) {
   const { open, setOpen, root } = usePopover();
-  const [modelId, setModelId] = useState(() => cheapestModel(models)?.id ?? '');
+  const [picked, setModelId] = useState(() => cheapestModel(models)?.id ?? '');
+  // Picked before the library loaded (or removed since): fall back to the cheapest model.
+  const modelId = models.some((m) => m.id === picked) ? picked : cheapestModel(models)?.id ?? '';
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

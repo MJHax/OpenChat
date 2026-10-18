@@ -70,6 +70,13 @@ export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () 
       touchChat(db, chatId);
       return message;
     };
+    /** Ends the discussion if the moderator said so or the turn limit is reached; one that ended meanwhile (Stop) stays as it is. */
+    const settle = (end: string | null) => {
+      const { status, turnLimit } = getDiscussionRow(db, chatId);
+      if (status !== 'active') return;
+      if (end !== null) setStatus(db, chatId, 'ended', 'moderator', end);
+      else if (turnsTaken(participants, getChatMessages(db, chatId)) >= turnLimit) setStatus(db, chatId, 'ended', 'limit');
+    };
 
     await send('start', { messageId, participantId: speaker.id } satisfies DiscussionTurnStart);
     try {
@@ -92,23 +99,20 @@ export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () 
       const handoffTo = decision && 'handoffTo' in decision ? decision.handoffTo : null;
       const message = save('complete', cleanReply(text, speaker.name, others), handoffTo);
       log('complete', message.id);
-      if (decision && 'end' in decision) {
-        setStatus(db, chatId, 'ended', 'moderator', decision.end);
-      } else {
-        const { turnLimit } = getDiscussionRow(db, chatId);
-        if (turnsTaken(participants, getChatMessages(db, chatId)) >= turnLimit) setStatus(db, chatId, 'ended', 'limit');
-      }
+      settle(decision && 'end' in decision ? decision.end : null);
       await send('done', { message, state: discussionState(db, chatId) } satisfies DiscussionTurnDone);
     } catch (err) {
-      const partial = text ? saveIfChatExists(() => save('stopped', text, null)) : null;
+      // A cut-off reply still counts as a turn, so it is cleaned like any other and can reach the turn limit.
+      const partial = text ? saveIfChatExists(() => save('stopped', cleanReply(text, speaker.name, others), null)) : null;
       if (key) log(failureStatus(abort.signal), partial?.id ?? null);
-      if (abort.signal.aborted) return; // client went away; nothing to send
       let state: DiscussionState;
       try {
+        if (partial) settle(null);
         state = discussionState(db, chatId);
       } catch {
         return; // the discussion was deleted mid-turn
       }
+      if (abort.signal.aborted) return; // client went away; nothing to send
       await send('error', { message: replyErrorMessage(err), partial, state } satisfies DiscussionTurnError);
     }
   }
