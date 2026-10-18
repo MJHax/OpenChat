@@ -25,6 +25,10 @@ export interface Deps {
   mediaDir: string;
 }
 
+/** localhost, 127.0.0.1, [::1] and *.localhost: names that can only ever mean this machine. */
+export const isLocalHost = (hostname: string): boolean =>
+  hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname.endsWith('.localhost');
+
 export function createApp(deps: Deps): Hono {
   const app = new Hono();
 
@@ -32,6 +36,13 @@ export function createApp(deps: Deps): Hono {
     if (err instanceof HttpError) return c.json({ error: err.message }, err.status as ContentfulStatusCode);
     console.error(err);
     return c.json({ error: 'Internal server error' }, 500);
+  });
+
+  // A site that points its own domain at 127.0.0.1 (DNS rebinding) would count as same-origin, so only local names may
+  // reach the API. The URL's host comes from the Host header, which the browser sets to the name it looked up.
+  app.use('/api/*', async (c, next) => {
+    if (!isLocalHost(new URL(c.req.url).hostname)) throw new HttpError(403, 'OpenChat only answers on localhost.');
+    await next();
   });
 
   // Generated pages run in a null-origin sandbox and may navigate to any site; neither may change data here.
