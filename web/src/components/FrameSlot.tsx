@@ -4,6 +4,7 @@ import { attachmentUrl, uploadAttachment } from '../api';
 import { shrinkFile } from '../lib/shrinkImage';
 import { GeneratedPicker } from './GeneratedPicker';
 import { usePopover } from './usePopover';
+import { X } from 'lucide-react';
 
 interface Props {
   label: 'Start' | 'End';
@@ -56,7 +57,7 @@ export function FrameSlot({ label, photo, onPhoto, onAspect, disabledReason, onE
       {photo ? (
         <>
           <img src={attachmentUrl(photo.id)} alt={`${label} photo`} onLoad={(e) => onAspect?.(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)} />
-          <button className="icon frame-remove" aria-label={`Remove ${label.toLowerCase()} photo`} onClick={() => onPhoto(null)}>✕</button>
+          <button className="icon frame-remove" aria-label={`Remove ${label.toLowerCase()} photo`} onClick={() => onPhoto(null)}><X size={12} /></button>
         </>
       ) : (
         <button className="frame-empty" disabled={!!disabledReason || busy} onClick={() => setOpen(!open)} aria-haspopup="menu">

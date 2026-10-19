@@ -4,6 +4,7 @@ import { LIMIT_LABELS, SPENDING_LIMITS_HREF } from '../../../shared/limits';
 import { usd } from '../../../shared/videoModels';
 import { api } from '../api';
 import { dismissNotice, noticeFor } from '../lib/limits';
+import { X } from 'lucide-react';
 
 const resetTime = (ts: number) =>
   new Date(ts).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -28,7 +29,7 @@ export function SpendNotice({ refreshKey }: { refreshKey: unknown }) {
         {LIMIT_LABELS[s.period]}: {usd(s.spent)} of your {usd(s.amount)} limit{over ? ' — reached' : ` (${Math.floor((s.spent / s.amount) * 100)}%)`}.
         {' '}Resets {resetTime(s.resetsAt)}. <a href={SPENDING_LIMITS_HREF}>Limits</a>
       </span>
-      <button className="icon" aria-label="Dismiss until the limit resets" onClick={() => { dismissNotice(s); setDismissed((n) => n + 1); }}>✕</button>
+      <button className="icon" aria-label="Dismiss until the limit resets" onClick={() => { dismissNotice(s); setDismissed((n) => n + 1); }}><X size={14} /></button>
     </div>
   );
 }

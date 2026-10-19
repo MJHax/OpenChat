@@ -1,0 +1,118 @@
+/* Reset, type and the shared building blocks every screen uses. */
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--text); font: 14.5px/1.6 var(--font-sans); -webkit-font-smoothing: antialiased;
+  transition: background-color 0.4s var(--ease-out), color 0.4s var(--ease-out);
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+code, pre, kbd { font-family: var(--font-mono); }
+h1, h2, h3 { letter-spacing: -0.02em; }
+
+button {
+  cursor: pointer; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-sm); padding: 6px 12px;
+  transition: transform 0.25s var(--ease-spring), background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+button:hover:not(:disabled) { border-color: var(--border-strong); }
+button:active:not(:disabled) { transform: scale(0.96); }
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary { background: var(--accent-fill); color: var(--on-accent); border-color: transparent; }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); border-color: transparent; }
+button.link { border: none; background: none; padding: 2px 6px; color: var(--muted); }
+button.link:hover:not(:disabled) { color: var(--text); }
+button.link.danger { color: var(--danger); }
+button.icon { border: none; background: none; padding: 4px 8px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+button.icon:hover { color: var(--text); }
+input, select, textarea {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 10px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: none; border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+button:focus-visible, a:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 2px; }
+textarea { resize: vertical; width: 100%; }
+a { color: var(--accent); }
+::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.error-text { color: var(--danger); }
+.mono { font-family: var(--font-mono); }
+
+.app { display: flex; height: 100%; }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; position: relative; overflow: clip; /* keeps the drifting aurora from widening the page */ }
+.banner.error { background: var(--danger); color: #fff; padding: 8px 16px; }
+
+/* Accent paint for filled elements (drifts when vivid; see tokens.css). */
+.fill { background: var(--accent-fill); color: var(--on-accent); }
+
+/* Chips: small rounded controls and labels. */
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); font-size: 12.5px; color: var(--text); white-space: nowrap; }
+.chip.ghost { color: var(--muted); }
+.chip.ghost:hover { color: var(--text); }
+.icon-btn { width: 30px; height: 30px; padding: 0; border-radius: var(--radius-sm); display: inline-grid; place-items: center; color: var(--muted); }
+.icon-btn:hover:not(:disabled) { color: var(--text); }
+.icon-btn[aria-pressed='true'] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+kbd { font-size: 11px; padding: 1px 5px; border-radius: 5px; border: 1px solid var(--border); color: var(--muted); }
+
+/* Popovers: scale out of their anchor. Add .open to show; .down / .right choose the anchor corner. */
+.popover {
+  position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 30; min-width: 220px; padding: 6px;
+  border-radius: 14px; border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow);
+  transform-origin: bottom left; animation: pop-in 0.35s var(--ease-spring);
+}
+.popover.down { bottom: auto; top: calc(100% + 8px); transform-origin: top left; }
+.popover.right { left: auto; right: 0; transform-origin: bottom right; }
+.popover.down.right { transform-origin: top right; }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.92) translateY(4px); } }
+.pop-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: none; border-radius: 9px; background: none; text-align: left; }
+.pop-item:hover:not(:disabled) { background: var(--surface-2); }
+.pop-item small { display: block; color: var(--muted); font-size: 12px; }
+.pop-item .check { margin-left: auto; color: var(--accent); }
+.pop-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); padding: 8px 10px 4px; }
+
+/* Segmented control with a sliding pill (position the .pill from JS). */
+.seg { position: relative; display: inline-flex; padding: 3px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
+.seg button { position: relative; z-index: 1; padding: 4px 12px; border: none; border-radius: 7px; background: none; color: var(--muted); font-size: 13px; }
+.seg button[aria-pressed='true'] { color: var(--text); }
+.seg .pill { position: absolute; top: 3px; bottom: 3px; border-radius: 7px; background: var(--surface); border: 1px solid var(--border-strong);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); transition: left 0.45s var(--ease-spring), width 0.45s var(--ease-spring); }
+
+/* Switch: a button with .switch, aria-checked for state. */
+.switch { width: 38px; height: 22px; padding: 0; border: none; border-radius: 999px; background: var(--border-strong); position: relative; flex-shrink: 0; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+  transition: transform 0.4s var(--ease-spring); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+.switch[aria-checked='true'] { background: var(--accent-fill); }
+.switch[aria-checked='true']::after { transform: translateX(16px); }
+.switch:active:not(:disabled) { transform: none; }
+
+/* Entrances. */
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes fade { from { opacity: 0; } }
+
+/* Animations switched off, or the OS asks for reduced motion: keep only functional spinners. */
+:root[data-motion='off'] *:not(.spinner), :root[data-motion='off'] *::before, :root[data-motion='off'] *::after {
+  animation: none !important; transition: none !important;
+}
+:root[data-motion='off'] .aurora { display: none; }
+
+/* Tilt cards (TiltCard.tsx): never on messages, menus, popovers or forms. */
+.tilt { position: relative; overflow: hidden; will-change: transform; transition: border-color 0.2s, box-shadow 0.3s; }
+.tilt .glare { position: absolute; inset: 0; pointer-events: none; opacity: 0.12; }
+:root[data-theme='light'] .tilt .glare { opacity: 0.06; }
+:root[data-tilt='off'] .tilt { transform: none !important; }
+:root[data-tilt='off'] .tilt .glare { display: none; }
+:root[data-style='vivid'] .tilt:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: 0 12px 30px -14px color-mix(in srgb, var(--accent) 50%, transparent); }
+
+/* Theme and accent changes crossfade instead of snapping. */
+.rail, .threads, .composer-box, .chip, .icon-btn, .settings-sheet, .popover, .panel, .card, .bubble, .thread-item, .chat-header {
+  transition: background-color 0.4s var(--ease-out), border-color 0.4s var(--ease-out), color 0.4s var(--ease-out), box-shadow 0.3s, transform 0.25s var(--ease-spring);
+}
+/* Tilt cards: colors fade, but never transition transform (the spring drives it). */
+.tilt { transition: background-color 0.4s var(--ease-out), border-color 0.2s, box-shadow 0.3s; }
+/* Screen changes rise in slightly. */
+.page-slot > .chat, .page-slot > .page { animation: rise 0.4s var(--ease-out); }
+/* Wrappers App uses to make the background inert under overlays; they add no box. */
+.rail-slot, .page-slot { display: contents; }

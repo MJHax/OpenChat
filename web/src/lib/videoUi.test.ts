@@ -22,7 +22,14 @@ describe('renderHint', () => {
 describe('formatVideoRate', () => {
   it('shows the cheapest silent rate', () => {
     expect(formatVideoRate(base)).toBe('from $0.05/s');
-    expect(formatVideoRate({ ...base, skus: { video_tokens: '0.00001' } })).toBe('priced by video tokens');
+    expect(formatVideoRate({ ...base, skus: {} })).toBe('Price unknown');
+  });
+
+  it('shows token-priced models per million output tokens', () => {
+    expect(formatVideoRate({ ...base, skus: { video_tokens: '0.00001' } })).toBe('$10.00/M output tokens');
+    // Several resolutions: the cheapest output rate; the with-video-input rate is for editing a video, which the tab doesn't do.
+    expect(formatVideoRate({ ...base, skus: { video_tokens: '0.000007', video_tokens_4k: '0.000004', video_tokens_with_video_input: '0.0000021' } }))
+      .toBe('from $4.00/M output tokens');
     expect(formatVideoRate({ ...base, skus: {} })).toBe('Price unknown');
   });
 });

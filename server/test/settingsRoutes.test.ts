@@ -28,6 +28,13 @@ describe('settings routes', () => {
     expect(bad.status).toBe(400);
   });
 
+  it('saves the accent and rejects an unknown one', async () => {
+    const { call } = makeApp();
+    const res = await call('PUT', '/api/settings', { accent: 'green' });
+    expect(((await res.json()) as SettingsView).accent).toBe('green');
+    expect((await call('PUT', '/api/settings', { accent: 'x' })).status).toBe(400);
+  });
+
   it('tests the key against OpenRouter', async () => {
     const ok = makeApp();
     expect(await (await ok.call('POST', '/api/settings/test-key')).json()).toEqual({ ok: true });

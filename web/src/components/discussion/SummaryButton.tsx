@@ -4,6 +4,7 @@ import { api } from '../../api';
 import { cheapestModel } from '../../lib/discussion';
 import { usePopover } from '../usePopover';
 import { ErrorText } from '../ErrorText';
+import { FileText } from 'lucide-react';
 
 /** Summarize: a small picker, defaulting to the cheapest model in the library. */
 export function SummaryButton({ discussionId, models, disabled, onSummary }: {
@@ -31,9 +32,9 @@ export function SummaryButton({ discussionId, models, disabled, onSummary }: {
 
   return (
     <div className="stats-pop" ref={root}>
-      <button type="button" className="link" disabled={disabled} aria-expanded={open} onClick={() => setOpen(!open)}>Summarize</button>
+      <button type="button" className="chip ghost" disabled={disabled} aria-expanded={open} onClick={() => setOpen(!open)}><FileText size={13} />Summarize</button>
       {open && (
-        <div className="stats-pop-panel" role="dialog" aria-label="Summarize">
+        <div className="stats-pop-panel popover down right" role="dialog" aria-label="Summarize">
           <h4>Summarize this discussion</h4>
           <div className="summary-pick">
             <select aria-label="Model" value={modelId} onChange={(e) => setModelId(e.target.value)}>

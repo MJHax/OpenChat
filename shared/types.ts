@@ -9,6 +9,11 @@ export type MessageStatus = 'complete' | 'stopped' | 'generating' | 'error';
 /** What a thread is for: a conversation, making images or videos, or watching models discuss. */
 export type ThreadKind = 'chat' | 'image' | 'video' | 'discussion';
 export type Theme = 'light' | 'dark' | 'system';
+export type Accent = 'blue' | 'orange' | 'green' | 'rainbow';
+export const ACCENTS: Accent[] = ['blue', 'orange', 'green', 'rainbow'];
+/** Flat paints the accent solid; vivid drifts a duotone gradient and adds a soft glow. Rainbow is always vivid. */
+export type ColorStyle = 'flat' | 'vivid';
+export const COLOR_STYLES: ColorStyle[] = ['flat', 'vivid'];
 export type AttachmentKind = 'image' | 'pdf' | 'text';
 
 /** A file attached to a user message (metadata only; the bytes are served by /api/attachments/:id). */
@@ -126,6 +131,8 @@ export interface MediaLibraryModel {
   id: string;
   displayName: string;
   kind: MediaKind;
+  /** The model new threads of this kind start on. */
+  isDefault: boolean;
   /** ImageModel for kind 'image', VideoModel for kind 'video'; null when the catalog no longer lists it. */
   model: MediaModel | null;
   /** Average time to generate, from completed calls; null before the first. */
@@ -328,6 +335,10 @@ export interface SettingsView {
   aboutMe: string;
   customInstructions: string;
   theme: Theme;
+  accent: Accent;
+  colorStyle: ColorStyle;
+  animations: boolean;
+  tiltCards: boolean;
   defaultModelId: string;
   titleModelId: string;
   memoryModelId: string;
@@ -339,6 +350,10 @@ export type SettingsUpdate = Partial<{
   aboutMe: string;
   customInstructions: string;
   theme: Theme;
+  accent: Accent;
+  colorStyle: ColorStyle;
+  animations: boolean;
+  tiltCards: boolean;
   defaultModelId: string;
   titleModelId: string;
   memoryModelId: string;

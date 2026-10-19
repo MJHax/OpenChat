@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChatSummary, LibraryModel, SettingsView, ThreadKind } from '../../shared/types';
+import type { Accent, ChatSummary, ColorStyle, LibraryModel, SettingsView, ThreadKind } from '../../shared/types';
 import { api } from './api';
-import { navigate, useRoute } from './lib/route';
-import { Sidebar, threadHref } from './components/Sidebar';
+import { navigate, replaceHash, routeHash, settingsBackdrop, settingsCloseAction, threadHref, useRoute, type Route } from './lib/route';
+import { IconRail, type RailItem } from './components/shell/IconRail';
+import { ThreadPanel } from './components/shell/ThreadPanel';
+import { CommandPalette } from './components/shell/CommandPalette';
+import { nextTheme, resolvedTheme } from './lib/appearance';
 import { ChatView } from './components/ChatView';
 import { ImageThread } from './pages/ImageThread';
 import { VideoThread } from './pages/VideoThread';
@@ -12,9 +15,33 @@ import { loadLibrarySort, saveLibrarySort, sortLibrary, type LibrarySort } from 
 import { ModelLibrary } from './pages/ModelLibrary';
 import { Settings } from './pages/Settings';
 import { Stats } from './pages/Stats';
+import { useAppearance } from './components/useAppearance';
+import { Clapperboard, X } from 'lucide-react';
+
+const NARROW = '(max-width: 899px)';
+
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW);
+    const update = () => setNarrow(mq.matches);
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return narrow;
+}
 
 export function App() {
   const route = useRoute();
+  // Settings opens over the page it came from; `page` is that page (or the route itself).
+  // Adjusted while rendering (not in an effect), so the first frame with Settings open already has its backdrop.
+  const [lastPage, setLastPage] = useState<Route | null>(null);
+  if (route.page !== 'settings' && route !== lastPage) setLastPage(route);
+  const page = route.page === 'settings' ? settingsBackdrop(lastPage) : route;
+  const closeSettings = useCallback(() => {
+    if (settingsCloseAction(lastPage) === 'back') window.history.back();
+    else replaceHash(routeHash(settingsBackdrop(lastPage)));
+  }, [lastPage]);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [libraryModels, setModels] = useState<LibraryModel[]>([]);
   // Every model picker follows the order chosen in the Model Library.
@@ -26,8 +53,8 @@ export function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   // The sidebar keeps showing the last mode while on Model Library, Stats or Settings.
   const [lastMode, setLastMode] = useState<ThreadKind>('chat');
-  const mode: ThreadKind = route.page === 'images' ? 'image' : route.page === 'video' ? 'video' : route.page === 'chat' ? 'chat'
-    : route.page === 'discussions' ? 'discussion' : lastMode;
+  const mode: ThreadKind = page.page === 'images' ? 'image' : page.page === 'video' ? 'video' : page.page === 'chat' ? 'chat'
+    : page.page === 'discussions' ? 'discussion' : lastMode;
   const [toasts, setToasts] = useState<{ id: string; title: string }[]>([]);
 
   // Clips render for minutes: watch video threads from anywhere in the app and say when one is ready.
@@ -56,11 +83,17 @@ export function App() {
   const refreshChats = useCallback(() => { api.listChats(mode).then(setChats).catch(fail); }, [mode]);
   const refreshRef = useRef(refreshChats);
   refreshRef.current = refreshChats;
+  // A settings fetch that started before a save finished may carry the old values; its result is dropped.
+  const settingsEpoch = useRef(0);
+  const refreshSettings = useCallback(() => {
+    const epoch = settingsEpoch.current;
+    api.getSettings().then((s) => { if (epoch === settingsEpoch.current) setSettings(s); }).catch(fail);
+  }, []);
+  const settingsSaved = useCallback((view: SettingsView) => { settingsEpoch.current++; setSettings(view); }, []);
   const refreshModels = useCallback(() => {
     api.listModels().then(setModels).catch(fail);
-    api.getSettings().then(setSettings).catch(fail); // default model lives in settings
-  }, []);
-  const refreshSettings = useCallback(() => { api.getSettings().then(setSettings).catch(fail); }, []);
+    refreshSettings(); // default model lives in settings
+  }, [refreshSettings]);
 
   useEffect(() => refreshChats(), [refreshChats]);
   useEffect(() => refreshModels(), [refreshModels]);
@@ -73,52 +106,127 @@ export function App() {
     return () => clearInterval(timer);
   }, [anyBusy, refreshChats]);
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = settings?.theme ?? 'system';
-  }, [settings?.theme]);
+  const { appearance, setAppearance, systemDark } = useAppearance(settings, settingsSaved);
 
   const openChat = useCallback((chatId: string, kind: ThreadKind) => {
     navigate(threadHref(kind, chatId));
     setChatReload((n) => n + 1);
   }, []);
 
-  const activeChatId = route.page === 'chat' ? route.chatId : route.page === 'images' || route.page === 'video' ? route.threadId
-    : route.page === 'discussions' ? route.discussionId : null;
-  const title = chats.find((c) => c.id === activeChatId)?.title ?? (route.page === 'images' ? 'New image' : route.page === 'video' ? 'New video' : 'New chat');
+  const activeChatId = page.page === 'chat' ? page.chatId : page.page === 'images' || page.page === 'video' ? page.threadId
+    : page.page === 'discussions' ? page.discussionId : null;
+  const title = chats.find((c) => c.id === activeChatId)?.title ?? (page.page === 'images' ? 'New image' : page.page === 'video' ? 'New video' : 'New chat');
+
+  // The thread panel: collapsed by the user, or starting collapsed (as an overlay) in a narrow window.
+  const narrow = useNarrow();
+  const [panelOpen, setPanelOpen] = useState(() => !window.matchMedia(NARROW).matches);
+  useEffect(() => setPanelOpen(!narrow), [narrow]);
+  const togglePanel = useCallback(() => setPanelOpen((o) => !o), []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'b' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        togglePanel();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [togglePanel]);
+  // In a narrow window the panel floats over the page, so following a link closes it.
+  useEffect(() => { if (narrow) setPanelOpen(false); }, [narrow, route]);
+
+  // Command palette: Ctrl/Cmd+K anywhere.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const runCommand = (id: string) => {
+    const go: Record<string, string> = {
+      'new-chat': '#/', 'new-image': '#/images', 'new-video': '#/video', 'new-discussion': '#/discussions', 'go-models': '#/models', 'go-stats': '#/stats',
+    };
+    if (go[id]) return navigate(go[id]);
+    if (id.startsWith('go-settings-')) {
+      const hash = `#/settings/${id.slice('go-settings-'.length)}`;
+      return route.page === 'settings' ? replaceHash(hash) : navigate(hash); // one history entry for Settings, however many tabs
+    }
+    if (id === 'toggle-theme') return void setAppearance({ theme: nextTheme(appearance.theme, systemDark) });
+    if (id.startsWith('accent-')) return void setAppearance({ accent: id.slice('accent-'.length) as Accent });
+    if (id.startsWith('style-')) return void setAppearance({ colorStyle: id.slice('style-'.length) as ColorStyle });
+  };
+
+  const overlayOpen = route.page === 'settings' || paletteOpen;
+  // Remember the last thing focused outside an overlay, and put focus back there when the overlay closes.
+  // (Making the background inert blurs it before the overlay mounts, so the overlay can't record it itself.)
+  const lastFocus = useRef<HTMLElement | null>(null);
+  const overlayRef = useRef(overlayOpen);
+  overlayRef.current = overlayOpen;
+  useEffect(() => {
+    const onFocus = (e: FocusEvent) => { if (!overlayRef.current && e.target instanceof HTMLElement) lastFocus.current = e.target; };
+    document.addEventListener('focusin', onFocus);
+    return () => document.removeEventListener('focusin', onFocus);
+  }, []);
+  const wasOpen = useRef(overlayOpen);
+  useEffect(() => {
+    if (wasOpen.current && !overlayOpen) requestAnimationFrame(() => { if (lastFocus.current?.isConnected) lastFocus.current.focus(); });
+    wasOpen.current = overlayOpen;
+  }, [overlayOpen]);
+  const railActive: RailItem = route.page === 'settings' ? 'settings' : page.page === 'models' ? 'models' : page.page === 'stats' ? 'stats' : mode;
+  const shownTheme = resolvedTheme(appearance.theme, systemDark);
 
   return (
-    <div className="app">
-      <Sidebar mode={mode} chats={chats} activeChatId={activeChatId} onChatsChanged={refreshChats} onOpenChat={openChat} />
+    <div className={`app${panelOpen ? '' : ' panel-closed'}${narrow ? ' narrow' : ''}`}>
+      {/* While Settings or the palette is open, everything behind it is inert, so focus and screen readers stay in the dialog. */}
+      <div className="rail-slot" inert={overlayOpen}>
+      <IconRail active={railActive} mode={mode} resolvedTheme={shownTheme} onTogglePanel={togglePanel} settingsHref="#/settings"
+        onToggleTheme={() => void setAppearance({ theme: nextTheme(appearance.theme, systemDark) })} />
+      </div>
+      <div className="threads-slot" aria-hidden={!panelOpen} inert={!panelOpen || overlayOpen}>
+        <ThreadPanel mode={mode} chats={chats} activeChatId={activeChatId} onChatsChanged={refreshChats} onOpenChat={openChat}
+          onCollapse={() => setPanelOpen(false)} onOpenPalette={() => setPaletteOpen(true)} />
+      </div>
+      {narrow && panelOpen && <div className="threads-scrim" onClick={() => setPanelOpen(false)} />}
       <main className="main">
+        <div className="aurora" aria-hidden />
+        <div className="page-slot" inert={overlayOpen}>
         {loadError && <div className="banner error">Can't reach the OpenChat server: {loadError}</div>}
-        {route.page === 'chat' && (
-          <ChatView chatId={route.chatId} title={title} reloadToken={chatReload} models={models} settings={settings} onChatsChanged={refreshChats} />
+        {page.page === 'chat' && (
+          <ChatView chatId={page.chatId} title={title} reloadToken={chatReload} models={models} settings={settings} onChatsChanged={refreshChats} />
         )}
-        {route.page === 'images' && (
-          <ImageThread threadId={route.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />
+        {page.page === 'images' && (
+          <ImageThread threadId={page.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />
         )}
-        {route.page === 'video' && (
-          <VideoThread threadId={route.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />
+        {page.page === 'video' && (
+          <VideoThread threadId={page.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />
         )}
-        {route.page === 'discussions' && (
-          <DiscussionPage key={route.discussionId ?? 'new'} discussionId={route.discussionId} models={models} settings={settings}
+        {page.page === 'discussions' && (
+          <DiscussionPage key={page.discussionId ?? 'new'} discussionId={page.discussionId} models={models} settings={settings}
             onDiscussionsChanged={refreshChats} />
         )}
-        {route.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} sort={librarySort} onSort={changeLibrarySort} />}
-        {route.page === 'stats' && <Stats />}
+        {page.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} sort={librarySort} onSort={changeLibrarySort} />}
+        {page.page === 'stats' && <Stats />}
+        </div>
         {route.page === 'settings' && (
-          <Settings models={models} tab={route.tab} section={route.section} onChanged={refreshSettings}
+          <Settings models={models} tab={route.tab} section={route.section} onChanged={refreshSettings} onClose={closeSettings}
+            appearance={appearance} onAppearance={(patch) => void setAppearance(patch)}
             onDataChanged={() => { refreshChats(); refreshModels(); }} />
         )}
       </main>
+      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} onCommand={runCommand} onOpenChat={openChat} />}
       {toasts.length > 0 && (
         <div className="toasts" role="status">
           {toasts.map((t) => (
             <div key={t.id} className="toast">
-              <button className="link" onClick={() => { setToasts((x) => x.filter((y) => y.id !== t.id)); openChat(t.id, 'video'); }}>
-                🎬 “{t.title}” finished
+              <button className="link toast-open" onClick={() => { setToasts((x) => x.filter((y) => y.id !== t.id)); openChat(t.id, 'video'); }}>
+                <Clapperboard size={16} className="toast-icon" /> “{t.title}” finished
               </button>
-              <button className="icon" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}>✕</button>
+              <button className="icon" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
             </div>
           ))}
         </div>

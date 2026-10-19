@@ -10,7 +10,7 @@ export function ThinkingIndicator({ startedAt, reasoning, webSearch = false }: {
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000));
   return (
     <div className="thinking">
-      Thinking… {seconds}s{webSearch && ' · web search on'}
+      <span className="shimmer-text">Thinking… {seconds}s{webSearch && ' · web search on'}</span>
       {reasoning && (
         <details className="reasoning">
           <summary>Show reasoning</summary>

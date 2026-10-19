@@ -6,6 +6,7 @@ import {
 import { api } from '../../api';
 import { ErrorText } from '../ErrorText';
 import { initials } from '../../lib/discussion';
+import { X } from 'lucide-react';
 
 interface Row {
   key: number;
@@ -101,7 +102,7 @@ export function DiscussionSetup({ models, noKey, onCreated }: DiscussionSetupPro
                     </label>
                   )}
                   {rows.length > MIN_PARTICIPANTS && (
-                    <button className="icon" aria-label={`Remove ${r.name}`} onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>✕</button>
+                    <button className="icon" aria-label={`Remove ${r.name}`} onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}><X size={16} /></button>
                   )}
                 </div>
                 <textarea rows={2} aria-label="Instructions" value={r.instructions} placeholder="Argue that the egg came first."

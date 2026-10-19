@@ -11,6 +11,9 @@ function CodeBlock({ node: _node, children, ...props }: ComponentProps<'pre'> & 
   const panel = useContext(FilePanelContext);
   const [saveable, setSaveable] = useState(false);
   useEffect(() => setSaveable(!!panel && saveableCode(ref.current?.innerText ?? '')), [panel, children]);
+  // The language rehype-highlight found, read from the rendered code element's class.
+  const [lang, setLang] = useState<string | null>(null);
+  useEffect(() => setLang(/language-([\w+-]+)/.exec(ref.current?.querySelector('code')?.className ?? '')?.[1] ?? null), [children]);
   const copy = async () => {
     await navigator.clipboard.writeText(ref.current?.innerText ?? '');
     setCopied(true);
@@ -23,10 +26,13 @@ function CodeBlock({ node: _node, children, ...props }: ComponentProps<'pre'> & 
   };
   return (
     <div className="code-block">
-      <span className="code-actions">
-        {saveable && <button className="copy-code" onClick={save}>Save as file</button>}
-        <button className="copy-code" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
-      </span>
+      <div className="code-head">
+        <span className="code-lang">{lang ?? 'code'}</span>
+        <span className="code-actions">
+          {saveable && <button className="copy-code" onClick={save}>Save as file</button>}
+          <button className="copy-code" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
+        </span>
+      </div>
       <pre ref={ref} {...props}>{children}</pre>
     </div>
   );

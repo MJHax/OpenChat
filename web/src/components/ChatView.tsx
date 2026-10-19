@@ -11,7 +11,8 @@ import { ChatStatsPopover } from './ChatStatsPopover';
 import { ContextPopover, percent, useContextUsages } from './ContextPopover';
 import { ContextNote } from './ContextNote';
 import { contextLevel } from '../lib/context';
-import { InstructionsButton } from './InstructionsButton';
+import { ChatMenu } from './ChatMenu';
+import { HomeGreeting, SuggestionCards } from './ChatHome';
 import { CompareColumns, type Column } from './CompareColumns';
 import { Composer } from './Composer';
 import { ErrorText } from './ErrorText';
@@ -24,9 +25,10 @@ import { fileKind, fileVersions, parseFileBlocks, type FileBlock } from '../../.
 import { inlineImages } from '../lib/filePreview';
 import { useChatImages } from '../lib/useChatImages';
 import { panelView } from '../lib/filePanelState';
-import { MessageItem } from './MessageItem';
+import { MessageItem, ModelMark } from './MessageItem';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { toDraft } from './useAttachmentDraft';
+import { X } from 'lucide-react';
 
 export interface ChatViewProps {
   chatId: string | null;
@@ -84,6 +86,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   /** A continued chat's summary note as being edited; null when the chat has none. */
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
   const [continuing, setContinuing] = useState(false);
+  /** Text a suggestion card drops into the composer. */
+  const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
   /** Chats whose context warning was dismissed (until reload). */
   const [warningDismissed, setWarningDismissed] = useState<Set<string>>(() => new Set());
   /** "Compare versions" view: the path index of the reply being compared, and all its versions. */
@@ -411,6 +415,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   const noModels = models.length === 0;
   // A user message at the end of the path means its reply was stopped or lost before any text arrived.
   const awaitingReply = !choosing && messages.length > 0 && messages[messages.length - 1].role === 'user';
+  const home = !chatId && !pending && !noKey && !noModels;
   const wide = (pending !== null && pending.slots.length > 1) || choosing !== null || versions !== null;
   const disabledReason =
     noModels ? 'Add a model in the Model Library first.'
@@ -421,13 +426,14 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
 
   return (
     <FilePanelContext.Provider value={filePanel}>
-      <div className={`chat${openFile ? ' with-file' : ''}`} style={{ '--file-panel-width': `${panelWidth}px` } as CSSProperties}>
+      <div className={`chat${openFile ? ' with-file' : ''}${home ? ' home' : ''}`} style={{ '--file-panel-width': `${panelWidth}px` } as CSSProperties}>
         <header className="chat-header">
-          <h1>{chatId ? title : 'New chat'}</h1>
+          <h1 className={chatId ? undefined : 'visually-hidden'}>{chatId ? title : 'New chat'}</h1>
           <div className="chat-header-tools">
-            <InstructionsButton value={chatId ? detail?.chat.instructions ?? '' : draftInstructions} onSave={saveInstructions} />
             <ContextPopover context={context} show={!!runModels?.length} nameOf={nameOf} onContinue={canContinue ? summarize : null} continuing={continuing} />
             <ChatStatsPopover chatId={chatId} totalCost={detail?.chat.totalCost ?? 0} refreshKey={detail} />
+            <ChatMenu instructions={chatId ? detail?.chat.instructions ?? '' : draftInstructions} onSaveInstructions={saveInstructions}
+              compare={compare} onCompareChange={setCompare} canCompare={models.length >= 2} />
           </div>
         </header>
 
@@ -439,7 +445,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
                 {noModels && <div>Add a model in the <a href="#/models">Model Library</a> to start chatting.</div>}
               </div>
             )}
-            {!chatId && !pending && !noKey && !noModels && <div className="empty">How can I help you today?</div>}
+            {home && <HomeGreeting />}
 
             {noteDraft !== null && (
               <ContextNote draft={noteDraft} from={detail?.chat.continuedFrom ?? null} editable={noteEditable && !streaming} onChange={setNoteDraft} />
@@ -464,16 +470,19 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
             ))}
 
             {pending?.userText != null && (
-              <div className="msg user">
+              <div className="msg user pending-msg">
                 <AttachmentChips items={pending.userAttachments.map(toDraft)} inMessage />
                 {pending.userText && <div className="bubble">{pending.userText}</div>}
               </div>
             )}
             {pending && pending.slots.length === 1 && (
-              <div className="msg assistant">
-                {!pending.slots[0].text && <ThinkingIndicator startedAt={pending.startedAt} reasoning={pending.slots[0].reasoning} webSearch={pending.webSearch} />}
-                {pending.slots[0].text && <div className="msg-body"><MessageBody text={pending.slots[0].text} messageId={null} streaming /></div>}
-                <div className="msg-meta"><span className="model-tag">{nameOf(pending.slots[0].modelId)}</span></div>
+              <div className="msg assistant pending-msg">
+                <ModelMark name={nameOf(pending.slots[0].modelId)} />
+                <div className="msg-col">
+                  <div className="msg-head"><span className="model-tag">{nameOf(pending.slots[0].modelId)}</span></div>
+                  {!pending.slots[0].text && <ThinkingIndicator startedAt={pending.startedAt} reasoning={pending.slots[0].reasoning} webSearch={pending.webSearch} />}
+                  {pending.slots[0].text && <div className="msg-body streaming"><MessageBody text={pending.slots[0].text} messageId={null} streaming /></div>}
+                </div>
               </div>
             )}
             {pending && pending.slots.length > 1 && (
@@ -510,7 +519,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
                 </span>
                 <button onClick={summarize} disabled={continuing}>{continuing ? 'Summarizing…' : 'Summarize and continue'}</button>
                 <button className="link" aria-label="Dismiss" title="Dismiss"
-                  onClick={() => setWarningDismissed((s) => new Set(s).add(chatId))}>✕</button>
+                  onClick={() => setWarningDismissed((s) => new Set(s).add(chatId))}><X size={16} /></button>
               </div>
             )}
             <SpendNotice refreshKey={detail} />
@@ -533,7 +542,10 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
           path={messages}
           onSend={send}
           onStop={() => abortRef.current?.abort()}
+          showCompareToggle={!chatId}
+          prefill={prefill}
         />
+        {home && <SuggestionCards onPrefill={(text) => setPrefill((p) => ({ text, nonce: (p?.nonce ?? 0) + 1 }))} />}
 
         {openFile && panel && (
           <>

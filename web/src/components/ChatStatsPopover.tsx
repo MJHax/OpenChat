@@ -4,6 +4,7 @@ import { api } from '../api';
 import { formatCost } from '../lib/format';
 import { compactNumber, emptyChatStats, formatPercent } from '../lib/stats';
 import { usePopover } from './usePopover';
+import { BarChart3 } from 'lucide-react';
 
 export interface ChatStatsPopoverProps {
   /** null for a chat that hasn't been created yet: everything reads 0. */
@@ -42,11 +43,11 @@ export function ChatStatsPopover({ chatId, totalCost, refreshKey }: ChatStatsPop
   const hit = s?.cacheHitRate ?? null;
   return (
     <div className="stats-pop" ref={root}>
-      <button type="button" className="link stats-pop-button" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)}>
-        Total {money(totalCost)} ▾
+      <button type="button" className="chip ghost" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)} title="This chat's cost and stats">
+        <BarChart3 size={13} />{money(totalCost)}
       </button>
       {open && (
-        <div className="stats-pop-panel" role="dialog" aria-label="This chat's stats">
+        <div className="stats-pop-panel popover down right" role="dialog" aria-label="This chat's stats">
           <h4>This chat</h4>
           {error ? (
             <p className="error-text small">{error}</p>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatContext, formatCost, formatPricePerM, formatTokens, groupByDate, splitSnippet, formatBytes } from './format';
+import { formatContext, formatCost, formatPricePerM, formatTokens, groupByDate, splitSnippet, formatBytes, spendKey } from './format';
 
 describe('formatCost', () => {
   it('formats small and large amounts', () => {
@@ -54,5 +54,21 @@ describe('formatBytes', () => {
     expect(formatBytes(20.25 * 1024 * 1024)).toBe('20.3 MB');
     expect(formatBytes(1.5 * 1024 ** 3)).toBe('1.5 GB');
     expect(formatBytes(0)).toBe('0 B');
+  });
+});
+
+describe('spendKey', () => {
+  const chat = (id: string, totalCost: number, extra: object = {}) => ({ id, totalCost, title: id, updatedAt: 1, busy: false, ...extra });
+
+  it('stays the same when nothing that affects spend changed', () => {
+    const before = spendKey([chat('a', 0.5), chat('b', 0)]);
+    expect(spendKey([chat('a', 0.5, { title: 'renamed', updatedAt: 99, busy: true }), chat('b', 0)])).toBe(before);
+  });
+
+  it('changes when a thread is added, removed or costs more', () => {
+    const before = spendKey([chat('a', 0.5)]);
+    expect(spendKey([chat('a', 0.5), chat('b', 0)])).not.toBe(before);
+    expect(spendKey([])).not.toBe(before);
+    expect(spendKey([chat('a', 0.75)])).not.toBe(before);
   });
 });

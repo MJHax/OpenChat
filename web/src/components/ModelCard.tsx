@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { CatalogModel } from '../../../shared/types';
 import { CAPABILITIES, capabilitiesOf, isNew, UNUSED_HINT } from '../lib/catalog';
 import { formatContext, formatPricePerM } from '../lib/format';
+import { TiltCard } from './TiltCard';
+import { ProviderMark } from './ProviderMark';
 
 export interface ModelCardProps {
   model: CatalogModel;
@@ -21,8 +23,9 @@ export function ModelCard({ model: m, added, busy, onAdd, onRemove, compact = fa
   const caps = capabilitiesOf(m);
   const pills = PILLS.filter((c) => caps.includes(c.id));
   return (
-    <li className={`model-card${compact ? ' compact' : ''}`}>
+    <TiltCard as="li" max={10} className={`model-card${compact ? ' compact' : ''}`}>
       <div className="model-card-head">
+        <ProviderMark id={m.id} />
         <span className="model-card-name" title={m.name}>{m.name}</span>
         {isNew(m) && <span className="badge">New</span>}
       </div>
@@ -64,6 +67,6 @@ export function ModelCard({ model: m, added, busy, onAdd, onRemove, compact = fa
         )}
         <button className="link" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Less' : 'More'}</button>
       </div>
-    </li>
+    </TiltCard>
   );
 }

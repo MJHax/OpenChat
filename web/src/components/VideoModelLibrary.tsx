@@ -5,6 +5,8 @@ import { api } from '../api';
 import { loadLibrarySort, saveLibrarySort, sortMediaLibrary, type LibrarySort } from '../lib/models';
 import { LibraryHeading } from './LibraryHeading';
 import { formatVideoRate, videoBadges } from '../lib/videoUi';
+import { TiltCard } from './TiltCard';
+import { ProviderMark } from './ProviderMark';
 
 const provider = (id: string) => id.split('/')[0];
 
@@ -16,8 +18,8 @@ function VideoModelCard({ m, added, busy, onAdd, onRemove }: { m: VideoModel; ad
     return { r, silent: at(false), sound: m.sound ? at(true) : null };
   });
   return (
-    <li className="model-card">
-      <div className="model-card-head"><span className="model-card-name" title={m.name}>{m.name}</span></div>
+    <TiltCard as="li" max={10} className="model-card">
+      <div className="model-card-head"><ProviderMark id={m.id} /><span className="model-card-name" title={m.name}>{m.name}</span></div>
       <code className="model-card-id" title={m.id}>{m.id}</code>
       <div className="model-card-stats"><span>{formatVideoRate(m)}</span></div>
       <div className="pills">{videoBadges(m).map((b) => <span key={b} className="pill">{b}</span>)}</div>
@@ -37,7 +39,7 @@ function VideoModelCard({ m, added, busy, onAdd, onRemove }: { m: VideoModel; ad
         {added && <button className="link danger" disabled={busy} onClick={onRemove}>Remove</button>}
         <button className="link" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Less' : 'More'}</button>
       </div>
-    </li>
+    </TiltCard>
   );
 }
 
@@ -94,6 +96,11 @@ export function VideoModelLibrary() {
               <div className="model-main"><span>{e.displayName}</span><code>{e.id}</code></div>
               <div className="model-side">
                 <span className="muted small">{e.model ? formatVideoRate(e.model as VideoModel) : 'not offered any more'}</span>
+                {e.isDefault ? (
+                  <span className="badge">Default</span>
+                ) : (
+                  <button className="link" disabled={busy === e.id} onClick={() => act(e.id, () => api.setDefaultMediaModel(e.id, 'video'))}>Make default</button>
+                )}
                 <button className="link danger" disabled={busy === e.id} onClick={() => act(e.id, () => api.removeMediaModel(e.id, 'video'))}>Remove</button>
               </div>
             </li>

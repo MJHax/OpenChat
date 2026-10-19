@@ -23,11 +23,21 @@ export function renderingNote(elapsedMs: number, hint: string, status: string | 
   return parts.join(' · ');
 }
 
-/** The card's price line: the cheapest silent per-second rate. */
+/**
+ * The card's price line: the cheapest silent per-second rate, or for token-priced models the cheapest rate per million
+ * output (video) tokens. OpenRouter lists no separate input-token price for those; the "with video input" rate is for
+ * editing a video, which the tab doesn't do.
+ */
 export function formatVideoRate(m: VideoModel): string {
   const rate = cheapestPerSecond(m);
   if (rate !== null) return `from ${usd(rate)}/s`;
-  return Object.keys(m.skus).some((k) => k.startsWith('video_tokens')) ? 'priced by video tokens' : 'Price unknown';
+  const perToken = Object.entries(m.skus)
+    .filter(([k]) => k.startsWith('video_tokens') && !k.includes('with_video_input'))
+    .map(([, v]) => Number(v))
+    .filter((v) => Number.isFinite(v) && v > 0);
+  if (perToken.length === 0) return 'Price unknown';
+  const perM = `$${(Math.min(...perToken) * 1_000_000).toFixed(2)}/M output tokens`;
+  return new Set(perToken).size > 1 ? `from ${perM}` : perM;
 }
 
 /** Why `m` can't take the photos that are filled in; null when it can. */

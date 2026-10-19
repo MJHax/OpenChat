@@ -12,8 +12,8 @@ export const DEFAULT_LIMITS: SpendingLimits = {
   timeZone: 'UTC',
 };
 
-/** Where limit errors link to: Settings › General, scrolled to the limits. */
-export const SPENDING_LIMITS_HREF = '#/settings/general/limits';
+/** Where limit errors link to: the Spending limits tab in Settings. */
+export const SPENDING_LIMITS_HREF = '#/settings/limits';
 
 /** Matches the server's limit errors, so any error box can add a link to the limits. */
 export const LIMIT_ERROR = /spending limit/i;

@@ -87,6 +87,14 @@ describe('OpenRouter client', () => {
     expect(JSON.parse(String(calls[0].init.body))).toMatchObject({ model: 'openai/gpt-4o', stream: true, usage: { include: true } });
   });
 
+  it('identifies the app to OpenRouter by repo URL and title', async () => {
+    const { fn, calls } = fakeFetch(() => sse('data: [DONE]'));
+    await collect(createOpenRouterClient(fn).streamChat({ apiKey: 'k', model: 'openai/gpt-4o', messages: [{ role: 'user', content: 'hi' }] }));
+    expect(calls[0].init.headers).toMatchObject({
+      'HTTP-Referer': 'https://github.com/MJHax/OpenChat', 'X-OpenRouter-Title': 'OpenChat', 'X-Title': 'OpenChat',
+    });
+  });
+
   it('yields reasoning deltas separately from content', async () => {
     const { fn } = fakeFetch(() => sse(
       'data: {"choices":[{"delta":{"content":"","reasoning":"Let me think"}}]}',

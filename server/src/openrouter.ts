@@ -185,13 +185,18 @@ async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) => Prom
   return out;
 }
 
+/** OpenRouter identifies an app by its HTTP-Referer (so not a localhost URL, which every local app shares) and shows its title. */
+const APP_URL = 'https://github.com/MJHax/OpenChat';
+const APP_TITLE = 'OpenChat';
+
 export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = OPENROUTER_BASE): OpenRouterClient {
   async function request(path: string, init: RequestInit & { apiKey?: string } = {}): Promise<Response> {
     const { apiKey, ...rest } = init;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'http://localhost:3000',
-      'X-Title': 'OpenChat',
+      'HTTP-Referer': APP_URL,
+      'X-OpenRouter-Title': APP_TITLE,
+      'X-Title': APP_TITLE, // the older name for the same header, still accepted
     };
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
     // A video job's polling URL may come back absolute; everything else is a path under the API base.

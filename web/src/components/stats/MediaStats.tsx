@@ -4,14 +4,15 @@ import { compactNumber, formatSeconds } from '../../lib/stats';
 import { money } from '../../lib/imagePrice';
 import { Heatmap } from './Heatmap';
 import { Segmented } from './Segmented';
+import { TiltCard } from '../TiltCard';
 
 function Tile({ label, value, sub }: { label: string; value: string; sub?: string | null }) {
   return (
-    <div className="stat-tile">
+    <TiltCard className="stat-tile" max={10}>
       <div className="stat-label">{label}</div>
       <div className="stat-value" title={value}>{value}</div>
       {sub && <div className="stat-sub">{sub}</div>}
-    </div>
+    </TiltCard>
   );
 }
 

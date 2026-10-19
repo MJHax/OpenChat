@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { EFFORTS, type Attachment, type Effort, type LibraryModel } from '../../../shared/types';
 import { sendBlockReason, skippedImagesNotice } from '../lib/attachments';
-import { MAX_COMPARE, toggleModel, type CompareState } from '../lib/compare';
+import type { CompareState } from '../lib/compare';
+import { ArrowUp, Brain, Columns2, Globe, Square } from 'lucide-react';
+import { ModelPicker } from './ModelPicker';
 import { SEARCH_TOOLTIP } from '../lib/search';
 import { EFFORT_TOOLTIP } from '../lib/effort';
 import { AttachmentChips } from './AttachmentChips';
@@ -29,15 +31,29 @@ interface Props {
   /** Resolves false when the send was refused before the server took it; the draft is then put back. */
   onSend(text: string, attachments: Attachment[]): Promise<boolean>;
   onStop(): void;
+  /** The one-click compare toggle; only before the first message (later it lives in the ⋯ menu). */
+  showCompareToggle: boolean;
+  /** Text to drop into the box; a new nonce applies it again. */
+  prefill?: { text: string; nonce: number } | null;
 }
 
 export function Composer({
   disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, webSearch, onWebSearchChange, effort, onEffortChange,
   replyModels, path,
-  onSend, onStop,
+  onSend, onStop, showCompareToggle, prefill,
 }: Props) {
   const [text, setText] = useState('');
   const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!prefill) return;
+    setText(prefill.text);
+    const el = ref.current;
+    if (el) {
+      el.focus();
+      requestAnimationFrame(() => el.setSelectionRange(prefill.text.length, prefill.text.length));
+    }
+  }, [prefill?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
   const draft = useAttachmentDraft();
   const drop = useFileDrop(draft.add);
   const blockReason = sendBlockReason(draft.kinds, replyModels);
@@ -70,7 +86,7 @@ export function Composer({
           ref={ref}
           rows={1}
           value={text}
-          placeholder="Message…"
+          placeholder={compare.enabled ? 'Message several models…' : `Message ${models.find((m) => m.id === modelId)?.displayName ?? ''}…`.replace(' …', '…')}
           onChange={(e) => setText(e.target.value)}
           onPaste={drop.onPaste}
           onKeyDown={(e) => {
@@ -83,62 +99,31 @@ export function Composer({
         <div className="composer-bar">
           <div className="composer-models">
             <AttachButton onFiles={draft.add} onAttachments={draft.restore} />
-            <button
-              className="toggle"
-              aria-pressed={webSearch}
-              title={SEARCH_TOOLTIP}
-              onClick={() => onWebSearchChange(!webSearch)}
-            >
-              Web search
+            <button className="icon-btn" aria-pressed={webSearch} aria-label="Web search" title={`Web search: ${webSearch ? 'on' : 'off'}. ${SEARCH_TOOLTIP}`}
+              onClick={() => onWebSearchChange(!webSearch)}>
+              <Globe size={15} />
             </button>
-            <button
-              className="toggle"
-              aria-pressed={compare.enabled}
-              disabled={models.length < 2 && !compare.enabled}
-              title="Send each message to several models and pick a reply"
-              onClick={() => onCompareChange({ ...compare, enabled: !compare.enabled })}
-            >
-              Compare
-            </button>
-            {replyModels.some((m) => m.supportsReasoning) && (
-              <select
-                className={`effort${effort ? ' on' : ''}`}
-                value={effort ?? ''}
-                title={EFFORT_TOOLTIP}
-                aria-label="Reasoning effort"
-                onChange={(e) => onEffortChange((e.target.value || null) as Effort | null)}
-              >
-                <option value="">Default effort</option>
-                {EFFORTS.map((x) => <option key={x} value={x}>{`${x[0].toUpperCase()}${x.slice(1)} effort`}</option>)}
-              </select>
+            {showCompareToggle && (
+              <button className="icon-btn" aria-pressed={compare.enabled} aria-label="Compare models" disabled={models.length < 2 && !compare.enabled}
+                title="Compare: send each message to several models and pick a reply" onClick={() => onCompareChange({ ...compare, enabled: !compare.enabled })}>
+                <Columns2 size={15} />
+              </button>
             )}
-            {compare.enabled ? (
-              <div className="compare-picker">
-                {models.map((m) => {
-                  const on = compare.modelIds.includes(m.id);
-                  return (
-                    <label key={m.id} className={`chip${on ? ' on' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={on}
-                        disabled={!on && compare.modelIds.length >= MAX_COMPARE}
-                        onChange={() => onCompareChange(toggleModel(compare, m.id))}
-                      />
-                      {m.displayName}
-                    </label>
-                  );
-                })}
-              </div>
-            ) : (
-              <select value={modelId} onChange={(e) => onModelChange(e.target.value)} disabled={models.length === 0} aria-label="Model">
-                {models.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
-              </select>
+            <ModelPicker models={models} modelId={modelId} onModelChange={onModelChange} compare={compare} onCompareChange={onCompareChange} />
+            {replyModels.some((m) => m.supportsReasoning) && (
+              <label className={`chip ghost effort-chip${effort ? ' on' : ''}`} title={EFFORT_TOOLTIP}>
+                <Brain size={13} />
+                <select value={effort ?? ''} aria-label="Reasoning effort" onChange={(e) => onEffortChange((e.target.value || null) as Effort | null)}>
+                  <option value="">Default</option>
+                  {EFFORTS.map((x) => <option key={x} value={x}>{`${x[0].toUpperCase()}${x.slice(1)}`}</option>)}
+                </select>
+              </label>
             )}
           </div>
           {streaming ? (
-            <button className="primary" onClick={onStop}>Stop</button>
+            <button className="send fill" onClick={onStop} aria-label="Stop" title="Stop"><Square size={13} fill="currentColor" /></button>
           ) : (
-            <button className="primary" onClick={() => { void submit(); }} disabled={!canSend}>Send</button>
+            <button className="send fill" onClick={() => { void submit(); }} disabled={!canSend} aria-label="Send" title="Send"><ArrowUp size={16} /></button>
           )}
         </div>
         {disabledReason && !streaming && <div className="composer-hint">{disabledReason}</div>}

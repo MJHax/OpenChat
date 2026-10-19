@@ -5,6 +5,8 @@ import { api } from '../api';
 import { loadLibrarySort, saveLibrarySort, sortMediaLibrary, type LibrarySort } from '../lib/models';
 import { LibraryHeading } from './LibraryHeading';
 import { formatImagePrice, imageBadges, money } from '../lib/imagePrice';
+import { TiltCard } from './TiltCard';
+import { ProviderMark } from './ProviderMark';
 
 const provider = (id: string) => id.split('/')[0];
 
@@ -20,8 +22,9 @@ function ImageModelCard({ m, entry, busy, onAdd, onRemove }: {
   const [open, setOpen] = useState(false);
   const prices = m.price.kind === 'image' ? Object.entries(m.price.bySize) : [];
   return (
-    <li className="model-card">
+    <TiltCard as="li" max={10} className="model-card">
       <div className="model-card-head">
+        <ProviderMark id={m.id} />
         <span className="model-card-name" title={m.name}>{m.name}</span>
       </div>
       <code className="model-card-id" title={m.id}>{m.id}</code>
@@ -42,7 +45,7 @@ function ImageModelCard({ m, entry, busy, onAdd, onRemove }: {
         {entry && <button className="link danger" disabled={busy} onClick={onRemove}>Remove</button>}
         <button className="link" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Less' : 'More'}</button>
       </div>
-    </li>
+    </TiltCard>
   );
 }
 
@@ -101,6 +104,11 @@ export function ImageModelLibrary() {
               <div className="model-main"><span>{e.displayName}</span><code>{e.id}</code></div>
               <div className="model-side">
                 <span className="muted small">{e.model ? formatImagePrice(e.model as ImageModel, avgFor(e)) : ''}</span>
+                {e.isDefault ? (
+                  <span className="badge">Default</span>
+                ) : (
+                  <button className="link" disabled={busy === e.id} onClick={() => act(e.id, () => api.setDefaultMediaModel(e.id, 'image'))}>Make default</button>
+                )}
                 <button className="link danger" disabled={busy === e.id} onClick={() => act(e.id, () => api.removeMediaModel(e.id, 'image'))}>Remove</button>
               </div>
             </li>

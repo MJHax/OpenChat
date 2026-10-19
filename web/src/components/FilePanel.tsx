@@ -3,6 +3,7 @@ import hljs from 'highlight.js/lib/common';
 import { fileKind, type FileBlock, type FileVersion } from '../../../shared/files';
 import { csvRows, prepareHtml, svgDataUrl } from '../lib/filePreview';
 import { Markdown } from './Markdown';
+import { X } from 'lucide-react';
 
 interface Props {
   name: string;
@@ -81,7 +82,7 @@ export function FilePanel({ name, versions, initialVersion, adhoc, images, onDow
           <button className="link" onClick={() => frame.current?.contentWindow?.postMessage('openchat:print', '*')}>Print / Save as PDF</button>
         )}
         <button className="link" onClick={() => onDownload(file)}>Download</button>
-        <button className="icon" onClick={onClose} aria-label="Close file" title="Close">✕</button>
+        <button className="icon" onClick={onClose} aria-label="Close file" title="Close"><X size={16} /></button>
       </div>
       {!file.complete && <div className="file-panel-note muted small">Incomplete. The reply stopped before this file finished.</div>}
       <div className="file-panel-body">
