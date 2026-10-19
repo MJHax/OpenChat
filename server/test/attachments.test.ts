@@ -9,7 +9,8 @@ import type { OpenRouterClient } from '../src/openrouter';
 import { createChat, deleteChat } from '../src/chats';
 import { insertMessage } from '../src/messages';
 import {
-  attachmentsFor, cleanFilename, cleanupPending, deletePending, detectKind, getAttachmentData, getAttachmentRow, insertGenerated, insertPending,
+  attachToMessage, attachmentsFor, cleanFilename, cleanupPending, deletePending, detectKind, getAttachmentData, getAttachmentRow, hashBytes,
+  insertGenerated, insertPending,
 } from '../src/attachments';
 import { setActiveLeaf } from '../src/chats';
 
@@ -386,5 +387,26 @@ describe('attaching generated images and files', () => {
     const { call, a2 } = seed();
     expect((await call('POST', '/api/attachments/copy', { attachmentId: 'nope' })).status).toBe(404);
     expect((await call('POST', '/api/attachments/copy', { messageId: a2.id, name: 'missing.txt' })).status).toBe(404);
+  });
+});
+
+describe('content hash', () => {
+  const hashOf = (db: ReturnType<typeof openDb>, id: string) =>
+    (db.prepare('SELECT hash FROM attachments WHERE id = ?').get(id) as { hash: string | null }).hash;
+
+  it('stores a content hash on pending, generated, attached and copied rows', () => {
+    const db = openDb(':memory:');
+    const chat = createChat(db);
+    const u1 = insertMessage(db, { chatId: chat.id, parentId: null, role: 'user', content: 'one' });
+    const u2 = insertMessage(db, { chatId: chat.id, parentId: u1.id, role: 'user', content: 'two' });
+    const pending = insertPending(db, { filename: 'a.png', kind: 'image', mime: 'image/png', data: PNG });
+    expect(hashOf(db, pending.id)).toBe(hashBytes(PNG));
+    const generated = insertGenerated(db, { messageId: u1.id, filename: 'b.png', kind: 'image', mime: 'image/png', data: PNG });
+    expect(hashOf(db, generated.id)).toBe(hashBytes(PNG));
+    attachToMessage(db, u1.id, [getAttachmentRow(db, pending.id)!]);
+    attachToMessage(db, u2.id, [getAttachmentRow(db, pending.id)!]); // already claimed, so this copies
+    const copy = (db.prepare('SELECT id FROM attachments WHERE message_id = ?').get(u2.id) as { id: string }).id;
+    expect(copy).not.toBe(pending.id);
+    expect(hashOf(db, copy)).toBe(hashBytes(PNG));
   });
 });

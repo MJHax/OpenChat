@@ -25,8 +25,8 @@ export function forkChat(db: DB, chatId: string, messageId: string): ChatSummary
      FROM messages WHERE id = ?`,
   );
   const copyAttachments = db.prepare(
-    `INSERT INTO attachments (id, message_id, position, kind, filename, mime, size, data, created_at)
-     SELECT ?, ?, position, kind, filename, mime, size, data, created_at FROM attachments WHERE id = ?`,
+    `INSERT INTO attachments (id, message_id, position, kind, filename, mime, size, data, created_at, hash)
+     SELECT ?, ?, position, kind, filename, mime, size, data, created_at, hash FROM attachments WHERE id = ?`,
   );
 
   return db.transaction(() => {

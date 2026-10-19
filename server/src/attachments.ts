@@ -1,5 +1,7 @@
 import type { DB } from './db';
-import { newId, now } from './db';
+import { hashBytes, newId, now } from './db';
+
+export { hashBytes };
 import { HttpError } from './http';
 import { displayNameOf, modelModalities } from './library';
 import {
@@ -61,8 +63,8 @@ export function cleanFilename(name: string): string {
 
 export function insertPending(db: DB, a: { filename: string; kind: AttachmentKind; mime: string; data: Uint8Array }): Attachment {
   const id = newId();
-  db.prepare('INSERT INTO attachments (id, message_id, kind, filename, mime, size, data, created_at) VALUES (?, NULL, ?, ?, ?, ?, ?, ?)')
-    .run(id, a.kind, a.filename, a.mime, a.data.length, Buffer.from(a.data), now());
+  db.prepare('INSERT INTO attachments (id, message_id, kind, filename, mime, size, data, created_at, hash) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)')
+    .run(id, a.kind, a.filename, a.mime, a.data.length, Buffer.from(a.data), now(), hashBytes(a.data));
   return { id, kind: a.kind, filename: a.filename, mime: a.mime, size: a.data.length };
 }
 
@@ -110,8 +112,8 @@ export function resolveAttachmentIds(db: DB, ids: unknown, opts: { editedMessage
 export function attachToMessage(db: DB, messageId: string, list: AttachmentRow[]): void {
   const claim = db.prepare('UPDATE attachments SET message_id = ?, position = ? WHERE id = ?');
   const copy = db.prepare(
-    `INSERT INTO attachments (id, message_id, position, kind, filename, mime, size, data, created_at)
-     SELECT ?, ?, ?, kind, filename, mime, size, data, ? FROM attachments WHERE id = ?`,
+    `INSERT INTO attachments (id, message_id, position, kind, filename, mime, size, data, created_at, hash)
+     SELECT ?, ?, ?, kind, filename, mime, size, data, ?, hash FROM attachments WHERE id = ?`,
   );
   list.forEach((a, position) => {
     if (a.messageId === null) claim.run(messageId, position, a.id);
@@ -144,8 +146,8 @@ export function attachmentsFor(db: DB, messageIds: string[]): Map<string, Attach
 /** Stores a generated file (an image a model made) on the assistant message that produced it. */
 export function insertGenerated(db: DB, a: { messageId: string; filename: string; kind: AttachmentKind; mime: string; data: Uint8Array }): Attachment {
   const id = newId();
-  db.prepare('INSERT INTO attachments (id, message_id, position, kind, filename, mime, size, data, created_at) VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?)')
-    .run(id, a.messageId, a.kind, a.filename, a.mime, a.data.length, a.data, now());
+  db.prepare('INSERT INTO attachments (id, message_id, position, kind, filename, mime, size, data, created_at, hash) VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?)')
+    .run(id, a.messageId, a.kind, a.filename, a.mime, a.data.length, a.data, now(), hashBytes(a.data));
   return { id, kind: a.kind, filename: a.filename, mime: a.mime, size: a.data.length };
 }
 

@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
@@ -85,7 +85,9 @@ CREATE TABLE IF NOT EXISTS attachments (
   mime TEXT NOT NULL,
   size INTEGER NOT NULL,
   data BLOB NOT NULL,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  -- SHA-256 of data, so the Library can tell when two rows are the same file.
+  hash TEXT
 );
 CREATE INDEX IF NOT EXISTS attachments_message ON attachments(message_id, position);
 
@@ -255,6 +257,10 @@ function migrate(db: DB): void {
   if (!messageColumns.includes('effort')) db.exec('ALTER TABLE messages ADD COLUMN effort TEXT');
   const videoJobColumns = (db.prepare('PRAGMA table_info(video_jobs)').all() as { name: string }[]).map((c) => c.name);
   if (!videoJobColumns.includes('download_failed_at')) db.exec('ALTER TABLE video_jobs ADD COLUMN download_failed_at INTEGER');
+  const attachmentColumns = (db.prepare('PRAGMA table_info(attachments)').all() as { name: string }[]).map((c) => c.name);
+  if (!attachmentColumns.includes('hash')) db.exec('ALTER TABLE attachments ADD COLUMN hash TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS attachments_hash ON attachments(hash)');
+  backfillHashes(db);
   backfillUsage(db);
 }
 
@@ -295,7 +301,19 @@ function backfillUsage(db: DB): void {
   })();
 }
 
+/** Hashes attachments stored before the hash column existed, one row at a time so only one file is in memory. */
+function backfillHashes(db: DB): void {
+  const ids = db.prepare('SELECT id FROM attachments WHERE hash IS NULL').pluck().all() as string[];
+  if (ids.length === 0) return;
+  const read = db.prepare('SELECT data FROM attachments WHERE id = ?').pluck();
+  const write = db.prepare('UPDATE attachments SET hash = ? WHERE id = ?');
+  db.transaction(() => { for (const id of ids) write.run(hashBytes(read.get(id) as Buffer), id); })();
+}
+
 export const newId = (): string => randomUUID();
+
+/** SHA-256 of a file's bytes, as lowercase hex; equal hashes mean the same file. */
+export const hashBytes = (data: Uint8Array): string => createHash('sha256').update(data).digest('hex');
 
 let last = 0;
 /** Millisecond timestamp, strictly increasing within this process so ordering never ties. */

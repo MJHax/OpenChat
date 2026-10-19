@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { makeApp } from './appHelpers';
 import { insertMessage } from '../src/messages';
-import { attachToMessage, getAttachmentData, getAttachmentRow } from '../src/attachments';
+import { attachToMessage, getAttachmentData, getAttachmentRow, hashBytes } from '../src/attachments';
 import { setActiveLeaf } from '../src/chats';
 import type { Attachment, ChatDetail, ChatSummary } from '../../shared/types';
 
@@ -42,6 +42,8 @@ describe('POST /api/chats/:id/fork', () => {
     expect(copied).toMatchObject({ filename: 'notes.md', kind: file.kind });
     expect(copied.id).not.toBe(file.id);
     expect(getAttachmentData(ctx.db, copied.id)?.toString()).toBe('notes');
+    const hashOf = (id: string) => (ctx.db.prepare('SELECT hash FROM attachments WHERE id = ?').get(id) as { hash: string | null }).hash;
+    expect(hashOf(copied.id)).toBe(hashBytes(new TextEncoder().encode('notes')));
   });
 
   it('leaves the original chat as it was, and the copy survives its deletion', async () => {
