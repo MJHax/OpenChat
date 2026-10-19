@@ -28,6 +28,7 @@
 .lib-chat-list button { display: flex; justify-content: space-between; gap: 12px; width: 100%; border: none; background: none; padding: 6px 8px; border-radius: var(--radius-sm); text-align: left; color: var(--text); }
 .lib-chat-list button:hover { background: var(--surface-2); }
 .lib-chat-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-chat-list button .muted { white-space: nowrap; flex-shrink: 0; }
 
 .lib-preview-body { display: flex; align-items: center; justify-content: center; max-width: 100%; max-height: calc(100% - 64px); min-height: 0; }
 .lib-preview-body img, .lib-preview-body video { max-width: 100%; max-height: calc(100vh - 120px); border-radius: var(--radius); }
