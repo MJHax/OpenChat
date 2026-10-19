@@ -2,6 +2,7 @@ import type { DB } from './db';
 import { now } from './db';
 import { HttpError } from './http';
 import { CATALOG_TTL_MS } from './catalog';
+import { getSetting, setSetting, type SettingKey } from './settings';
 import type { OpenRouterClient } from './openrouter';
 import type { MediaModel } from '../../shared/types';
 import type { MediaCatalog, MediaKind, MediaLibraryModel } from '../../shared/types';
@@ -62,7 +63,10 @@ function averages(db: DB, kind: MediaKind): Map<string, Record<string, number>> 
   return new Map([...sums].map(([id, m]) => [id, Object.fromEntries([...m].map(([k, v]) => [k, v.total / v.n]))]));
 }
 
+const DEFAULT_KEYS: Record<MediaKind, SettingKey> = { image: 'default_image_model_id', video: 'default_video_model_id' };
+
 export function listMediaLibrary(db: DB, kind: MediaKind): MediaLibraryModel[] {
+  const defaultId = getSetting(db, DEFAULT_KEYS[kind]);
   const rows = db.prepare('SELECT id, display_name FROM media_models WHERE kind = ? ORDER BY added_at, id').all(kind) as { id: string; display_name: string }[];
   const catalog = readCache(db, kind)?.models ?? [];
   const avg = averages(db, kind);
@@ -73,7 +77,7 @@ export function listMediaLibrary(db: DB, kind: MediaKind): MediaLibraryModel[] {
     "SELECT duration_ms FROM media_events WHERE kind = ? AND model_id = ? AND status = 'complete' AND duration_ms IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 20",
   );
   return rows.map((r) => ({
-    id: r.id, displayName: r.display_name, kind, model: catalog.find((m) => m.id === r.id) ?? null, avgCost: avg.get(r.id) ?? {},
+    id: r.id, displayName: r.display_name, kind, isDefault: r.id === defaultId, model: catalog.find((m) => m.id === r.id) ?? null, avgCost: avg.get(r.id) ?? {},
     avgRenderMs: render.get(r.id) ?? null,
     recentRenderMs: (recent.all(kind, r.id) as { duration_ms: number }[]).map((x) => x.duration_ms),
   }));
@@ -81,8 +85,21 @@ export function listMediaLibrary(db: DB, kind: MediaKind): MediaLibraryModel[] {
 
 export function addMediaModel(db: DB, kind: MediaKind, model: { id: string; name: string }): void {
   db.prepare('INSERT OR IGNORE INTO media_models (id, kind, display_name, added_at) VALUES (?, ?, ?, ?)').run(model.id, kind, model.name, now());
+  if (!getSetting(db, DEFAULT_KEYS[kind])) setSetting(db, DEFAULT_KEYS[kind], model.id);
+}
+
+export function requireMediaModel(db: DB, kind: MediaKind, id: string): void {
+  if (!db.prepare('SELECT 1 FROM media_models WHERE id = ? AND kind = ?').get(id, kind)) throw new HttpError(404, 'Model is not in your list.');
+}
+
+export function setDefaultMediaModel(db: DB, kind: MediaKind, id: string): void {
+  setSetting(db, DEFAULT_KEYS[kind], id);
 }
 
 export function removeMediaModel(db: DB, kind: MediaKind, id: string): void {
   db.prepare('DELETE FROM media_models WHERE id = ? AND kind = ?').run(id, kind);
+  if (getSetting(db, DEFAULT_KEYS[kind]) === id) {
+    const next = db.prepare('SELECT id FROM media_models WHERE kind = ? ORDER BY added_at, id LIMIT 1').get(kind) as { id: string } | undefined;
+    setSetting(db, DEFAULT_KEYS[kind], next?.id ?? '');
+  }
 }

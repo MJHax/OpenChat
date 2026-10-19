@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { defaultSettings, snapSettings, type ImageSettings } from '../../../shared/imageModels';
+import { defaultSettings, snapSettings, type ImageModel, type ImageSettings } from '../../../shared/imageModels';
 import type { Attachment, ChatDetail, ImageGeneration, MediaLibraryModel, PathMessage, SettingsView } from '../../../shared/types';
 import { api, attachmentUrl, deleteAttachment, uploadAttachment } from '../api';
 import { navigate } from '../lib/route';
-import { loadLibrarySort, sortMediaLibrary } from '../lib/models';
-import { editTarget, pickImageModel } from '../lib/imageTarget';
+import { loadLibrarySort, pickMediaEntry, sortMediaLibrary } from '../lib/models';
+import { editTarget } from '../lib/imageTarget';
 import { money } from '../lib/imagePrice';
 import { shrinkFile } from '../lib/shrinkImage';
 import { ImageComposer } from '../components/ImageComposer';
@@ -22,10 +22,6 @@ interface Props {
   settings: SettingsView | null;
   onThreadsChanged(): void;
 }
-
-const MODEL_KEY = 'openchat.images.model';
-const loadModel = () => { try { return localStorage.getItem(MODEL_KEY) ?? ''; } catch { return ''; } };
-const saveModel = (id: string) => { try { localStorage.setItem(MODEL_KEY, id); } catch { /* private mode */ } };
 
 /** width / height for a ratio like "16:9"; square for "auto". */
 const ratioOf = (aspect: string) => {
@@ -50,7 +46,7 @@ function Generating({ g }: { g: ImageGeneration }) {
 export function ImageThread({ threadId, title, reloadToken, settings: appSettings, onThreadsChanged }: Props) {
   const [detail, setDetail] = useState<ChatDetail | null>(null);
   const [library, setLibrary] = useState<MediaLibraryModel[]>([]);
-  const [modelId, setModelId] = useState(loadModel);
+  const [modelId, setModelId] = useState('');
   const [settings, setSettings] = useState<ImageSettings | null>(null);
   const [prompt, setPrompt] = useState('');
   const [uploads, setUploads] = useState<Attachment[]>([]);
@@ -62,6 +58,8 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
   const [sending, setSending] = useState(false);
   const [zoom, setZoom] = useState<{ image: Attachment; message: PathMessage } | null>(null);
   const viewing = useRef(threadId);
+  /** The thread this view just created for a send, so moving to it keeps the model picked in the composer. */
+  const createdRef = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const reload = async (id: string) => {
@@ -79,6 +77,12 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
     if (!threadId) { setDetail(null); return; }
     reload(threadId).catch((e: Error) => setError(e.message));
   }, [threadId, reloadToken]);
+
+  // A thread other than the one this view just created starts from its own model, not the last pick.
+  useEffect(() => {
+    if (threadId !== createdRef.current) setModelId('');
+    createdRef.current = null;
+  }, [threadId]);
 
   const messages = detail?.messages ?? [];
   const generations = detail?.generations ?? {};
@@ -98,8 +102,9 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, running]);
 
-  // A saved model OpenRouter no longer lists can't be used; fall back to one that can, so the composer always shows.
-  const model = pickImageModel(library, modelId) ?? null;
+  // A new thread starts on the default model, an existing one on the model it last used; a model OpenRouter no longer lists is skipped.
+  const lastModel = messages.findLast((m) => m.role === 'assistant' && m.modelId)?.modelId ?? null;
+  const model = (pickMediaEntry(library, modelId, lastModel)?.model ?? null) as ImageModel | null;
   // Settings follow the model: a model change snaps them to what it offers.
   useEffect(() => {
     if (model) setSettings((s) => (s ? snapSettings(model, s) : defaultSettings(model)));
@@ -129,6 +134,7 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
     if (threadId) return threadId;
     const id = (await api.createChat('image')).id;
     viewing.current = id;
+    createdRef.current = id;
     navigate(`#/images/${id}`);
     onThreadsChanged();
     return id;
@@ -140,7 +146,6 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
     try {
       const id = await ensureThread();
       await api.generateImage(id, body);
-      saveModel(body.modelId);
       await reload(id);
       onThreadsChanged();
       return true;
@@ -250,7 +255,7 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
         <ImageComposer
           library={library}
           model={model}
-          onModelChange={(id) => { setModelId(id); saveModel(id); }}
+          onModelChange={setModelId}
           settings={settings}
           onSettings={setSettings}
           prompt={prompt}

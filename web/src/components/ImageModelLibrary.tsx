@@ -104,6 +104,11 @@ export function ImageModelLibrary() {
               <div className="model-main"><span>{e.displayName}</span><code>{e.id}</code></div>
               <div className="model-side">
                 <span className="muted small">{e.model ? formatImagePrice(e.model as ImageModel, avgFor(e)) : ''}</span>
+                {e.isDefault ? (
+                  <span className="badge">Default</span>
+                ) : (
+                  <button className="link" disabled={busy === e.id} onClick={() => act(e.id, () => api.setDefaultMediaModel(e.id, 'image'))}>Make default</button>
+                )}
                 <button className="link danger" disabled={busy === e.id} onClick={() => act(e.id, () => api.removeMediaModel(e.id, 'image'))}>Remove</button>
               </div>
             </li>

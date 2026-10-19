@@ -131,6 +131,8 @@ export interface MediaLibraryModel {
   id: string;
   displayName: string;
   kind: MediaKind;
+  /** The model new threads of this kind start on. */
+  isDefault: boolean;
   /** ImageModel for kind 'image', VideoModel for kind 'video'; null when the catalog no longer lists it. */
   model: MediaModel | null;
   /** Average time to generate, from completed calls; null before the first. */

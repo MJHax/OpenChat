@@ -62,6 +62,8 @@ export const api = {
   listMediaModels: (kind: MediaKind) => json<MediaLibraryModel[]>('GET', `/api/media-models?kind=${kind}`),
   mediaCatalog: (kind: MediaKind, refresh = false) => json<MediaCatalog>('GET', `/api/media-models/catalog?kind=${kind}${refresh ? '&refresh=1' : ''}`),
   addMediaModel: (id: string, kind: MediaKind) => json<MediaLibraryModel[]>('POST', '/api/media-models', { id, kind }),
+  setDefaultMediaModel: (id: string, kind: MediaKind) =>
+    json<MediaLibraryModel[]>('PATCH', '/api/media-models', { id, kind, isDefault: true }),
   removeMediaModel: (id: string, kind: MediaKind) =>
     json<MediaLibraryModel[]>('DELETE', `/api/media-models?id=${encodeURIComponent(id)}&kind=${kind}`),
 

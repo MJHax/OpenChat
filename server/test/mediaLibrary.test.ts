@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { makeApp } from './appHelpers';
 import { listLibrary } from '../src/library';
-import { addMediaModel, getMediaCatalog, listMediaLibrary, removeMediaModel } from '../src/mediaLibrary';
+import { addMediaModel, getMediaCatalog, listMediaLibrary, removeMediaModel, setDefaultMediaModel } from '../src/mediaLibrary';
 import type { ImageModel } from '../../shared/imageModels';
 import type { VideoModel } from '../../shared/videoModels';
 import type { ChatSummary } from '../../shared/types';
@@ -112,5 +112,50 @@ describe('threads by kind', () => {
     expect(u.changes).toBe(1);
     const [summary] = (await (await call('GET', '/api/chats?kind=image')).json()) as ChatSummary[];
     expect(summary).toMatchObject({ totalCost: 0.04, thumbnailId: 'img1', busy: true });
+  });
+});
+
+describe('media default model', () => {
+  const ids = (db: ReturnType<typeof makeApp>['db'], kind: 'image' | 'video') => listMediaLibrary(db, kind).filter((m) => m.isDefault).map((m) => m.id);
+
+  it('makes the first model of a kind its default, per kind', () => {
+    const { db } = makeApp();
+    addMediaModel(db, 'image', img('a/one'));
+    addMediaModel(db, 'image', img('a/two'));
+    addMediaModel(db, 'video', { id: 'v/one', name: 'V1' });
+    expect(ids(db, 'image')).toEqual(['a/one']);
+    expect(ids(db, 'video')).toEqual(['v/one']);
+  });
+
+  it('switches the default and falls back to the next model on remove', () => {
+    const { db } = makeApp();
+    addMediaModel(db, 'image', img('a/one'));
+    addMediaModel(db, 'image', img('a/two'));
+    setDefaultMediaModel(db, 'image', 'a/two');
+    expect(ids(db, 'image')).toEqual(['a/two']);
+    removeMediaModel(db, 'image', 'a/two');
+    expect(ids(db, 'image')).toEqual(['a/one']);
+    removeMediaModel(db, 'image', 'a/one');
+    expect(ids(db, 'image')).toEqual([]);
+    addMediaModel(db, 'image', img('a/three'));
+    expect(ids(db, 'image')).toEqual(['a/three']);
+  });
+
+  it('keeps the default when a non-default model is removed', () => {
+    const { db } = makeApp();
+    addMediaModel(db, 'image', img('a/one'));
+    addMediaModel(db, 'image', img('a/two'));
+    removeMediaModel(db, 'image', 'a/two');
+    expect(ids(db, 'image')).toEqual(['a/one']);
+  });
+
+  it('sets the default over PATCH and rejects unknown models', async () => {
+    const { call: raw } = makeApp({ listImageModels: async () => [img('a/one'), img('a/two')] });
+    const call = (method: string, body: unknown) => raw(method, '/api/media-models', body);
+    await call('POST', { id: 'a/one', kind: 'image' });
+    await call('POST', { id: 'a/two', kind: 'image' });
+    const res = await call('PATCH', { id: 'a/two', kind: 'image', isDefault: true });
+    expect(((await res.json()) as { id: string; isDefault: boolean }[]).map((m) => [m.id, m.isDefault])).toEqual([['a/one', false], ['a/two', true]]);
+    expect((await call('PATCH', { id: 'nope', kind: 'image', isDefault: true })).status).toBe(404);
   });
 });

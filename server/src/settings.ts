@@ -14,6 +14,8 @@ const DEFAULTS = {
   animations: '1',
   tilt_cards: '1',
   default_model_id: '',
+  default_image_model_id: '',
+  default_video_model_id: '',
   title_model_id: '',
   memory_model_id: '',
 };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { initialModelId, sortLibrary, sortMediaLibrary } from './models';
+import { initialModelId, pickMediaEntry, sortLibrary, sortMediaLibrary } from './models';
 import type { VideoModel } from '../../../shared/videoModels';
 import type { LibraryModel, MediaLibraryModel, Message } from '../../../shared/types';
 
@@ -52,7 +52,7 @@ describe('sortLibrary', () => {
 
 describe('sortMediaLibrary', () => {
   const video = (id: string, name: string, perSecond: string | null): MediaLibraryModel => ({
-    id, displayName: name, kind: 'video', avgRenderMs: null, recentRenderMs: [], avgCost: {},
+    id, displayName: name, kind: 'video', isDefault: false, avgRenderMs: null, recentRenderMs: [], avgCost: {},
     model: perSecond === null ? null : {
       id, name, description: '', created: null, durations: [5], resolutions: ['720p'], aspects: ['16:9'], sizes: [],
       frames: { first: false, last: false }, sound: false, skus: { duration_seconds_720p: perSecond },
@@ -64,5 +64,33 @@ describe('sortMediaLibrary', () => {
     expect(sortMediaLibrary(list, 'cost').map((m) => m.id)).toEqual(['v/3', 'v/1', 'v/2']);
     expect(sortMediaLibrary(list, 'name').map((m) => m.id)).toEqual(['v/2', 'v/3', 'v/1']);
     expect(sortMediaLibrary(list, 'added')).toBe(list);
+  });
+});
+
+describe('pickMediaEntry', () => {
+  const entry = (id: string, usable = true, isDefault = false): MediaLibraryModel => ({
+    id, displayName: id, kind: 'image', isDefault, model: usable ? ({ id } as never) : null, avgCost: {}, avgRenderMs: null, recentRenderMs: [],
+  });
+  const list = [entry('a'), entry('b', true, true), entry('gone', false), entry('c')];
+
+  it('starts a new thread on the default model', () => {
+    expect(pickMediaEntry(list, '', null)?.id).toBe('b');
+  });
+
+  it('keeps the model an existing thread last used', () => {
+    expect(pickMediaEntry(list, '', 'c')?.id).toBe('c');
+  });
+
+  it('prefers an explicit pick over everything', () => {
+    expect(pickMediaEntry(list, 'a', 'c')?.id).toBe('a');
+  });
+
+  it('skips models the catalog no longer lists', () => {
+    expect(pickMediaEntry(list, 'gone', 'gone')?.id).toBe('b');
+    expect(pickMediaEntry([entry('gone', false, true), entry('c')], '', null)?.id).toBe('c');
+  });
+
+  it('has nothing when no model is usable', () => {
+    expect(pickMediaEntry([entry('gone', false)], '', null)).toBeUndefined();
   });
 });

@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { editTarget, pickImageModel } from './imageTarget';
-import type { MediaLibraryModel } from '../../../shared/types';
-import type { ImageModel } from '../../../shared/imageModels';
+import { editTarget } from './imageTarget';
 
 const onPath = ['img1', 'img2', 'img3'];
 
@@ -30,25 +28,5 @@ describe('editTarget', () => {
   it('makes a new image when asked, or when there is nothing to edit', () => {
     expect(editTarget({ picked: 'img2', newImage: true, uploads: 0, onPath })).toEqual({ id: null, note: null });
     expect(editTarget({ picked: null, newImage: false, uploads: 0, onPath: [] })).toEqual({ id: null, note: null });
-  });
-});
-
-describe('pickImageModel', () => {
-  const m = (id: string): ImageModel => ({
-    id, name: id, description: '', created: null, aspects: [], resolutions: [], qualities: [], transparent: false, maxRefs: 0, minRefs: 0, price: { kind: 'unknown' },
-  });
-  const entry = (id: string, model: ImageModel | null): MediaLibraryModel => ({ id, displayName: id, kind: 'image', model, avgCost: {}, avgRenderMs: null, recentRenderMs: [] });
-
-  it('uses the saved model when the catalog still has it', () => {
-    expect(pickImageModel([entry('a', m('a')), entry('b', m('b'))], 'b')?.id).toBe('b');
-  });
-
-  it('falls back to a usable model when the saved one left the catalog', () => {
-    expect(pickImageModel([entry('gone', null), entry('b', m('b'))], 'gone')?.id).toBe('b');
-    expect(pickImageModel([entry('a', m('a'))], 'unknown')?.id).toBe('a');
-  });
-
-  it('has nothing when no model is usable', () => {
-    expect(pickImageModel([entry('gone', null)], 'gone')).toBeUndefined();
   });
 });

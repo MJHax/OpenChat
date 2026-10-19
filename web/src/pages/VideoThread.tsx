@@ -3,7 +3,7 @@ import { defaultVideoSettings, snapVideoSettings, usd, type VideoModel, type Vid
 import type { Attachment, ChatDetail, MediaLibraryModel, PathMessage, SettingsView } from '../../../shared/types';
 import { api, attachmentUrl, videoUrl } from '../api';
 import { navigate } from '../lib/route';
-import { loadLibrarySort, sortMediaLibrary } from '../lib/models';
+import { loadLibrarySort, pickMediaEntry, sortMediaLibrary } from '../lib/models';
 import { renderHint, renderingNote } from '../lib/videoUi';
 import { askNotifyPermission } from '../lib/notify';
 import { VideoComposer } from '../components/VideoComposer';
@@ -19,10 +19,6 @@ interface Props {
   settings: SettingsView | null;
   onThreadsChanged(): void;
 }
-
-const MODEL_KEY = 'openchat.video.model';
-const loadModel = () => { try { return localStorage.getItem(MODEL_KEY) ?? ''; } catch { return ''; } };
-const saveModel = (id: string) => { try { localStorage.setItem(MODEL_KEY, id); } catch { /* private mode */ } };
 
 const withStop = (text: string) => (/[.!?]$/.test(text) ? text : `${text}.`);
 
@@ -53,7 +49,7 @@ function Rendering({ startedAt, aspect, hint, status, lastError }: {
 export function VideoThread({ threadId, title, reloadToken, settings: appSettings, onThreadsChanged }: Props) {
   const [detail, setDetail] = useState<ChatDetail | null>(null);
   const [library, setLibrary] = useState<MediaLibraryModel[]>([]);
-  const [modelId, setModelId] = useState(loadModel);
+  const [modelId, setModelId] = useState('');
   const [settings, setSettings] = useState<VideoSettings | null>(null);
   const [prompt, setPrompt] = useState('');
   const [start, setStart] = useState<Attachment | null>(null);
@@ -63,6 +59,8 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
   const viewing = useRef(threadId);
   /** The thread this view just created for a send, so moving to it keeps the composer as it is. */
   const createdRef = useRef<string | null>(null);
+  /** Same, for the model: a thread this view created keeps the model picked in the composer. */
+  const createdModelRef = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const reload = async (id: string) => {
@@ -81,6 +79,11 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
     reload(threadId).catch((e: Error) => setError(e.message));
   }, [threadId, reloadToken]);
 
+  useEffect(() => {
+    if (threadId !== createdModelRef.current) setModelId('');
+    createdModelRef.current = null;
+  }, [threadId]);
+
   const messages = detail?.messages ?? [];
   const generations = detail?.generations ?? {};
   const rendering = messages.some((m) => m.status === 'generating');
@@ -97,8 +100,9 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, rendering]);
 
-  const usable = library.filter((e) => e.model);
-  const entry = usable.find((e) => e.id === modelId) ?? usable[0];
+  // A new thread starts on the default model, an existing one on the model it last used.
+  const lastModel = messages.findLast((m) => m.role === 'assistant' && m.modelId)?.modelId ?? null;
+  const entry = pickMediaEntry(library, modelId, lastModel);
   const model = (entry?.model ?? null) as VideoModel | null;
   useEffect(() => {
     if (model) setSettings((s) => (s ? snapVideoSettings(model, s) : defaultVideoSettings(model, null)));
@@ -114,12 +118,12 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
       if (!id) {
         id = (await api.createChat('video')).id;
         createdRef.current = id;
+        createdModelRef.current = id;
         viewing.current = id;
         navigate(`#/video/${id}`);
         onThreadsChanged();
       }
       await api.generateVideo(id, { prompt: prompt.trim(), modelId: model.id, settings, startAttachmentId: start?.id ?? null, endAttachmentId: end?.id ?? null });
-      saveModel(model.id);
       setPrompt('');
       await reload(id);
       onThreadsChanged();
@@ -216,7 +220,7 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
         <VideoComposer
           library={library}
           model={model}
-          onModelChange={(id) => { setModelId(id); saveModel(id); }}
+          onModelChange={setModelId}
           settings={settings}
           onSettings={setSettings}
           prompt={prompt}

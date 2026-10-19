@@ -11,6 +11,16 @@ export function initialModelId(messages: Pick<Message, 'role' | 'modelId'>[], mo
   return lastUsed ?? fallback ?? (models.find((m) => m.isDefault) ?? models[0])?.id ?? '';
 }
 
+/**
+ * The image or video model a thread uses: the user's pick, else the one its last generation used, else the kind's default,
+ * else the first. Models the catalog no longer lists can't generate, so they're skipped.
+ */
+export function pickMediaEntry(library: MediaLibraryModel[], pickedId: string, threadModelId: string | null): MediaLibraryModel | undefined {
+  const usable = library.filter((e) => e.model);
+  const byId = (id: string | null) => (id ? usable.find((e) => e.id === id) : undefined);
+  return byId(pickedId) ?? byId(threadModelId) ?? usable.find((e) => e.isDefault) ?? usable[0];
+}
+
 export type LibrarySort = 'added' | 'name' | 'cost';
 
 export const LIBRARY_SORTS: { id: LibrarySort; label: string }[] = [

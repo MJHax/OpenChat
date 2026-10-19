@@ -96,6 +96,11 @@ export function VideoModelLibrary() {
               <div className="model-main"><span>{e.displayName}</span><code>{e.id}</code></div>
               <div className="model-side">
                 <span className="muted small">{e.model ? formatVideoRate(e.model as VideoModel) : 'not offered any more'}</span>
+                {e.isDefault ? (
+                  <span className="badge">Default</span>
+                ) : (
+                  <button className="link" disabled={busy === e.id} onClick={() => act(e.id, () => api.setDefaultMediaModel(e.id, 'video'))}>Make default</button>
+                )}
                 <button className="link danger" disabled={busy === e.id} onClick={() => act(e.id, () => api.removeMediaModel(e.id, 'video'))}>Remove</button>
               </div>
             </li>

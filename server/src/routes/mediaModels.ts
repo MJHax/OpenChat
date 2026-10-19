@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Deps } from '../app';
 import { HttpError, readJson } from '../http';
-import { addMediaModel, getMediaCatalog, listMediaLibrary, removeMediaModel, requireMediaKind } from '../mediaLibrary';
+import { addMediaModel, getMediaCatalog, listMediaLibrary, removeMediaModel, requireMediaKind, requireMediaModel, setDefaultMediaModel } from '../mediaLibrary';
 
 /** Image and video models: the user's lists (?kind=image|video) and OpenRouter's catalogs. */
 export function mediaModelRoutes({ db, openrouter }: Deps): Hono {
@@ -20,6 +20,14 @@ export function mediaModelRoutes({ db, openrouter }: Deps): Hono {
     if (!model) throw new HttpError(400, 'That model is not in the catalog.');
     addMediaModel(db, kind, model);
     return c.json(listMediaLibrary(db, kind), 201);
+  });
+
+  r.patch('/', async (c) => {
+    const body = await readJson<{ id?: string; kind?: string; isDefault?: boolean }>(c);
+    const kind = requireMediaKind(body.kind);
+    requireMediaModel(db, kind, body.id ?? '');
+    if (body.isDefault) setDefaultMediaModel(db, kind, body.id!);
+    return c.json(listMediaLibrary(db, kind));
   });
 
   r.delete('/', (c) => {
