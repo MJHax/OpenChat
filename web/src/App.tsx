@@ -161,6 +161,7 @@ export function App() {
       </div>
       {narrow && panelOpen && <div className="threads-scrim" onClick={() => setPanelOpen(false)} />}
       <main className="main">
+        <div className="aurora" aria-hidden />
         {loadError && <div className="banner error">Can't reach the OpenChat server: {loadError}</div>}
         {page.page === 'chat' && (
           <ChatView chatId={page.chatId} title={title} reloadToken={chatReload} models={models} settings={settings} onChatsChanged={refreshChats} />

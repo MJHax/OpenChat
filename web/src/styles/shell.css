@@ -1,8 +1,8 @@
 /* App layout: icon rail, thread panel, main. */
-.app { display: grid; grid-template-columns: 60px var(--panel-w, 260px) minmax(0, 1fr); transition: grid-template-columns 0.35s var(--ease-out); }
+.app { display: grid; grid-template-columns: 60px var(--panel-w, 260px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); transition: grid-template-columns 0.35s var(--ease-out); }
 .app.panel-closed { --panel-w: 0px; }
 .app.narrow { --panel-w: 0px; }
-.app > .main { grid-column: 3; }
+.app > .main { grid-column: 3; min-height: 0; }
 
 /* Icon rail */
 .rail { grid-column: 1; position: relative; z-index: 40; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 0;
@@ -140,7 +140,7 @@ button.danger-button:not(:disabled):hover { background: var(--danger); color: #f
 .accent-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .accent-card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 10px 10px; border-radius: 12px; background: var(--surface); font-size: 13px; }
 .accent-card.on { border-color: var(--border-strong); background: var(--surface-2); }
-.accent-swatch { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+.accent-swatch { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: #0a0a0a; }
 .accent-swatch svg { opacity: 0; transform: scale(0.4); transition: opacity 0.35s var(--ease-spring), transform 0.35s var(--ease-spring); }
 .accent-card.on .accent-swatch svg { opacity: 1; transform: none; }
 .sw-blue { background: #3b82f6; } .sw-orange { background: #f97316; } .sw-green { background: #22c55e; }

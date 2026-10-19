@@ -41,7 +41,7 @@ a { color: var(--accent); }
 .mono { font-family: var(--font-mono); }
 
 .app { display: flex; height: 100%; }
-.main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; position: relative; }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; position: relative; overflow: clip; /* keeps the drifting aurora from widening the page */ }
 .banner.error { background: var(--danger); color: #fff; padding: 8px 16px; }
 
 /* Accent paint for filled elements (drifts when vivid; see tokens.css). */
@@ -105,3 +105,12 @@ kbd { font-size: 11px; padding: 1px 5px; border-radius: 5px; border: 1px solid v
 :root[data-tilt='off'] .tilt .glare { display: none; }
 :root[data-style='vivid'] .tilt:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
   box-shadow: 0 12px 30px -14px color-mix(in srgb, var(--accent) 50%, transparent); }
+
+/* Theme and accent changes crossfade instead of snapping. */
+.rail, .threads, .composer-box, .chip, .icon-btn, .settings-sheet, .popover, .panel, .card, .bubble, .thread-item, .chat-header {
+  transition: background-color 0.4s var(--ease-out), border-color 0.4s var(--ease-out), color 0.4s var(--ease-out), box-shadow 0.3s, transform 0.25s var(--ease-spring);
+}
+/* Tilt cards: colors fade, but never transition transform (the spring drives it). */
+.tilt { transition: background-color 0.4s var(--ease-out), border-color 0.2s, box-shadow 0.3s; }
+/* Screen changes rise in slightly. */
+.main > .chat, .main > .page { animation: rise 0.4s var(--ease-out); }
