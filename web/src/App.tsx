@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatSummary, LibraryModel, SettingsView, ThreadKind } from '../../shared/types';
 import { api } from './api';
-import { navigate, threadHref, useRoute } from './lib/route';
+import { navigate, routeHash, settingsBackdrop, threadHref, useRoute, type Route } from './lib/route';
 import { IconRail, type RailItem } from './components/shell/IconRail';
 import { ThreadPanel } from './components/shell/ThreadPanel';
 import { nextTheme, resolvedTheme } from './lib/appearance';
@@ -32,6 +32,11 @@ function useNarrow(): boolean {
 
 export function App() {
   const route = useRoute();
+  // Settings opens over the page it came from; `page` is that page (or the route itself).
+  const lastPage = useRef<Route | null>(null);
+  if (route.page !== 'settings') lastPage.current = route;
+  const page = route.page === 'settings' ? settingsBackdrop(lastPage.current) : route;
+  const closeSettings = useCallback(() => navigate(routeHash(settingsBackdrop(lastPage.current))), []);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [libraryModels, setModels] = useState<LibraryModel[]>([]);
   // Every model picker follows the order chosen in the Model Library.
@@ -43,8 +48,8 @@ export function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   // The sidebar keeps showing the last mode while on Model Library, Stats or Settings.
   const [lastMode, setLastMode] = useState<ThreadKind>('chat');
-  const mode: ThreadKind = route.page === 'images' ? 'image' : route.page === 'video' ? 'video' : route.page === 'chat' ? 'chat'
-    : route.page === 'discussions' ? 'discussion' : lastMode;
+  const mode: ThreadKind = page.page === 'images' ? 'image' : page.page === 'video' ? 'video' : page.page === 'chat' ? 'chat'
+    : page.page === 'discussions' ? 'discussion' : lastMode;
   const [toasts, setToasts] = useState<{ id: string; title: string }[]>([]);
 
   // Clips render for minutes: watch video threads from anywhere in the app and say when one is ready.
@@ -97,9 +102,9 @@ export function App() {
     setChatReload((n) => n + 1);
   }, []);
 
-  const activeChatId = route.page === 'chat' ? route.chatId : route.page === 'images' || route.page === 'video' ? route.threadId
-    : route.page === 'discussions' ? route.discussionId : null;
-  const title = chats.find((c) => c.id === activeChatId)?.title ?? (route.page === 'images' ? 'New image' : route.page === 'video' ? 'New video' : 'New chat');
+  const activeChatId = page.page === 'chat' ? page.chatId : page.page === 'images' || page.page === 'video' ? page.threadId
+    : page.page === 'discussions' ? page.discussionId : null;
+  const title = chats.find((c) => c.id === activeChatId)?.title ?? (page.page === 'images' ? 'New image' : page.page === 'video' ? 'New video' : 'New chat');
 
   // The thread panel: collapsed by the user, or starting collapsed (as an overlay) in a narrow window.
   const narrow = useNarrow();
@@ -119,7 +124,7 @@ export function App() {
   // In a narrow window the panel floats over the page, so following a link closes it.
   useEffect(() => { if (narrow) setPanelOpen(false); }, [narrow, route]);
 
-  const railActive: RailItem = route.page === 'models' ? 'models' : route.page === 'stats' ? 'stats' : route.page === 'settings' ? 'settings' : mode;
+  const railActive: RailItem = route.page === 'settings' ? 'settings' : page.page === 'models' ? 'models' : page.page === 'stats' ? 'stats' : mode;
   const shownTheme = resolvedTheme(appearance.theme, systemDark);
 
   return (
@@ -133,23 +138,24 @@ export function App() {
       {narrow && panelOpen && <div className="threads-scrim" onClick={() => setPanelOpen(false)} />}
       <main className="main">
         {loadError && <div className="banner error">Can't reach the OpenChat server: {loadError}</div>}
-        {route.page === 'chat' && (
-          <ChatView chatId={route.chatId} title={title} reloadToken={chatReload} models={models} settings={settings} onChatsChanged={refreshChats} />
+        {page.page === 'chat' && (
+          <ChatView chatId={page.chatId} title={title} reloadToken={chatReload} models={models} settings={settings} onChatsChanged={refreshChats} />
         )}
-        {route.page === 'images' && (
-          <ImageThread threadId={route.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />
+        {page.page === 'images' && (
+          <ImageThread threadId={page.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />
         )}
-        {route.page === 'video' && (
-          <VideoThread threadId={route.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />
+        {page.page === 'video' && (
+          <VideoThread threadId={page.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />
         )}
-        {route.page === 'discussions' && (
-          <DiscussionPage key={route.discussionId ?? 'new'} discussionId={route.discussionId} models={models} settings={settings}
+        {page.page === 'discussions' && (
+          <DiscussionPage key={page.discussionId ?? 'new'} discussionId={page.discussionId} models={models} settings={settings}
             onDiscussionsChanged={refreshChats} />
         )}
-        {route.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} sort={librarySort} onSort={changeLibrarySort} />}
-        {route.page === 'stats' && <Stats />}
+        {page.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} sort={librarySort} onSort={changeLibrarySort} />}
+        {page.page === 'stats' && <Stats />}
         {route.page === 'settings' && (
-          <Settings models={models} tab={route.tab} section={route.section} onChanged={refreshSettings}
+          <Settings models={models} tab={route.tab} section={route.section} onChanged={refreshSettings} onClose={closeSettings}
+            appearance={appearance} onAppearance={(patch) => void setAppearance(patch)}
             onDataChanged={() => { refreshChats(); refreshModels(); }} />
         )}
       </main>

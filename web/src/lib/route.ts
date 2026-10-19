@@ -53,3 +53,17 @@ export const threadHref = (kind: ThreadKind, id: string) => (kind === 'chat' ? `
 export function settingsBackdrop(prev: Route | null): Route {
   return prev && prev.page !== 'settings' ? prev : { page: 'chat', chatId: null };
 }
+
+/** The hash that opens `route`; the inverse of parseHash. */
+export function routeHash(route: Route): string {
+  const id = (v: string | null) => (v ? `/${encodeURIComponent(v)}` : '');
+  switch (route.page) {
+    case 'chat': return route.chatId ? `#/chat/${encodeURIComponent(route.chatId)}` : '#/';
+    case 'images': return `#/images${id(route.threadId)}`;
+    case 'video': return `#/video${id(route.threadId)}`;
+    case 'discussions': return `#/discussions${id(route.discussionId)}`;
+    case 'models': return '#/models';
+    case 'stats': return '#/stats';
+    case 'settings': return `#/settings/${route.tab}${id(route.section)}`;
+  }
+}

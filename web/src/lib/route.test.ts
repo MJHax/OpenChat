@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseHash, settingsBackdrop, threadHref } from './route';
+import { parseHash, routeHash, settingsBackdrop, threadHref } from './route';
 
 describe('parseHash', () => {
   it('maps hashes to routes', () => {
@@ -57,5 +57,13 @@ describe('threadHref', () => {
     expect(threadHref('image', 'b')).toBe('#/images/b');
     expect(threadHref('video', 'c')).toBe('#/video/c');
     expect(threadHref('discussion', 'd')).toBe('#/discussions/d');
+  });
+});
+
+describe('routeHash', () => {
+  it('round-trips through parseHash', () => {
+    for (const h of ['#/', '#/chat/a1', '#/images', '#/images/i1', '#/video/v1', '#/discussions', '#/discussions/d1', '#/models', '#/stats', '#/settings/limits', '#/settings/general/key']) {
+      expect(routeHash(parseHash(h))).toBe(h);
+    }
   });
 });

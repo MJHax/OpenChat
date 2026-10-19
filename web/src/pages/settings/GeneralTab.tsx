@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import type { LibraryModel, SettingsUpdate, SettingsView, Theme } from '../../../../shared/types';
+import type { LibraryModel, SettingsUpdate, SettingsView } from '../../../../shared/types';
 import { api } from '../../api';
 import { SEARCH_NOTE } from '../../lib/search';
-import { SpendingLimitsSection } from './SpendingLimitsSection';
 
 export interface GeneralTabProps {
   view: SettingsView;
@@ -89,8 +88,6 @@ export function GeneralTab({ view, models, section, update }: GeneralTabProps) {
         </div>
       </div>
 
-      <SpendingLimitsSection limits={view.spendingLimits} update={update} />
-
       <h2>Other</h2>
       <div className="card">
         <p className="muted small">
@@ -108,14 +105,6 @@ export function GeneralTab({ view, models, section, update }: GeneralTabProps) {
           <select value={view.memoryModelId} onChange={(e) => update({ memoryModelId: e.target.value })}>
             <option value="">Same as default model</option>
             {models.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
-          </select>
-        </label>
-        <label className="field">
-          Theme
-          <select value={view.theme} onChange={(e) => update({ theme: e.target.value as Theme })}>
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
           </select>
         </label>
       </div>
