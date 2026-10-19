@@ -96,3 +96,12 @@ kbd { font-size: 11px; padding: 1px 5px; border-radius: 5px; border: 1px solid v
   animation: none !important; transition: none !important;
 }
 :root[data-motion='off'] .aurora { display: none; }
+
+/* Tilt cards (TiltCard.tsx): never on messages, menus, popovers or forms. */
+.tilt { position: relative; overflow: hidden; will-change: transform; transition: border-color 0.2s, box-shadow 0.3s; }
+.tilt .glare { position: absolute; inset: 0; pointer-events: none; opacity: 0.12; }
+:root[data-theme='light'] .tilt .glare { opacity: 0.06; }
+:root[data-tilt='off'] .tilt { transform: none !important; }
+:root[data-tilt='off'] .tilt .glare { display: none; }
+:root[data-style='vivid'] .tilt:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: 0 12px 30px -14px color-mix(in srgb, var(--accent) 50%, transparent); }
