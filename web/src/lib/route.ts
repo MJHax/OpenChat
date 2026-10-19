@@ -45,6 +45,11 @@ export function navigate(hash: string): void {
   window.location.hash = hash;
 }
 
+/** Moves to `hash` without adding a history entry, so Back skips it. Fires hashchange like navigate does. */
+export function replaceHash(hash: string): void {
+  window.location.replace(hash);
+}
+
 const HOME: Record<ThreadKind, string> = { chat: '#/', image: '#/images', video: '#/video', discussion: '#/discussions' };
 export const threadHome = (kind: ThreadKind) => HOME[kind];
 export const threadHref = (kind: ThreadKind, id: string) => (kind === 'chat' ? `#/chat/${id}` : `${HOME[kind]}/${id}`);
@@ -52,6 +57,15 @@ export const threadHref = (kind: ThreadKind, id: string) => (kind === 'chat' ? `
 /** The page Settings shows over: where it was opened from, or the chat home after a fresh load. */
 export function settingsBackdrop(prev: Route | null): Route {
   return prev && prev.page !== 'settings' ? prev : { page: 'chat', chatId: null };
+}
+
+/**
+ * How closing Settings returns to the backdrop. Settings holds one history entry (tab switches replace it), so when it
+ * was opened from another page in this session Back lands exactly there; after a fresh load on a Settings URL there is
+ * nothing in-app behind it, and going back could leave the app, so the entry is replaced instead.
+ */
+export function settingsCloseAction(prev: Route | null): 'back' | 'replace' {
+  return prev && prev.page !== 'settings' ? 'back' : 'replace';
 }
 
 /** The hash that opens `route`; the inverse of parseHash. */

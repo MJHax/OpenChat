@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Brain, Database, Gauge, Palette, Settings2, X } from 'lucide-react';
 import type { LibraryModel, SettingsUpdate, SettingsView } from '../../../shared/types';
 import { api } from '../api';
 import type { Appearance } from '../lib/appearance';
-import type { SettingsTab } from '../lib/route';
+import { replaceHash, type SettingsTab } from '../lib/route';
 import { closesOverlay } from '../lib/escape';
 import { GeneralTab } from './settings/GeneralTab';
 import { AppearanceTab } from './settings/AppearanceTab';
@@ -65,6 +65,13 @@ export function Settings({ models, tab, section, appearance, onAppearance, onCha
     }
   }
 
+  // Switching tabs replaces the history entry, so Back leaves Settings in one step.
+  const switchTab = (e: MouseEvent<HTMLAnchorElement>, id: SettingsTab) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    replaceHash(`#/settings/${id}`);
+  };
+
   const current = TABS.find((t) => t.id === tab) ?? TABS[0];
   return (
     <div className="settings-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -72,7 +79,7 @@ export function Settings({ models, tab, section, appearance, onAppearance, onCha
         <nav className="settings-tabs" aria-label="Settings sections">
           <h2>Settings</h2>
           {TABS.map(({ id, label, Icon }) => (
-            <a key={id} href={`#/settings/${id}`} aria-current={id === tab ? 'page' : undefined}><Icon size={15} />{label}</a>
+            <a key={id} href={`#/settings/${id}`} aria-current={id === tab ? 'page' : undefined} onClick={(e) => switchTab(e, id)}><Icon size={15} />{label}</a>
           ))}
         </nav>
         <div className="settings-pane">

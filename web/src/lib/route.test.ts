@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseHash, routeHash, settingsBackdrop, threadHref } from './route';
+import { parseHash, routeHash, settingsBackdrop, settingsCloseAction, threadHref } from './route';
 
 describe('parseHash', () => {
   it('maps hashes to routes', () => {
@@ -65,5 +65,17 @@ describe('routeHash', () => {
     for (const h of ['#/', '#/chat/a1', '#/images', '#/images/i1', '#/video/v1', '#/discussions', '#/discussions/d1', '#/models', '#/stats', '#/settings/limits', '#/settings/general/key']) {
       expect(routeHash(parseHash(h))).toBe(h);
     }
+  });
+});
+
+describe('settingsCloseAction', () => {
+  it('goes back when Settings was opened from another page in this session', () => {
+    expect(settingsCloseAction({ page: 'models' })).toBe('back');
+    expect(settingsCloseAction({ page: 'chat', chatId: null })).toBe('back');
+  });
+
+  it('replaces the entry when Settings was the first thing loaded', () => {
+    expect(settingsCloseAction(null)).toBe('replace');
+    expect(settingsCloseAction({ page: 'settings', tab: 'data', section: null })).toBe('replace');
   });
 });

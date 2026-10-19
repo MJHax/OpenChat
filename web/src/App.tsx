@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Accent, ChatSummary, ColorStyle, LibraryModel, SettingsView, ThreadKind } from '../../shared/types';
 import { api } from './api';
-import { navigate, routeHash, settingsBackdrop, threadHref, useRoute, type Route } from './lib/route';
+import { navigate, replaceHash, routeHash, settingsBackdrop, settingsCloseAction, threadHref, useRoute, type Route } from './lib/route';
 import { IconRail, type RailItem } from './components/shell/IconRail';
 import { ThreadPanel } from './components/shell/ThreadPanel';
 import { CommandPalette } from './components/shell/CommandPalette';
@@ -37,7 +37,10 @@ export function App() {
   const lastPage = useRef<Route | null>(null);
   if (route.page !== 'settings') lastPage.current = route;
   const page = route.page === 'settings' ? settingsBackdrop(lastPage.current) : route;
-  const closeSettings = useCallback(() => navigate(routeHash(settingsBackdrop(lastPage.current))), []);
+  const closeSettings = useCallback(() => {
+    if (settingsCloseAction(lastPage.current) === 'back') window.history.back();
+    else replaceHash(routeHash(settingsBackdrop(lastPage.current)));
+  }, []);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [libraryModels, setModels] = useState<LibraryModel[]>([]);
   // Every model picker follows the order chosen in the Model Library.
@@ -148,7 +151,10 @@ export function App() {
       'new-chat': '#/', 'new-image': '#/images', 'new-video': '#/video', 'new-discussion': '#/discussions', 'go-models': '#/models', 'go-stats': '#/stats',
     };
     if (go[id]) return navigate(go[id]);
-    if (id.startsWith('go-settings-')) return navigate(`#/settings/${id.slice('go-settings-'.length)}`);
+    if (id.startsWith('go-settings-')) {
+      const hash = `#/settings/${id.slice('go-settings-'.length)}`;
+      return route.page === 'settings' ? replaceHash(hash) : navigate(hash); // one history entry for Settings, however many tabs
+    }
     if (id === 'toggle-theme') return void setAppearance({ theme: nextTheme(appearance.theme, systemDark) });
     if (id.startsWith('accent-')) return void setAppearance({ accent: id.slice('accent-'.length) as Accent });
     if (id.startsWith('style-')) return void setAppearance({ colorStyle: id.slice('style-'.length) as ColorStyle });
