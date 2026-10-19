@@ -52,6 +52,26 @@ export function saveAppearance(a: Appearance): void {
   }
 }
 
+/**
+ * The look to show when the server's copy arrives. While one of our own saves is in flight the server may be behind
+ * (a fetch that started before the save), so the local look stands.
+ */
+export function reconcileAppearance(current: Appearance, fromServer: Appearance, pendingSaves: number): Appearance {
+  return pendingSaves > 0 ? current : fromServer;
+}
+
+/** After a failed save: restore the fields it changed, unless a later change has already replaced the value it set. */
+export function rollbackAppearance(current: Appearance, patch: Partial<Appearance>, before: Partial<Appearance>): Appearance {
+  const next = { ...current } as Record<string, unknown>;
+  let changed = false;
+  for (const key of Object.keys(patch) as (keyof Appearance)[]) {
+    if (current[key] !== patch[key] || !(key in before)) continue;
+    next[key] = before[key];
+    changed = true;
+  }
+  return changed ? (next as unknown as Appearance) : current;
+}
+
 /** Rainbow has no flat version. */
 export function effectiveStyle(a: Pick<Appearance, 'accent' | 'colorStyle'>): ColorStyle {
   return a.accent === 'rainbow' ? 'vivid' : a.colorStyle;

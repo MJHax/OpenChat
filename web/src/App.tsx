@@ -79,11 +79,17 @@ export function App() {
   const refreshChats = useCallback(() => { api.listChats(mode).then(setChats).catch(fail); }, [mode]);
   const refreshRef = useRef(refreshChats);
   refreshRef.current = refreshChats;
+  // A settings fetch that started before a save finished may carry the old values; its result is dropped.
+  const settingsEpoch = useRef(0);
+  const refreshSettings = useCallback(() => {
+    const epoch = settingsEpoch.current;
+    api.getSettings().then((s) => { if (epoch === settingsEpoch.current) setSettings(s); }).catch(fail);
+  }, []);
+  const settingsSaved = useCallback((view: SettingsView) => { settingsEpoch.current++; setSettings(view); }, []);
   const refreshModels = useCallback(() => {
     api.listModels().then(setModels).catch(fail);
-    api.getSettings().then(setSettings).catch(fail); // default model lives in settings
-  }, []);
-  const refreshSettings = useCallback(() => { api.getSettings().then(setSettings).catch(fail); }, []);
+    refreshSettings(); // default model lives in settings
+  }, [refreshSettings]);
 
   useEffect(() => refreshChats(), [refreshChats]);
   useEffect(() => refreshModels(), [refreshModels]);
@@ -96,7 +102,7 @@ export function App() {
     return () => clearInterval(timer);
   }, [anyBusy, refreshChats]);
 
-  const { appearance, setAppearance, systemDark } = useAppearance(settings);
+  const { appearance, setAppearance, systemDark } = useAppearance(settings, settingsSaved);
 
   const openChat = useCallback((chatId: string, kind: ThreadKind) => {
     navigate(threadHref(kind, chatId));

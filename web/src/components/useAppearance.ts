@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SettingsView } from '../../../shared/types';
 import { api } from '../api';
-import { htmlAttrs, loadAppearance, saveAppearance, type Appearance } from '../lib/appearance';
+import { htmlAttrs, loadAppearance, reconcileAppearance, rollbackAppearance, saveAppearance, type Appearance } from '../lib/appearance';
 
 function useMedia(query: string): boolean {
   const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
@@ -22,42 +22,56 @@ const fromSettings = (s: SettingsView): Appearance => ({
 /**
  * Keeps <html>'s data-* attributes in step with the appearance settings and the OS (dark mode, reduced motion).
  * Starts from the browser's copy, which web/index.html already applied, so nothing flashes while settings load.
+ * `onSaved` hands the server's view after each save to the owner of `settings`, so it never lags behind a change.
  */
-export function useAppearance(settings: SettingsView | null) {
+export function useAppearance(settings: SettingsView | null, onSaved?: (view: SettingsView) => void) {
   const [appearance, setLocal] = useState<Appearance>(loadAppearance);
+  /** Saves in flight: a settings fetch landing meanwhile may predate them, so it is ignored. */
+  const pending = useRef(0);
   const systemDark = useMedia('(prefers-color-scheme: dark)');
   const reducedMotion = useMedia('(prefers-reduced-motion: reduce)');
 
+  const applyServer = useCallback((server: Appearance) => {
+    setLocal((cur) => {
+      const next = reconcileAppearance(cur, server, pending.current);
+      if (next !== cur) saveAppearance(next);
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
-    if (!settings) return;
-    const next = fromSettings(settings);
-    setLocal(next);
-    saveAppearance(next);
-  }, [settings]);
+    if (settings) applyServer(fromSettings(settings));
+  }, [settings, applyServer]);
 
   const attrs = htmlAttrs(appearance, systemDark, reducedMotion);
   useEffect(() => {
     Object.assign(document.documentElement.dataset, attrs);
   }, [attrs.theme, attrs.accent, attrs.style, attrs.motion, attrs.tilt]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Applies at once, then saves; puts the old look back if the server refuses. */
+  /** Applies at once, then saves; if the server refuses, puts back just the fields this change touched. */
   const setAppearance = useCallback(async (patch: Partial<Appearance>) => {
-    let before: Appearance | null = null;
+    const before: Record<string, unknown> = {};
     setLocal((cur) => {
-      before = cur;
+      for (const key of Object.keys(patch) as (keyof Appearance)[]) before[key] = cur[key];
       const next = { ...cur, ...patch };
       saveAppearance(next);
       return next;
     });
+    pending.current++;
     try {
-      await api.updateSettings(patch);
+      const view = await api.updateSettings(patch);
+      pending.current--;
+      onSaved?.(view);
+      applyServer(fromSettings(view));
     } catch {
-      if (before) {
-        setLocal(before);
-        saveAppearance(before);
-      }
+      pending.current--;
+      setLocal((cur) => {
+        const next = rollbackAppearance(cur, patch, before as Partial<Appearance>);
+        if (next !== cur) saveAppearance(next);
+        return next;
+      });
     }
-  }, []);
+  }, [applyServer, onSaved]);
 
   return { appearance, setAppearance, systemDark, motionOn: attrs.motion === 'on', tiltOn: attrs.tilt === 'on' };
 }

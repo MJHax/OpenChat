@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect } from 'vitest';
 import {
-  APPEARANCE_KEY, DEFAULT_APPEARANCE, effectiveStyle, htmlAttrs, loadAppearance, nextTheme, parseAppearance, resolvedTheme, saveAppearance,
+  APPEARANCE_KEY, DEFAULT_APPEARANCE, effectiveStyle, htmlAttrs, loadAppearance, nextTheme, parseAppearance, reconcileAppearance, resolvedTheme, rollbackAppearance, saveAppearance,
 } from './appearance';
 
 function memoryStorage(): Storage {
@@ -86,5 +86,32 @@ describe('htmlAttrs', () => {
   it('follows the switches', () => {
     expect(htmlAttrs({ ...DEFAULT_APPEARANCE, animations: false }, false, false)).toMatchObject({ motion: 'off', tilt: 'on' });
     expect(htmlAttrs({ ...DEFAULT_APPEARANCE, tiltCards: false }, false, false)).toMatchObject({ motion: 'on', tilt: 'off' });
+  });
+});
+
+describe('reconcileAppearance', () => {
+  const local = { ...DEFAULT_APPEARANCE, theme: 'dark' as const };
+  const server = { ...DEFAULT_APPEARANCE, theme: 'light' as const };
+
+  it('takes the server copy when no save is in flight', () => {
+    expect(reconcileAppearance(local, server, 0)).toEqual(server);
+  });
+
+  it('keeps the local look while a save is pending, so a stale fetch cannot undo it', () => {
+    expect(reconcileAppearance(local, server, 1)).toBe(local);
+    expect(reconcileAppearance(local, server, 2)).toBe(local);
+  });
+});
+
+describe('rollbackAppearance', () => {
+  it('puts back only the fields the failed save changed', () => {
+    const before = { theme: 'system' as const };
+    const current = { ...DEFAULT_APPEARANCE, theme: 'dark' as const, accent: 'green' as const };
+    expect(rollbackAppearance(current, { theme: 'dark' }, before)).toEqual({ ...DEFAULT_APPEARANCE, theme: 'system', accent: 'green' });
+  });
+
+  it('leaves a field alone when a later change has replaced the failed value', () => {
+    const current = { ...DEFAULT_APPEARANCE, theme: 'light' as const };
+    expect(rollbackAppearance(current, { theme: 'dark' }, { theme: 'system' })).toBe(current);
   });
 });
