@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Clapperboard, PanelLeftClose, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import type { ChatSummary, ThreadKind } from '../../../../shared/types';
 import { api, attachmentUrl } from '../../api';
-import { groupByDate } from '../../lib/format';
+import { groupByDate, spendKey } from '../../lib/format';
 import { navigate, threadHome, threadHref } from '../../lib/route';
 import { forgetChatPrefs } from '../../lib/chatPrefs';
 import { UsageCard } from './UsageCard';
@@ -98,7 +98,7 @@ export function ThreadPanel({ mode, chats, activeChatId, onChatsChanged, onOpenC
           ))}
       </nav>
 
-      <UsageCard refreshKey={chats} />
+      <UsageCard refreshKey={spendKey(chats)} />
     </aside>
   );
 }

@@ -55,3 +55,8 @@ export function splitSnippet(snippet: string): { text: string; hit: boolean }[] 
     .filter(Boolean)
     .map((part) => (part.startsWith('«') ? { text: part.slice(1, -1), hit: true } : { text: part, hit: false }));
 }
+
+/** Changes only when the thread set or any thread's cost does, so spend displays refetch on that and not on every list poll. */
+export function spendKey(chats: { id: string; totalCost: number }[]): string {
+  return chats.map((c) => `${c.id}:${c.totalCost}`).join('|');
+}
