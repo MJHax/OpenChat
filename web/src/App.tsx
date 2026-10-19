@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatSummary, LibraryModel, SettingsView, ThreadKind } from '../../shared/types';
 import { api } from './api';
 import { navigate, threadHref, useRoute } from './lib/route';
-import { Sidebar } from './components/Sidebar';
+import { IconRail, type RailItem } from './components/shell/IconRail';
+import { ThreadPanel } from './components/shell/ThreadPanel';
+import { nextTheme, resolvedTheme } from './lib/appearance';
 import { ChatView } from './components/ChatView';
 import { ImageThread } from './pages/ImageThread';
 import { VideoThread } from './pages/VideoThread';
@@ -14,6 +16,19 @@ import { Settings } from './pages/Settings';
 import { Stats } from './pages/Stats';
 import { useAppearance } from './components/useAppearance';
 import { Clapperboard, X } from 'lucide-react';
+
+const NARROW = '(max-width: 899px)';
+
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW);
+    const update = () => setNarrow(mq.matches);
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return narrow;
+}
 
 export function App() {
   const route = useRoute();
@@ -86,9 +101,36 @@ export function App() {
     : route.page === 'discussions' ? route.discussionId : null;
   const title = chats.find((c) => c.id === activeChatId)?.title ?? (route.page === 'images' ? 'New image' : route.page === 'video' ? 'New video' : 'New chat');
 
+  // The thread panel: collapsed by the user, or starting collapsed (as an overlay) in a narrow window.
+  const narrow = useNarrow();
+  const [panelOpen, setPanelOpen] = useState(() => !window.matchMedia(NARROW).matches);
+  useEffect(() => setPanelOpen(!narrow), [narrow]);
+  const togglePanel = useCallback(() => setPanelOpen((o) => !o), []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'b' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        togglePanel();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [togglePanel]);
+  // In a narrow window the panel floats over the page, so following a link closes it.
+  useEffect(() => { if (narrow) setPanelOpen(false); }, [narrow, route]);
+
+  const railActive: RailItem = route.page === 'models' ? 'models' : route.page === 'stats' ? 'stats' : route.page === 'settings' ? 'settings' : mode;
+  const shownTheme = resolvedTheme(appearance.theme, systemDark);
+
   return (
-    <div className="app">
-      <Sidebar mode={mode} chats={chats} activeChatId={activeChatId} onChatsChanged={refreshChats} onOpenChat={openChat} />
+    <div className={`app${panelOpen ? '' : ' panel-closed'}${narrow ? ' narrow' : ''}`}>
+      <IconRail active={railActive} mode={mode} resolvedTheme={shownTheme} onTogglePanel={togglePanel} settingsHref="#/settings"
+        onToggleTheme={() => void setAppearance({ theme: nextTheme(appearance.theme, systemDark) })} />
+      <div className="threads-slot" aria-hidden={!panelOpen} inert={!panelOpen}>
+        <ThreadPanel mode={mode} chats={chats} activeChatId={activeChatId} onChatsChanged={refreshChats} onOpenChat={openChat}
+          onCollapse={() => setPanelOpen(false)} onOpenPalette={() => {}} />
+      </div>
+      {narrow && panelOpen && <div className="threads-scrim" onClick={() => setPanelOpen(false)} />}
       <main className="main">
         {loadError && <div className="banner error">Can't reach the OpenChat server: {loadError}</div>}
         {route.page === 'chat' && (
@@ -115,8 +157,8 @@ export function App() {
         <div className="toasts" role="status">
           {toasts.map((t) => (
             <div key={t.id} className="toast">
-              <button className="link" onClick={() => { setToasts((x) => x.filter((y) => y.id !== t.id)); openChat(t.id, 'video'); }}>
-                <Clapperboard size={16} /> “{t.title}” finished
+              <button className="link toast-open" onClick={() => { setToasts((x) => x.filter((y) => y.id !== t.id)); openChat(t.id, 'video'); }}>
+                <Clapperboard size={16} className="toast-icon" /> “{t.title}” finished
               </button>
               <button className="icon" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
             </div>

@@ -1,28 +1,28 @@
 import { useEffect, useState } from 'react';
-import type { ChatSummary, SearchHit, ThreadKind } from '../../../shared/types';
-import { api, attachmentUrl } from '../api';
-import { Segmented } from './stats/Segmented';
-import { groupByDate, splitSnippet } from '../lib/format';
-import { navigate, threadHome, threadHref } from '../lib/route';
-import { forgetChatPrefs } from '../lib/chatPrefs';
-import { Clapperboard, PanelLeft, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Clapperboard, PanelLeftClose, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import type { ChatSummary, SearchHit, ThreadKind } from '../../../../shared/types';
+import { api, attachmentUrl } from '../../api';
+import { groupByDate, splitSnippet } from '../../lib/format';
+import { navigate, threadHome, threadHref } from '../../lib/route';
+import { forgetChatPrefs } from '../../lib/chatPrefs';
+import { UsageCard } from './UsageCard';
 
-export interface SidebarProps {
-  /** Which threads the list shows: chats or image threads. */
+export interface ThreadPanelProps {
+  /** Which threads the list shows. */
   mode: ThreadKind;
   chats: ChatSummary[];
   activeChatId: string | null;
   onChatsChanged(): void;
   onOpenChat(chatId: string, kind: ThreadKind): void;
+  onCollapse(): void;
+  onOpenPalette(): void;
 }
 
-const MODES: { id: ThreadKind; label: string }[] = [
-  { id: 'chat', label: 'Chats' }, { id: 'image', label: 'Images' }, { id: 'video', label: 'Video' }, { id: 'discussion', label: 'Discussions' },
-];
+const TITLE: Record<ThreadKind, string> = { chat: 'Chats', image: 'Images', video: 'Video', discussion: 'Discussions' };
 const NEW_LABEL: Record<ThreadKind, string> = { chat: 'New chat', image: 'New image', video: 'New video', discussion: 'New discussion' };
 
-export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(false);
+/** The list of threads for the current mode, beside the rail. */
+export function ThreadPanel({ mode, chats, activeChatId, onChatsChanged, onOpenChat, onCollapse, onOpenPalette }: ThreadPanelProps) {
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -65,26 +65,21 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
 
   const newLabel = NEW_LABEL[mode];
 
-  if (collapsed) {
-    return (
-      <aside className="sidebar collapsed">
-        <button className="icon" onClick={() => setCollapsed(false)} aria-label="Expand sidebar" title="Expand sidebar"><PanelLeft size={16} /></button>
-        <button className="icon" onClick={() => navigate(threadHome(mode))} aria-label={newLabel} title={newLabel}><Plus size={16} /></button>
-      </aside>
-    );
-  }
-
   return (
-    <aside className="sidebar">
-      <div className="sidebar-top">
-        <span className="brand">OpenChat</span>
-        <button className="icon" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar" title="Collapse sidebar"><PanelLeft size={16} /></button>
+    <aside className="threads" aria-label={TITLE[mode]}>
+      <div className="threads-head">
+        <h2>{TITLE[mode]}</h2>
+        <button className="icon-btn" onClick={() => navigate(threadHome(mode))} aria-label={newLabel} title={newLabel}><Plus size={16} /></button>
+        <button className="icon-btn" onClick={onCollapse} aria-label="Collapse panel" title="Collapse panel (Ctrl+B)"><PanelLeftClose size={16} /></button>
       </div>
-      <Segmented label="Mode" options={MODES} value={mode} onChange={(m) => navigate(threadHome(m))} />
-      <button className="new-chat" onClick={() => navigate(threadHome(mode))}><Plus size={16} /> {newLabel}</button>
-      <input className="search" type="search" placeholder="Search" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <label className="thread-search">
+        <Search size={14} />
+        <input type="search" placeholder="Search or jump to…" value={query} onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'k' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); onOpenPalette(); } }} />
+        <kbd>Ctrl K</kbd>
+      </label>
 
-      <nav className="chat-list">
+      <nav className="thread-list">
         {query.trim() ? (
           hits.length ? (
             hits.map((hit) => (
@@ -117,7 +112,7 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
                     onBlur={() => commitRename(chat)}
                   />
                 ) : (
-                  <div key={chat.id} className={`chat-item${chat.id === activeChatId ? ' active' : ''}`}>
+                  <div key={chat.id} className={`thread-item${chat.id === activeChatId ? ' active' : ''}`}>
                     <a href={threadHref(chat.kind, chat.id)} title={chat.title}>
                       {(chat.kind === 'image' || chat.kind === 'video') && (
                         <span className="thread-thumb">
@@ -125,9 +120,9 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
                         </span>
                       )}
                       <span className="chat-title">{chat.title}</span>
-                      {chat.busy && <span className="spinner" aria-label="Generating" />}
+                      {chat.busy && <span className="busy-dot fill" aria-label="Generating" />}
                     </a>
-                    <span className="chat-actions">
+                    <span className="thread-actions">
                       <button className="icon" aria-label="Rename chat" title="Rename" onClick={() => { setRenaming(chat.id); setDraft(chat.title); }}><Pencil size={14} /></button>
                       <button className="icon" aria-label="Delete chat" title="Delete" onClick={() => remove(chat)}><Trash2 size={14} /></button>
                     </span>
@@ -139,11 +134,7 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
         )}
       </nav>
 
-      <div className="sidebar-footer">
-        <a href="#/models">Model Library</a>
-        <a href="#/stats">Stats</a>
-        <a href="#/settings">Settings</a>
-      </div>
+      <UsageCard refreshKey={chats} />
     </aside>
   );
 }
