@@ -66,8 +66,10 @@ function averages(db: DB, kind: MediaKind): Map<string, Record<string, number>> 
 const DEFAULT_KEYS: Record<MediaKind, SettingKey> = { image: 'default_image_model_id', video: 'default_video_model_id' };
 
 export function listMediaLibrary(db: DB, kind: MediaKind): MediaLibraryModel[] {
-  const defaultId = getSetting(db, DEFAULT_KEYS[kind]);
   const rows = db.prepare('SELECT id, display_name FROM media_models WHERE kind = ? ORDER BY added_at, id').all(kind) as { id: string; display_name: string }[];
+  // Libraries built before defaults existed (or whose default was removed elsewhere) fall back to the first model.
+  const stored = getSetting(db, DEFAULT_KEYS[kind]);
+  const defaultId = rows.some((r) => r.id === stored) ? stored : rows[0]?.id ?? '';
   const catalog = readCache(db, kind)?.models ?? [];
   const avg = averages(db, kind);
   const render = new Map((db.prepare(

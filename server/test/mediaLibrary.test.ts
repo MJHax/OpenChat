@@ -127,6 +127,14 @@ describe('media default model', () => {
     expect(ids(db, 'video')).toEqual(['v/one']);
   });
 
+  it('treats the first model as the default when none was ever stored (libraries from before defaults)', () => {
+    const { db } = makeApp();
+    addMediaModel(db, 'image', img('a/one'));
+    addMediaModel(db, 'image', img('a/two'));
+    db.prepare("DELETE FROM settings WHERE key = 'default_image_model_id'").run();
+    expect(ids(db, 'image')).toEqual(['a/one']);
+  });
+
   it('switches the default and falls back to the next model on remove', () => {
     const { db } = makeApp();
     addMediaModel(db, 'image', img('a/one'));
