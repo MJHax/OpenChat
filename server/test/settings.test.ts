@@ -49,3 +49,21 @@ describe('getPersona', () => {
     expect(getPersona(db)).toEqual({ aboutMe: 'Sam', customInstructions: 'Be brief', memories: ['Likes tea'] });
   });
 });
+
+describe('appearance settings', () => {
+  it('defaults to blue, vivid, animations and tilt on', () => {
+    const db = openDb(':memory:');
+    expect(getSettingsView(db, {})).toMatchObject({ accent: 'blue', colorStyle: 'vivid', animations: true, tiltCards: true });
+  });
+  it('saves and reads them back', () => {
+    const db = openDb(':memory:');
+    updateSettings(db, { accent: 'rainbow', colorStyle: 'flat', animations: false, tiltCards: false });
+    expect(getSettingsView(db, {})).toMatchObject({ accent: 'rainbow', colorStyle: 'flat', animations: false, tiltCards: false });
+  });
+  it('rejects bad values', () => {
+    const db = openDb(':memory:');
+    expect(() => updateSettings(db, { accent: 'pink' as never })).toThrow(HttpError);
+    expect(() => updateSettings(db, { colorStyle: 'loud' as never })).toThrow(HttpError);
+    expect(() => updateSettings(db, { animations: 'yes' as never })).toThrow(HttpError);
+  });
+});
