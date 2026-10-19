@@ -13,6 +13,7 @@ import { SpendNotice } from '../components/SpendNotice';
 import { MediaStatsPopover } from '../components/MediaStatsPopover';
 import { Lightbox } from '../components/Lightbox';
 import { SiblingNav } from '../components/SiblingNav';
+import { TiltCard } from '../components/TiltCard';
 
 interface Props {
   threadId: string | null;
@@ -221,9 +222,9 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
                   </div>
                 )}
                 {image && (
-                  <button className="image-result" onClick={() => setZoom({ image, message: m })} aria-label={`Open ${image.filename}`}>
+                  <TiltCard as="button" type="button" max={8} className="image-result" onClick={() => setZoom({ image, message: m })} aria-label={`Open ${image.filename}`}>
                     <img src={attachmentUrl(image.id)} alt={g?.prompt ?? image.filename} />
-                  </button>
+                  </TiltCard>
                 )}
                 {m.status === 'complete' && g && (
                   <div className="msg-meta">

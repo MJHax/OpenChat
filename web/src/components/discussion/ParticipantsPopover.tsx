@@ -17,11 +17,11 @@ export function ParticipantsPopover({ participants, nameOf }: { participants: Di
   const { open, setOpen, root } = usePopover();
   return (
     <div className="stats-pop" ref={root}>
-      <button type="button" className="link avatar-stack" aria-expanded={open} aria-haspopup="dialog" aria-label="Participants" onClick={() => setOpen(!open)}>
+      <button type="button" className="chip ghost avatar-stack" aria-expanded={open} aria-haspopup="dialog" aria-label="Participants" onClick={() => setOpen(!open)}>
         {participants.map((p) => <Avatar key={p.id} name={p.name} position={p.position} small />)} <ChevronDown size={14} />
       </button>
       {open && (
-        <div className="stats-pop-panel participants-panel" role="dialog" aria-label="Participants">
+        <div className="stats-pop-panel popover down right participants-panel" role="dialog" aria-label="Participants">
           <h4>Participants</h4>
           {participants.map((p) => (
             <div key={p.id} className="participant-pop-row">
