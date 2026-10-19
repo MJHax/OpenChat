@@ -296,7 +296,7 @@ a.button { border: 1px solid var(--border); background: var(--surface); border-r
 .messages-inner { max-width: 760px; padding: 28px 22px; gap: 26px; }
 .msg.user .bubble { background: var(--bubble); border: 1px solid var(--border); border-radius: 18px 18px 6px 18px; padding: 10px 14px; }
 :root[data-style='vivid'] .msg.user .bubble { background: color-mix(in srgb, var(--accent) 9%, var(--bubble)); border-color: color-mix(in srgb, var(--accent) 22%, var(--border)); }
-.msg.assistant:not(.seed) { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 12px; }
+.msg.assistant:not(.seed):not(.image-reply) { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 12px; }
 .msg-col { min-width: 0; }
 .model-mark { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-size: 11px; font-weight: 700; margin-top: 1px; }
 .msg-head { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
