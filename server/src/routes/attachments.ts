@@ -6,6 +6,7 @@ import {
   cleanFilename, cleanupPending, copyGenerated, deletePending, detectKind, generatedItems, getAttachmentData, getAttachmentRow, insertPending,
 } from '../attachments';
 import { ATTACHMENT_LIMITS, MB, UNSUPPORTED_TYPE, emptyFileMessage, tooLargeMessage } from '../../../shared/attachments';
+import { SVG_MIME } from '../svg';
 
 
 export function attachmentRoutes({ db }: Deps): Hono {
@@ -45,7 +46,10 @@ export function attachmentRoutes({ db }: Deps): Hono {
     const row = getAttachmentRow(db, id);
     const data = row && getAttachmentData(db, id);
     if (!row || !data) throw new HttpError(404, 'Attachment not found.');
+    // An SVG opened on its own would run as a page on OpenChat's origin; the sandbox stops any script in it.
+    const sandbox: Record<string, string> = row.mime === SVG_MIME ? { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox" } : {};
     return c.body(new Uint8Array(data), 200, {
+      ...sandbox,
       'Content-Type': row.kind === 'text' ? 'text/plain; charset=utf-8' : row.mime,
       'X-Content-Type-Options': 'nosniff',
       'Content-Disposition': `inline; filename*=UTF-8''${rfc5987(row.filename)}`,

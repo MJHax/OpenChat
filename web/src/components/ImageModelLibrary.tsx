@@ -7,6 +7,7 @@ import { LibraryHeading } from './LibraryHeading';
 import { formatImagePrice, imageBadges, money } from '../lib/imagePrice';
 import { TiltCard } from './TiltCard';
 import { ProviderMark } from './ProviderMark';
+import { SvgTag } from './SvgTag';
 
 const provider = (id: string) => id.split('/')[0];
 
@@ -26,6 +27,7 @@ function ImageModelCard({ m, entry, busy, onAdd, onRemove }: {
       <div className="model-card-head">
         <ProviderMark id={m.id} />
         <span className="model-card-name" title={m.name}>{m.name}</span>
+        {m.svg && <SvgTag />}
       </div>
       <code className="model-card-id" title={m.id}>{m.id}</code>
       <div className="model-card-stats"><span>{formatImagePrice(m, avgFor(entry))}</span></div>
@@ -57,6 +59,7 @@ export function ImageModelLibrary() {
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
   const [providers, setProviders] = useState<string[]>([]);
+  const [svgOnly, setSvgOnly] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [sort, setSort] = useState<LibrarySort>(() => loadLibrarySort('image'));
   const changeSort = (next: LibrarySort) => { setSort(next); saveLibrarySort(next, 'image'); };
@@ -76,7 +79,7 @@ export function ImageModelLibrary() {
   const all = (catalog?.models ?? []) as ImageModel[]; // kind=image catalog
   const providerList = useMemo(() => [...new Set(all.map((m) => provider(m.id)))].sort(), [catalog]);
   const q = query.trim().toLowerCase();
-  const results = all.filter((m) => (!q || `${m.name} ${m.id}`.toLowerCase().includes(q)) && (providers.length === 0 || providers.includes(provider(m.id))));
+  const results = all.filter((m) => (!q || `${m.name} ${m.id}`.toLowerCase().includes(q)) && (providers.length === 0 || providers.includes(provider(m.id))) && (!svgOnly || m.svg));
   const byId = new Map(library.map((e) => [e.id, e]));
 
   async function act(id: string, fn: () => Promise<MediaLibraryModel[]>) {
@@ -101,7 +104,7 @@ export function ImageModelLibrary() {
         <ul className="model-list">
           {mine.map((e) => (
             <li key={e.id} className="model-row">
-              <div className="model-main"><span>{e.displayName}</span><code>{e.id}</code></div>
+              <div className="model-main"><span>{e.displayName}{(e.model as ImageModel | null)?.svg && <SvgTag />}</span><code>{e.id}</code></div>
               <div className="model-side">
                 <span className="muted small">{e.model ? formatImagePrice(e.model as ImageModel, avgFor(e)) : ''}</span>
                 {e.isDefault ? (
@@ -121,6 +124,12 @@ export function ImageModelLibrary() {
         <div className="chip-row">
           <input type="search" placeholder="Search image models" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search image models" />
           <button className="link" disabled={loading} onClick={() => load(true)}>{loading ? 'Loading…' : 'Refresh'}</button>
+        </div>
+        <div className="chip-row" role="group" aria-label="Output">
+          <span className="chip-label">Makes</span>
+          <button className={`chip${svgOnly ? ' on' : ''}`} aria-pressed={svgOnly} title="Only models that make SVG (vector) images" onClick={() => setSvgOnly(!svgOnly)}>
+            SVG
+          </button>
         </div>
         <div className="chip-row">
           <span className="chip-label">Provider</span>

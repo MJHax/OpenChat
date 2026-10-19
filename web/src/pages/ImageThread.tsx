@@ -15,6 +15,8 @@ import { Lightbox } from '../components/Lightbox';
 import { SiblingNav } from '../components/SiblingNav';
 import { TiltCard } from '../components/TiltCard';
 import { HomeGreeting } from '../components/ChatHome';
+import { isSvgAttachment } from '../lib/svg';
+import { CopySvgButton } from '../components/CopySvgButton';
 
 interface Props {
   threadId: string | null;
@@ -229,7 +231,7 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
                 )}
                 {image && (
                   <TiltCard as="button" type="button" max={8} className="image-result" onClick={() => setZoom({ image, message: m })} aria-label={`Open ${image.filename}`}>
-                    <img src={attachmentUrl(image.id)} alt={g?.prompt ?? image.filename} />
+                    <img src={attachmentUrl(image.id)} alt={g?.prompt ?? image.filename} className={isSvgAttachment(image) ? 'svg-image' : undefined} />
                   </TiltCard>
                 )}
                 {m.status === 'complete' && g && (
@@ -241,6 +243,7 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
                     {seconds !== null && <span>· {seconds}s</span>}
                     {note && <span className="muted">· {note}</span>}
                     {image && <a className="link" href={attachmentUrl(image.id)} download={image.filename}>Download</a>}
+                    {image && isSvgAttachment(image) && <CopySvgButton className="link" src={attachmentUrl(image.id)} />}
                     {image && <button className="link" onClick={() => { setTarget(image.id); setNewImage(false); }}>Edit this</button>}
                     <button className="link" disabled={!!blocked} onClick={() => again(m)}>Again</button>
                   </div>

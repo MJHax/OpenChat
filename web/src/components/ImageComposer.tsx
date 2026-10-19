@@ -69,7 +69,7 @@ export function ImageComposer(p: Props) {
           <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={(e) => { p.onFiles([...(e.target.files ?? [])]); e.target.value = ''; }} />
           <select aria-label="Image model" value={m?.id ?? ''} onChange={(e) => p.onModelChange(e.target.value)} disabled={p.library.length === 0}>
             {p.library.length === 0 && <option value="">No image models</option>}
-            {p.library.map((e) => <option key={e.id} value={e.id}>{e.displayName}</option>)}
+            {p.library.map((e) => <option key={e.id} value={e.id}>{e.displayName}{(e.model as ImageModel | null)?.svg ? ' · SVG' : ''}</option>)}
           </select>
           {m && m.aspects.length > 0 && (
             <select aria-label="Aspect ratio" value={p.settings.aspect} onChange={(e) => set({ aspect: e.target.value })}>

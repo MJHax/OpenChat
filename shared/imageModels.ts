@@ -26,6 +26,8 @@ export interface ImageModel {
   /** At least this many are required (a model that only edits). */
   minRefs: number;
   price: ImagePrice;
+  /** Makes SVG (vector) images only. */
+  svg?: boolean;
 }
 
 export interface ImageSettings {
@@ -68,14 +70,13 @@ function parsePrice(lines: unknown): ImagePrice {
 
 /**
  * One model from the list entry and its endpoints response (null when that fetch failed: price unknown). Null for models
- * the tab leaves out: SVG-only output (SVG can carry scripts) and models no provider serves.
+ * no provider serves.
  */
 export function parseImageModel(entry: any, endpoints: any | null): ImageModel | null {
   const first = Array.isArray(endpoints?.endpoints) ? endpoints.endpoints[0] : undefined;
   if (endpoints && Array.isArray(endpoints.endpoints) && !first) return null;
   const params = { ...(first?.supported_parameters ?? {}), ...(entry?.supported_parameters ?? {}) };
   const formats = values(params.output_format);
-  if (formats.length > 0 && formats.every((f) => f === 'svg')) return null;
   const refs = range(params.input_references);
   return {
     id: String(entry.id),
@@ -89,6 +90,7 @@ export function parseImageModel(entry: any, endpoints: any | null): ImageModel |
     maxRefs: refs.max,
     minRefs: refs.min,
     price: first ? parsePrice(first.pricing) : { kind: 'unknown' },
+    ...(formats.length > 0 && formats.every((f) => f === 'svg') ? { svg: true } : {}),
   };
 }
 

@@ -2,12 +2,13 @@ import { Download, FileCode, FileText, MessageSquarePlus, Play } from 'lucide-re
 import type { LibraryItem } from '../../../../shared/types';
 import { librarySrc } from '../../api';
 import { ChatsBadge } from './ChatsBadge';
+import { isSvgName } from '../../lib/svg';
 
 const extension = (name: string) => (name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toUpperCase() : '');
 
 /** The picture at the top of a tile: the image itself, a video's first frame, or an icon for documents and code. */
 function Thumb({ item }: { item: LibraryItem }) {
-  if (item.type === 'image') return <img src={librarySrc(item.source)} alt="" loading="lazy" />;
+  if (item.type === 'image') return <img src={librarySrc(item.source)} alt="" loading="lazy" className={isSvgName(item.name) ? 'svg-image' : undefined} />;
   if (item.type === 'video') {
     return (
       <>

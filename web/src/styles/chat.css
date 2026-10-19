@@ -329,3 +329,5 @@ a.button { border: 1px solid var(--border); background: var(--surface); border-r
 .copy-code:hover:not(:disabled) { color: #fff; border-color: #555; }
 .code-block pre { margin: 0; border-radius: 0; background: transparent; font: 12.5px/1.6 var(--font-mono); }
 .msg-body :not(pre) > code { background: var(--surface-2); border: 1px solid var(--border); padding: 1px 5px; border-radius: 5px; font-size: 0.86em; }
+/* SVGs are often transparent icons: a faint checkerboard shows their edges on either theme. */
+img.svg-image { background-color: #fff; background-image: conic-gradient(#e6e6e6 25%, transparent 0 50%, #e6e6e6 0 75%, transparent 0); background-size: 16px 16px; }

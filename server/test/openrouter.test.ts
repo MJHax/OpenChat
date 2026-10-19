@@ -377,12 +377,21 @@ describe('image generation client', () => {
     expect(out.usage).toBeNull();
   });
 
-  it('never trusts a reported type that is not a plain raster image', async () => {
+  it('only calls an image SVG when its bytes are SVG', async () => {
     const { fn } = fakeFetch(() => Response.json({ data: [{ b64_json: PNG.toString('base64'), media_type: 'image/svg+xml' }] }));
     const out = await createOpenRouterClient(fn).generateImage({
       apiKey: 'k', model: 'm', prompt: 'p', settings: { aspect: '1:1', size: null, quality: null, transparent: false }, references: [],
     });
     expect(out.mime).toBe('image/png');
+  });
+
+  it('recognises SVG output from its bytes, whatever type is reported', async () => {
+    const svg = Buffer.from('<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"/>');
+    const { fn } = fakeFetch(() => Response.json({ data: [{ b64_json: svg.toString('base64'), media_type: 'image/png' }] }));
+    const out = await createOpenRouterClient(fn).generateImage({
+      apiKey: 'k', model: 'm', prompt: 'p', settings: { aspect: '1:1', size: null, quality: null, transparent: false }, references: [],
+    });
+    expect(out.mime).toBe('image/svg+xml');
   });
 
   it('turns a failed generation into an OpenRouterError', async () => {
@@ -401,7 +410,7 @@ describe('image generation client', () => {
       .rejects.toThrow(OpenRouterError);
   });
 
-  it('lists image models with their pricing, skipping SVG-only ones', async () => {
+  it('lists image models with their pricing, marking SVG-only ones', async () => {
     const { fn, calls } = fakeFetch(({ url }) => {
       if (url.endsWith('/images/models')) {
         return Response.json({ data: [
@@ -415,7 +424,7 @@ describe('image generation client', () => {
       return Response.json({ endpoints: [{ pricing: [] }] });
     });
     const models = await createOpenRouterClient(fn).listImageModels();
-    expect(models.map((m) => [m.id, m.price.kind])).toEqual([['a/img', 'image'], ['b/img', 'unknown']]);
+    expect(models.map((m) => [m.id, m.price.kind, !!m.svg])).toEqual([['a/img', 'image', false], ['r/vec', 'unknown', true], ['b/img', 'unknown', false]]);
     expect(calls.some((c) => c.url.endsWith('/images/models/a/img/endpoints'))).toBe(true);
   });
 });

@@ -17,6 +17,7 @@ import { maybeGenerateTitle } from './title';
 import { buildVideoRequest, snapVideoSettings, videoPrice, type VideoModel, type VideoSettings } from '../../shared/videoModels';
 import { BAD_ATTACHMENT } from '../../shared/attachments';
 import { checkSpend } from './limits';
+import { imageDataUrl } from './svg';
 
 export interface VideoRequest {
   prompt: string;
@@ -40,7 +41,7 @@ const nextPoll = (startedAt: number, at: number) => at + (at - startedAt < SLOW_
 
 export const clipPath = (mediaDir: string, messageId: string) => join(mediaDir, `${messageId}.mp4`);
 
-const dataUrl = (row: AttachmentRow, db: DB) => `data:${row.mime};base64,${(getAttachmentData(db, row.id) ?? Buffer.alloc(0)).toString('base64')}`;
+const dataUrl = (row: AttachmentRow, db: DB) => imageDataUrl(row.mime, getAttachmentData(db, row.id) ?? Buffer.alloc(0));
 
 /** A photo for a frame slot: a pending upload, or an image already on a message in this thread. */
 function framePhoto(db: DB, threadId: string, id: string | null): AttachmentRow | null {

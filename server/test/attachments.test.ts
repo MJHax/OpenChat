@@ -152,6 +152,15 @@ describe('attachment routes', () => {
     const odd = (await (await upload('x', "it's (a)*.md")).json()) as Attachment;
     expect((await call('GET', `/api/attachments/${odd.id}`)).headers.get('Content-Disposition'))
       .toBe("inline; filename*=UTF-8''it%27s%20%28a%29%2A.md");
+    expect(res.headers.get('Content-Security-Policy')).toBeNull();
+  });
+
+  it('serves a generated SVG sandboxed, so script in it cannot run', async () => {
+    const { db, call } = makeApp();
+    const svg = insertPending(db, { filename: 'icon.svg', kind: 'image', mime: 'image/svg+xml', data: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>') });
+    const res = await call('GET', `/api/attachments/${svg.id}`);
+    expect(res.headers.get('Content-Type')).toBe('image/svg+xml');
+    expect(res.headers.get('Content-Security-Policy')).toMatch(/default-src 'none'.*sandbox/);
   });
 
   it('enforces the size limit for each kind', async () => {

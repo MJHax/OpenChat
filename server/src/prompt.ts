@@ -1,6 +1,7 @@
 import { canViewImages, imageSkippedNote } from '../../shared/attachments';
 import { collapseSuperseded } from '../../shared/files';
 import type { Attachment, Message } from '../../shared/types';
+import { imageDataUrl } from './svg';
 
 export interface Persona {
   aboutMe: string;
@@ -80,7 +81,7 @@ function toParts(m: PathEntry, attachments: Attachment[], o: AttachmentOptions):
   }
   const images = canViewImages(o.inputModalities);
   for (const a of ofKind('image')) {
-    parts.push(images ? { type: 'image_url', image_url: { url: dataUrl(a.mime, o.loadData(a.id)) } } : { type: 'text', text: imageSkippedNote(a.filename) });
+    parts.push(images ? { type: 'image_url', image_url: { url: imageDataUrl(a.mime, o.loadData(a.id)) } } : { type: 'text', text: imageSkippedNote(a.filename) });
   }
   for (const a of ofKind('pdf')) {
     parts.push({ type: 'file', file: { filename: a.filename, file_data: dataUrl(a.mime, o.loadData(a.id)) } });

@@ -13,6 +13,7 @@ import { maybeGenerateTitle } from './title';
 import { jobErrorOf, jobStatusOf } from './videoJobs';
 import { canGenerate, estimateImageCost, snapSettings, type ImageModel, type ImageSettings } from '../../shared/imageModels';
 import { checkSpend } from './limits';
+import { imageDataUrl, SVG_MIME } from './svg';
 import type { ImageGeneration } from '../../shared/types';
 
 export interface ImageRequest {
@@ -37,11 +38,9 @@ export async function whenIdle(): Promise<void> {
   while (running.size) await Promise.all([...running]);
 }
 
-const dataUrl = (mime: string, data: Buffer) => `data:${mime};base64,${data.toString('base64')}`;
-
 const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'image';
 
-const EXTENSIONS: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+const EXTENSIONS: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', [SVG_MIME]: 'svg' };
 
 function busy(db: DB, threadId: string): boolean {
   return !!db.prepare(
@@ -116,7 +115,7 @@ export async function startImageGeneration(deps: Deps, threadId: string, req: Im
   setActiveLeaf(db, threadId, assistantId);
   touchChat(db, threadId);
 
-  const references = refIds.map((id) => dataUrl(getAttachmentRow(db, id)!.mime, getAttachmentData(db, id) ?? Buffer.alloc(0)));
+  const references = refIds.map((id) => imageDataUrl(getAttachmentRow(db, id)!.mime, getAttachmentData(db, id) ?? Buffer.alloc(0)));
   const run = (async () => {
     const t0 = Date.now();
     let usage: Usage | null = null;

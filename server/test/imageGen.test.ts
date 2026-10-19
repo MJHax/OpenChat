@@ -66,6 +66,19 @@ describe('image generation', () => {
     expect((await s.detail(id)).generations[second.assistantMessageId]).toMatchObject({ mode: 'edit_generated', targetAttachmentId: fox.id });
   });
 
+  it('saves SVG output as an .svg, and edits it from a PNG drawn of it', async () => {
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24"/></svg>');
+    const s = setup(async () => ({ data: svg, mime: 'image/svg+xml', usage: USAGE }));
+    const id = await s.thread();
+    const first = (await (await s.generate(id, { prompt: 'a rocket icon' })).json()) as { assistantMessageId: string };
+    await whenIdle();
+    const icon = (await s.detail(id)).messages.find((m) => m.id === first.assistantMessageId)!.attachments[0];
+    expect(icon).toMatchObject({ kind: 'image', mime: 'image/svg+xml', filename: 'a-rocket-icon-1.svg' });
+    await s.generate(id, { prompt: 'make it blue', targetAttachmentId: icon.id });
+    await whenIdle();
+    expect(s.calls[1].references[0]).toMatch(/^data:image\/png;base64,/);
+  });
+
   it('uploaded photo makes edit_upload', async () => {
     const s = setup();
     const id = await s.thread();

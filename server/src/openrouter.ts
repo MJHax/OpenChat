@@ -3,6 +3,7 @@ import type { CatalogModel, Category, Effort, Source } from '../../shared/types'
 import type { ChatMessage, Plugin } from './prompt';
 import { parseImageModel, type ImageModel, type ImageSettings } from '../../shared/imageModels';
 import { parseVideoModel, type VideoModel } from '../../shared/videoModels';
+import { isSvg, SVG_MIME } from './svg';
 
 export const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
@@ -167,6 +168,7 @@ const RASTER = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 /** The image's type from its first bytes; PNG when unrecognised (OpenRouter's default). */
 function sniffImage(b: Buffer): string {
   if (b[0] === 0xff && b[1] === 0xd8) return 'image/jpeg';
+  if (isSvg(b)) return SVG_MIME;
   if (b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
   return 'image/png';
 }
@@ -313,8 +315,9 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
       const image = json.data?.[0];
       if (!image?.b64_json) throw new OpenRouterError('The model returned no image.', 502);
       const data = Buffer.from(image.b64_json, 'base64');
-      // Images are served from OpenChat's own origin, so only plain raster types are trusted (never SVG, which can carry script).
-      const mime = image.media_type && RASTER.has(image.media_type) ? image.media_type : sniffImage(data);
+      // SVG is taken from the bytes alone, never the reported type; it can carry script, so the attachment route serves it sandboxed.
+      const sniffed = sniffImage(data);
+      const mime = image.media_type && RASTER.has(image.media_type) && sniffed !== SVG_MIME ? image.media_type : sniffed;
       return { data, mime, usage: json.usage ? parseUsage(json.usage) : null };
     },
 

@@ -49,8 +49,12 @@ describe('parseImageModel', () => {
     expect(model('black-forest-labs/flux-3-image', null).price).toEqual({ kind: 'unknown' });
   });
 
-  it('leaves out SVG-only models and models nobody serves', () => {
-    expect(parseImageModel(entry('recraft/recraft-v4.1-vector'), vector)).toBeNull();
+  it('marks SVG-only models', () => {
+    expect(parseImageModel(entry('recraft/recraft-v4.1-vector'), vector)?.svg).toBe(true);
+    expect(parseImageModel(entry('black-forest-labs/flux-3-image'), flux3)?.svg).toBeUndefined();
+  });
+
+  it('leaves out models nobody serves', () => {
     expect(parseImageModel(entry('meta/muse-image'), muse)).toBeNull();
   });
 });
