@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ModelStats } from '../../../../shared/types';
 import { formatCost } from '../../lib/format';
 import { compactNumber, formatPercent, formatSeconds } from '../../lib/stats';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 const money = (usd: number | null) => (usd === null ? '—' : usd === 0 ? '$0.00' : formatCost(usd));
 
@@ -14,7 +15,7 @@ function ModelRow({ m, top }: { m: ModelStats; top: number }) {
   return (
     <div className="stat-model">
       <button type="button" className="stat-model-head" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span className="stat-model-name" title={m.id}>{open ? '▾' : '▸'} {m.name}</span>
+        <span className="stat-model-name" title={m.id}>{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {m.name}</span>
         <span className="share-bar"><b style={{ width: `${top ? (m.replies / top) * 100 : 0}%` }} /></span>
         <span className="muted small">{m.replies} repl{m.replies === 1 ? 'y' : 'ies'} · {money(m.cost)}</span>
       </button>

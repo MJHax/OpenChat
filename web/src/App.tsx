@@ -13,6 +13,7 @@ import { ModelLibrary } from './pages/ModelLibrary';
 import { Settings } from './pages/Settings';
 import { Stats } from './pages/Stats';
 import { useAppearance } from './components/useAppearance';
+import { Clapperboard, X } from 'lucide-react';
 
 export function App() {
   const route = useRoute();
@@ -115,9 +116,9 @@ export function App() {
           {toasts.map((t) => (
             <div key={t.id} className="toast">
               <button className="link" onClick={() => { setToasts((x) => x.filter((y) => y.id !== t.id)); openChat(t.id, 'video'); }}>
-                🎬 “{t.title}” finished
+                <Clapperboard size={16} /> “{t.title}” finished
               </button>
-              <button className="icon" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}>✕</button>
+              <button className="icon" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
             </div>
           ))}
         </div>

@@ -5,6 +5,7 @@ import { Segmented } from './stats/Segmented';
 import { groupByDate, splitSnippet } from '../lib/format';
 import { navigate } from '../lib/route';
 import { forgetChatPrefs } from '../lib/chatPrefs';
+import { Clapperboard, PanelLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 
 export interface SidebarProps {
   /** Which threads the list shows: chats or image threads. */
@@ -69,8 +70,8 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
   if (collapsed) {
     return (
       <aside className="sidebar collapsed">
-        <button className="icon" onClick={() => setCollapsed(false)} aria-label="Expand sidebar" title="Expand sidebar">☰</button>
-        <button className="icon" onClick={() => navigate(HOME[mode])} aria-label={newLabel} title={newLabel}>＋</button>
+        <button className="icon" onClick={() => setCollapsed(false)} aria-label="Expand sidebar" title="Expand sidebar"><PanelLeft size={16} /></button>
+        <button className="icon" onClick={() => navigate(HOME[mode])} aria-label={newLabel} title={newLabel}><Plus size={16} /></button>
       </aside>
     );
   }
@@ -79,10 +80,10 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
     <aside className="sidebar">
       <div className="sidebar-top">
         <span className="brand">OpenChat</span>
-        <button className="icon" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar" title="Collapse sidebar">⟨</button>
+        <button className="icon" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar" title="Collapse sidebar"><PanelLeft size={16} /></button>
       </div>
       <Segmented label="Mode" options={MODES} value={mode} onChange={(m) => navigate(HOME[m])} />
-      <button className="new-chat" onClick={() => navigate(HOME[mode])}>＋ {newLabel}</button>
+      <button className="new-chat" onClick={() => navigate(HOME[mode])}><Plus size={16} /> {newLabel}</button>
       <input className="search" type="search" placeholder="Search" value={query} onChange={(e) => setQuery(e.target.value)} />
 
       <nav className="chat-list">
@@ -122,15 +123,15 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
                     <a href={threadHref(chat.kind, chat.id)} title={chat.title}>
                       {(chat.kind === 'image' || chat.kind === 'video') && (
                         <span className="thread-thumb">
-                          {chat.thumbnailId ? <img src={attachmentUrl(chat.thumbnailId)} alt="" /> : chat.kind === 'video' ? '🎬' : null}
+                          {chat.thumbnailId ? <img src={attachmentUrl(chat.thumbnailId)} alt="" /> : chat.kind === 'video' ? <Clapperboard size={14} /> : null}
                         </span>
                       )}
                       <span className="chat-title">{chat.title}</span>
                       {chat.busy && <span className="spinner" aria-label="Generating" />}
                     </a>
                     <span className="chat-actions">
-                      <button className="icon" aria-label="Rename chat" title="Rename" onClick={() => { setRenaming(chat.id); setDraft(chat.title); }}>✎</button>
-                      <button className="icon" aria-label="Delete chat" title="Delete" onClick={() => remove(chat)}>🗑</button>
+                      <button className="icon" aria-label="Rename chat" title="Rename" onClick={() => { setRenaming(chat.id); setDraft(chat.title); }}><Pencil size={14} /></button>
+                      <button className="icon" aria-label="Delete chat" title="Delete" onClick={() => remove(chat)}><Trash2 size={14} /></button>
                     </span>
                   </div>
                 ),

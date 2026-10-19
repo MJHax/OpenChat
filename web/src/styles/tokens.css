@@ -1,0 +1,50 @@
+/*
+ * Design tokens. <html> carries data-theme (light|dark), data-accent (blue|orange|green|rainbow),
+ * data-style (flat|vivid), data-motion (on|off) and data-tilt (on|off); see web/src/lib/appearance.ts.
+ * Mostly black and white: the accent goes only on highlights, never on large surfaces or body text.
+ */
+:root {
+  --bg: #ffffff; --panel: #fafafa; --surface: #ffffff; --surface-2: #f4f4f5;
+  --border: #e7e7e7; --border-strong: #d4d4d4; --text: #0a0a0a; --muted: #6b6b6b; --faint: #a3a3a3;
+  --bubble: #f4f4f5; --glare: #000000; --shadow: 0 20px 50px -24px rgba(0, 0, 0, 0.18);
+  --danger: #b42318; --warn: #b54708; --mark: #f6e3a1; --code-bg: #0f0f0f;
+  --font-sans: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'Cascadia Code', Consolas, monospace;
+  --radius-sm: 8px; --radius: 12px; --radius-lg: 20px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  --bg: #0a0a0a; --panel: #0f0f0f; --surface: #151515; --surface-2: #1c1c1c;
+  --border: #242424; --border-strong: #333333; --text: #fafafa; --muted: #8f8f8f; --faint: #5a5a5a;
+  --bubble: #1c1c1c; --glare: #ffffff; --shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.8);
+  --danger: #f97066; --warn: #fdb022; --mark: #6b5a1e; --code-bg: #111111;
+  color-scheme: dark;
+}
+
+/* Accents: --accent is the solid color (text, borders, rings); --accent-fill paints filled things. */
+:root, :root[data-accent='blue'] { --accent: #3b82f6; --accent-fill: #3b82f6; --on-accent: #ffffff; --glow-a: #3b82f6; --glow-b: #22d3ee; }
+:root[data-accent='orange'] { --accent: #f97316; --accent-fill: #f97316; --on-accent: #ffffff; --glow-a: #f97316; --glow-b: #f43f5e; }
+:root[data-accent='green'] { --accent: #22c55e; --accent-fill: #22c55e; --on-accent: #04130a; --glow-a: #22c55e; --glow-b: #14b8a6; }
+:root[data-theme='light'][data-accent='green'] { --accent: #16a34a; --accent-fill: #16a34a; --on-accent: #ffffff; }
+:root[data-accent='rainbow'] { --accent: #8b5cf6; --on-accent: #ffffff; --glow-a: #a066ff; --glow-b: #3bb2ff; }
+
+/* Each accent's duotone, also used by the Color style previews whatever the current style is. */
+:root, :root[data-accent='blue'] { --vivid-fill: linear-gradient(110deg, #2563eb, #3b82f6, #22d3ee, #6366f1, #2563eb); }
+:root[data-accent='orange'] { --vivid-fill: linear-gradient(110deg, #ea580c, #f97316, #f59e0b, #f43f5e, #ea580c); }
+:root[data-accent='green'] { --vivid-fill: linear-gradient(110deg, #16a34a, #22c55e, #a3e635, #14b8a6, #16a34a); }
+:root[data-accent='rainbow'] { --vivid-fill: linear-gradient(110deg, #ff5f6d, #ffc371, #47e891, #3bb2ff, #a066ff, #ff5f6d); }
+
+/* Vivid (rainbow is always vivid: appearance.ts sets data-style accordingly). */
+:root[data-style='vivid'] { --accent-fill: var(--vivid-fill); --glare-c: color-mix(in srgb, var(--accent) 65%, var(--glare)); }
+:root[data-style='vivid'] .fill { background-size: 300% 100%; animation: drift 8s linear infinite; }
+@keyframes drift { to { background-position: 300% 0; } }
+
+/* Ambient glow behind a page; put .aurora as the first child of a positioned container. */
+.aurora { position: absolute; inset: -20% 0 auto; height: 70%; pointer-events: none; opacity: 0; z-index: 0;
+  background: radial-gradient(40% 50% at 35% 30%, var(--glow-a), transparent 70%), radial-gradient(35% 45% at 70% 25%, var(--glow-b), transparent 70%);
+  filter: blur(40px); transition: opacity 0.6s var(--ease-out); animation: aurora 14s ease-in-out infinite alternate; }
+:root[data-style='vivid'] .aurora { opacity: 0.13; }
+:root[data-theme='light'][data-style='vivid'] .aurora { opacity: 0.09; }
+@keyframes aurora { to { transform: translateX(6%) scale(1.08); } }

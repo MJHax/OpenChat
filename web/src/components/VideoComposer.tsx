@@ -2,6 +2,7 @@ import { snapVideoSettings, usd, videoPrice, type VideoModel, type VideoSettings
 import type { Attachment, MediaLibraryModel } from '../../../shared/types';
 import { FrameSlot } from './FrameSlot';
 import { framesProblem } from '../lib/videoUi';
+import { Volume2, VolumeX } from 'lucide-react';
 
 interface Props {
   library: MediaLibraryModel[];
@@ -70,7 +71,7 @@ export function VideoComposer(p: Props) {
           )}
           {m?.sound && (
             <button className="toggle" aria-pressed={p.settings.sound} onClick={() => set({ sound: !p.settings.sound })}>
-              {p.settings.sound ? '🔊 Sound on' : '🔇 Sound off'}
+              {p.settings.sound ? <><Volume2 size={14} /> Sound on</> : <><VolumeX size={14} /> Sound off</>}
             </button>
           )}
           <span className="spacer" />

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { usePopover } from './usePopover';
+import { ChevronDown } from 'lucide-react';
 
 export interface InstructionsButtonProps {
   /** This chat's saved instructions ('' when none). */
@@ -38,7 +39,7 @@ export function InstructionsButton({ value, onSave }: InstructionsButtonProps) {
     <div className="stats-pop" ref={root}>
       <button type="button" className="link stats-pop-button" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)}
         title={value ? 'This chat has its own instructions' : undefined}>
-        Instructions{value && <i className="instructions-dot" aria-label="(set)" />} ▾
+        Instructions{value && <i className="instructions-dot" aria-label="(set)" />} <ChevronDown size={14} />
       </button>
       {open && (
         <div className="stats-pop-panel instructions-panel" role="dialog" aria-label="Instructions for this chat">

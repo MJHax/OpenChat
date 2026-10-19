@@ -4,6 +4,7 @@ import { api } from '../api';
 import { formatCost } from '../lib/format';
 import { compactNumber, emptyChatStats, formatPercent } from '../lib/stats';
 import { usePopover } from './usePopover';
+import { ChevronDown } from 'lucide-react';
 
 export interface ChatStatsPopoverProps {
   /** null for a chat that hasn't been created yet: everything reads 0. */
@@ -43,7 +44,7 @@ export function ChatStatsPopover({ chatId, totalCost, refreshKey }: ChatStatsPop
   return (
     <div className="stats-pop" ref={root}>
       <button type="button" className="link stats-pop-button" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)}>
-        Total {money(totalCost)} ▾
+        Total {money(totalCost)} <ChevronDown size={14} />
       </button>
       {open && (
         <div className="stats-pop-panel" role="dialog" aria-label="This chat's stats">

@@ -3,6 +3,7 @@ import { participantColor } from '../../../../shared/discussion';
 import { formatCost } from '../../lib/format';
 import { initials } from '../../lib/discussion';
 import { usePopover } from '../usePopover';
+import { ChevronDown } from 'lucide-react';
 
 const money = (usd: number) => (usd === 0 ? '$0.00' : formatCost(usd));
 
@@ -17,7 +18,7 @@ export function ParticipantsPopover({ participants, nameOf }: { participants: Di
   return (
     <div className="stats-pop" ref={root}>
       <button type="button" className="link avatar-stack" aria-expanded={open} aria-haspopup="dialog" aria-label="Participants" onClick={() => setOpen(!open)}>
-        {participants.map((p) => <Avatar key={p.id} name={p.name} position={p.position} small />)} ▾
+        {participants.map((p) => <Avatar key={p.id} name={p.name} position={p.position} small />)} <ChevronDown size={14} />
       </button>
       {open && (
         <div className="stats-pop-panel participants-panel" role="dialog" aria-label="Participants">

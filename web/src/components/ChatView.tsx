@@ -27,6 +27,7 @@ import { panelView } from '../lib/filePanelState';
 import { MessageItem } from './MessageItem';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { toDraft } from './useAttachmentDraft';
+import { X } from 'lucide-react';
 
 export interface ChatViewProps {
   chatId: string | null;
@@ -510,7 +511,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
                 </span>
                 <button onClick={summarize} disabled={continuing}>{continuing ? 'Summarizing…' : 'Summarize and continue'}</button>
                 <button className="link" aria-label="Dismiss" title="Dismiss"
-                  onClick={() => setWarningDismissed((s) => new Set(s).add(chatId))}>✕</button>
+                  onClick={() => setWarningDismissed((s) => new Set(s).add(chatId))}><X size={16} /></button>
               </div>
             )}
             <SpendNotice refreshKey={detail} />

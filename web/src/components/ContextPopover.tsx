@@ -4,6 +4,7 @@ import { api } from '../api';
 import { contextLevel } from '../lib/context';
 import { compactNumber, formatPercent } from '../lib/stats';
 import { usePopover } from './usePopover';
+import { ChevronDown } from 'lucide-react';
 
 export interface ContextState {
   usages: ContextUsage[] | null;
@@ -97,7 +98,7 @@ export function ContextPopover({ context, show, nameOf, onContinue, continuing }
     <div className="stats-pop" ref={root}>
       <button type="button" className={`link stats-pop-button${level === 'full' ? ' over' : level === 'warn' ? ' warn' : ''}`} aria-expanded={open}
         aria-haspopup="dialog" onClick={() => setOpen(!open)}>
-        Context {fullest ? (f !== null ? `${tilde(fullest)}${percent(f)}` : `${tilde(fullest)}${compactNumber(fullest.used)}`) : '…'} ▾
+        Context {fullest ? (f !== null ? `${tilde(fullest)}${percent(f)}` : `${tilde(fullest)}${compactNumber(fullest.used)}`) : '…'} <ChevronDown size={14} />
       </button>
       {open && (
         <div className="stats-pop-panel" role="dialog" aria-label="Context window">

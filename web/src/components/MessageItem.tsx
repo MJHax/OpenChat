@@ -10,6 +10,7 @@ import { copyText } from '../../../shared/files';
 import { RememberBox } from './RememberBox';
 import { Sources } from './Sources';
 import { SiblingNav } from './SiblingNav';
+import { RotateCw } from 'lucide-react';
 
 interface Props {
   message: PathMessage;
@@ -149,7 +150,7 @@ export function MessageItem({
         {rememberButton}
         <button className="link" disabled={disabled} onClick={onFork}>Fork</button>
         {compareMode ? (
-          <button className="link" disabled={disabled} onClick={() => onRegenerate(null)}>↻ Compare again</button>
+          <button className="link" disabled={disabled} onClick={() => onRegenerate(null)}><RotateCw size={14} /> Compare again</button>
         ) : (
           <select
             className="regen"
@@ -158,7 +159,7 @@ export function MessageItem({
             onChange={(e) => e.target.value && onRegenerate(e.target.value)}
             aria-label="Regenerate with model"
           >
-            <option value="">↻ Regenerate</option>
+            <option value="">Regenerate</option>
             {regenerateChoices.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
           </select>
         )}

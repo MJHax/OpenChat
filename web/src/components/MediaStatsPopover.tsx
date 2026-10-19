@@ -3,6 +3,7 @@ import type { MediaThreadStats } from '../../../shared/types';
 import { api } from '../api';
 import { money } from '../lib/imagePrice';
 import { usePopover } from './usePopover';
+import { ChevronDown } from 'lucide-react';
 
 function Row({ label, value }: { label: string; value: string }) {
   return <div className="stats-pop-row"><span className="muted">{label}</span><span>{value}</span></div>;
@@ -27,7 +28,7 @@ export function MediaStatsPopover({ threadId, totalCost, refreshKey, noun = 'ima
   return (
     <div className="stats-pop" ref={root}>
       <button type="button" className="link stats-pop-button" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)}>
-        Total {money(totalCost)} ▾
+        Total {money(totalCost)} <ChevronDown size={14} />
       </button>
       {open && (
         <div className="stats-pop-panel" role="dialog" aria-label="This thread's stats">
