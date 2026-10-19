@@ -4,6 +4,7 @@ import type { LibraryModel, SettingsUpdate, SettingsView } from '../../../shared
 import { api } from '../api';
 import type { Appearance } from '../lib/appearance';
 import type { SettingsTab } from '../lib/route';
+import { closesOverlay } from '../lib/escape';
 import { GeneralTab } from './settings/GeneralTab';
 import { AppearanceTab } from './settings/AppearanceTab';
 import { MemoryTab } from './settings/MemoryTab';
@@ -40,16 +41,16 @@ export function Settings({ models, tab, section, appearance, onAppearance, onCha
   const load = () => api.getSettings().then(setView).catch((e: Error) => setError(e.message));
   useEffect(() => { void load(); }, []);
 
-  // Focus moves into the sheet and back to where it was on close; Escape closes.
+  // Focus moves into the sheet (App puts it back on close); Escape closes.
   useEffect(() => {
-    const before = document.activeElement as HTMLElement | null;
     sheet.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      before?.focus?.();
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const nestedModalOpen = !!sheet.current?.querySelector('.modal-backdrop');
+      if (closesOverlay({ key: e.key, isComposing: e.isComposing, defaultPrevented: e.defaultPrevented, targetTag: target?.tagName ?? '', nestedModalOpen })) onClose();
     };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
   async function update(patch: SettingsUpdate) {

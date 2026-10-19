@@ -113,4 +113,6 @@ kbd { font-size: 11px; padding: 1px 5px; border-radius: 5px; border: 1px solid v
 /* Tilt cards: colors fade, but never transition transform (the spring drives it). */
 .tilt { transition: background-color 0.4s var(--ease-out), border-color 0.2s, box-shadow 0.3s; }
 /* Screen changes rise in slightly. */
-.main > .chat, .main > .page { animation: rise 0.4s var(--ease-out); }
+.page-slot > .chat, .page-slot > .page { animation: rise 0.4s var(--ease-out); }
+/* Wrappers App uses to make the background inert under overlays; they add no box. */
+.rail-slot, .page-slot { display: contents; }

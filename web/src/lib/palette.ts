@@ -1,3 +1,5 @@
+import type { SearchHit } from '../../../shared/types';
+
 // The command palette's fixed commands (chat search results are added by the component).
 
 export type PaletteGroup = 'Create' | 'Go to' | 'Appearance';
@@ -44,4 +46,15 @@ export function filterCommands(query: string, commands: PaletteCommand[] = PALET
 export function moveSelection(index: number, delta: number, count: number): number {
   if (count === 0) return 0;
   return Math.min(count - 1, Math.max(0, index + delta));
+}
+
+export type PaletteRow = { kind: 'hit'; hit: SearchHit } | { kind: 'command'; command: PaletteCommand };
+
+/**
+ * The palette's rows for `query`: every chat hit (above the commands), but only if those hits came back for this
+ * same query — older hits would move the Enter target while the new search is in flight.
+ */
+export function paletteRows(query: string, search: { query: string; hits: SearchHit[] }): PaletteRow[] {
+  const hits = search.query.trim() === query.trim() && query.trim() ? search.hits : [];
+  return [...hits.map((hit) => ({ kind: 'hit' as const, hit })), ...filterCommands(query).map((command) => ({ kind: 'command' as const, command }))];
 }

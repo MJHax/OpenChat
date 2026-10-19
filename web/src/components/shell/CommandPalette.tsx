@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MessageSquare, Search } from 'lucide-react';
 import type { SearchHit, ThreadKind } from '../../../../shared/types';
 import { api } from '../../api';
 import { splitSnippet } from '../../lib/format';
-import { filterCommands, moveSelection, type PaletteCommand } from '../../lib/palette';
+import { moveSelection, paletteRows, type PaletteRow } from '../../lib/palette';
 
 export interface CommandPaletteProps {
   onClose(): void;
@@ -12,38 +12,34 @@ export interface CommandPaletteProps {
   onOpenChat(chatId: string, kind: ThreadKind): void;
 }
 
-type Row = { kind: 'hit'; hit: SearchHit } | { kind: 'command'; command: PaletteCommand };
+type Row = PaletteRow;
 
 /** Ctrl/Cmd+K: search every chat, start something new, jump anywhere, change the look. */
 export function CommandPalette({ onClose, onCommand, onOpenChat }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
-  const [hits, setHits] = useState<SearchHit[]>([]);
+  // Hits remember which query they answer, so a slow search never shows (or opens) results for older text.
+  const [search, setSearch] = useState<{ query: string; hits: SearchHit[] }>({ query: '', hits: [] });
   const [searchFailed, setSearchFailed] = useState(false);
   const [index, setIndex] = useState(0);
   const list = useRef<HTMLDivElement>(null);
 
+
   useEffect(() => {
     const q = query.trim();
     setSearchFailed(false);
-    if (!q) {
-      setHits([]);
-      return;
-    }
+    if (!q) return;
     let current = true;
     const timer = setTimeout(() => {
       api.search(q)
-        .then((h) => { if (current) setHits(h.slice(0, 8)); })
-        .catch(() => { if (current) { setHits([]); setSearchFailed(true); } });
+        .then((h) => { if (current) setSearch({ query: q, hits: h }); })
+        .catch(() => { if (current) { setSearch({ query: q, hits: [] }); setSearchFailed(true); } });
     }, 250);
     return () => { current = false; clearTimeout(timer); };
   }, [query]);
 
-  const commands = filterCommands(query);
-  const rows: Row[] = useMemo(
-    () => [...hits.map((hit) => ({ kind: 'hit' as const, hit })), ...commands.map((command) => ({ kind: 'command' as const, command }))],
-    [hits, commands.map((c) => c.id).join()], // eslint-disable-line react-hooks/exhaustive-deps
-  );
-  useEffect(() => setIndex(0), [query, hits.length]);
+  const rows: Row[] = paletteRows(query, search);
+  const hitCount = rows.filter((r) => r.kind === 'hit').length;
+  useEffect(() => setIndex(0), [query, hitCount]);
   useEffect(() => {
     list.current?.querySelector<HTMLElement>(`[data-row="${index}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [index]);

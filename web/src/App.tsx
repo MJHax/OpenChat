@@ -148,20 +148,40 @@ export function App() {
     if (id.startsWith('style-')) return void setAppearance({ colorStyle: id.slice('style-'.length) as ColorStyle });
   };
 
+  const overlayOpen = route.page === 'settings' || paletteOpen;
+  // Remember the last thing focused outside an overlay, and put focus back there when the overlay closes.
+  // (Making the background inert blurs it before the overlay mounts, so the overlay can't record it itself.)
+  const lastFocus = useRef<HTMLElement | null>(null);
+  const overlayRef = useRef(overlayOpen);
+  overlayRef.current = overlayOpen;
+  useEffect(() => {
+    const onFocus = (e: FocusEvent) => { if (!overlayRef.current && e.target instanceof HTMLElement) lastFocus.current = e.target; };
+    document.addEventListener('focusin', onFocus);
+    return () => document.removeEventListener('focusin', onFocus);
+  }, []);
+  const wasOpen = useRef(overlayOpen);
+  useEffect(() => {
+    if (wasOpen.current && !overlayOpen) requestAnimationFrame(() => { if (lastFocus.current?.isConnected) lastFocus.current.focus(); });
+    wasOpen.current = overlayOpen;
+  }, [overlayOpen]);
   const railActive: RailItem = route.page === 'settings' ? 'settings' : page.page === 'models' ? 'models' : page.page === 'stats' ? 'stats' : mode;
   const shownTheme = resolvedTheme(appearance.theme, systemDark);
 
   return (
     <div className={`app${panelOpen ? '' : ' panel-closed'}${narrow ? ' narrow' : ''}`}>
+      {/* While Settings or the palette is open, everything behind it is inert, so focus and screen readers stay in the dialog. */}
+      <div className="rail-slot" inert={overlayOpen}>
       <IconRail active={railActive} mode={mode} resolvedTheme={shownTheme} onTogglePanel={togglePanel} settingsHref="#/settings"
         onToggleTheme={() => void setAppearance({ theme: nextTheme(appearance.theme, systemDark) })} />
-      <div className="threads-slot" aria-hidden={!panelOpen} inert={!panelOpen}>
+      </div>
+      <div className="threads-slot" aria-hidden={!panelOpen} inert={!panelOpen || overlayOpen}>
         <ThreadPanel mode={mode} chats={chats} activeChatId={activeChatId} onChatsChanged={refreshChats} onOpenChat={openChat}
           onCollapse={() => setPanelOpen(false)} onOpenPalette={() => setPaletteOpen(true)} />
       </div>
       {narrow && panelOpen && <div className="threads-scrim" onClick={() => setPanelOpen(false)} />}
       <main className="main">
         <div className="aurora" aria-hidden />
+        <div className="page-slot" inert={overlayOpen}>
         {loadError && <div className="banner error">Can't reach the OpenChat server: {loadError}</div>}
         {page.page === 'chat' && (
           <ChatView chatId={page.chatId} title={title} reloadToken={chatReload} models={models} settings={settings} onChatsChanged={refreshChats} />
@@ -178,6 +198,7 @@ export function App() {
         )}
         {page.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} sort={librarySort} onSort={changeLibrarySort} />}
         {page.page === 'stats' && <Stats />}
+        </div>
         {route.page === 'settings' && (
           <Settings models={models} tab={route.tab} section={route.section} onChanged={refreshSettings} onClose={closeSettings}
             appearance={appearance} onAppearance={(patch) => void setAppearance(patch)}
