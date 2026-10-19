@@ -15,6 +15,7 @@ import { loadLibrarySort, saveLibrarySort, sortLibrary, type LibrarySort } from 
 import { ModelLibrary } from './pages/ModelLibrary';
 import { Settings } from './pages/Settings';
 import { Stats } from './pages/Stats';
+import { Library } from './pages/Library';
 import { useAppearance } from './components/useAppearance';
 import { Clapperboard, X } from 'lucide-react';
 
@@ -149,7 +150,7 @@ export function App() {
   }, []);
   const runCommand = (id: string) => {
     const go: Record<string, string> = {
-      'new-chat': '#/', 'new-image': '#/images', 'new-video': '#/video', 'new-discussion': '#/discussions', 'go-models': '#/models', 'go-stats': '#/stats',
+      'new-chat': '#/', 'new-image': '#/images', 'new-video': '#/video', 'new-discussion': '#/discussions', 'go-models': '#/models', 'go-stats': '#/stats', 'go-library': '#/library',
     };
     if (go[id]) return navigate(go[id]);
     if (id.startsWith('go-settings-')) {
@@ -177,7 +178,8 @@ export function App() {
     if (wasOpen.current && !overlayOpen) requestAnimationFrame(() => { if (lastFocus.current?.isConnected) lastFocus.current.focus(); });
     wasOpen.current = overlayOpen;
   }, [overlayOpen]);
-  const railActive: RailItem = route.page === 'settings' ? 'settings' : page.page === 'models' ? 'models' : page.page === 'stats' ? 'stats' : mode;
+  const railActive: RailItem = route.page === 'settings' ? 'settings' : page.page === 'models' ? 'models' : page.page === 'stats' ? 'stats'
+    : page.page === 'library' ? 'library' : mode;
   const shownTheme = resolvedTheme(appearance.theme, systemDark);
 
   return (
@@ -211,6 +213,7 @@ export function App() {
         )}
         {page.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} sort={librarySort} onSort={changeLibrarySort} />}
         {page.page === 'stats' && <Stats />}
+        {page.page === 'library' && <Library />}
         </div>
         {route.page === 'settings' && (
           <Settings models={models} tab={route.tab} section={route.section} onChanged={refreshSettings} onClose={closeSettings}

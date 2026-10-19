@@ -9,6 +9,7 @@ describe('parseHash', () => {
     expect(parseHash('#/models')).toEqual({ page: 'models' });
     expect(parseHash('#/settings')).toEqual({ page: 'settings', tab: 'general', section: null });
     expect(parseHash('#/stats')).toEqual({ page: 'stats' });
+    expect(parseHash('#/library')).toEqual({ page: 'library' });
     expect(parseHash('#/garbage')).toEqual({ page: 'chat', chatId: null });
   });
 
@@ -62,7 +63,7 @@ describe('threadHref', () => {
 
 describe('routeHash', () => {
   it('round-trips through parseHash', () => {
-    for (const h of ['#/', '#/chat/a1', '#/images', '#/images/i1', '#/video/v1', '#/discussions', '#/discussions/d1', '#/models', '#/stats', '#/settings/limits', '#/settings/general/key']) {
+    for (const h of ['#/', '#/chat/a1', '#/images', '#/images/i1', '#/video/v1', '#/discussions', '#/discussions/d1', '#/models', '#/stats', '#/library', '#/settings/limits', '#/settings/general/key']) {
       expect(routeHash(parseHash(h))).toBe(h);
     }
   });
