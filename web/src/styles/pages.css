@@ -187,3 +187,11 @@ button.chip.on { background: var(--accent-fill); color: var(--on-accent); border
 :root[data-style='vivid'] .turn.host .bubble { background: color-mix(in srgb, var(--accent) 9%, var(--bubble)); border-color: color-mix(in srgb, var(--accent) 22%, var(--border)); }
 .participant-row { border-radius: var(--radius); }
 .handoff-tag { border-radius: 6px; }
+
+/* Stats: tiles tilt; chart chrome is neutral; series colors are unchanged. */
+.stat-tile { border-radius: var(--radius); padding: 14px 16px; }
+.stat-value { font-family: var(--font-mono); font-size: 24px; letter-spacing: -0.02em; }
+.panel, .stat-model { border-radius: var(--radius); }
+.stat-tiles { gap: 12px; }
+.chart { border-bottom-color: var(--border); }
+.heat-cell { background: var(--surface-2); }

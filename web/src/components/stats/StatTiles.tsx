@@ -1,5 +1,6 @@
 import type { StatsRange, StatsTiles } from '../../../../shared/types';
 import { formatCost } from '../../lib/format';
+import { TiltCard } from '../TiltCard';
 import { compactNumber, formatChange, formatPercent, formatSeconds } from '../../lib/stats';
 
 const PERIOD: Record<StatsRange, string> = { all: '', year: 'previous 365 days', month: 'previous 30 days', week: 'previous 7 days', today: 'yesterday so far' };
@@ -8,11 +9,11 @@ const money = (usd: number) => (usd === 0 ? '$0.00' : formatCost(usd));
 
 function Tile({ label, value, sub }: { label: string; value: string; sub?: string | null }) {
   return (
-    <div className="stat-tile">
+    <TiltCard className="stat-tile" max={10}>
       <div className="stat-label">{label}</div>
       <div className="stat-value" title={value}>{value}</div>
       {sub && <div className="stat-sub">{sub}</div>}
-    </div>
+    </TiltCard>
   );
 }
 
