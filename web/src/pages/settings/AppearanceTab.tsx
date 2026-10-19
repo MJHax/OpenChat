@@ -1,6 +1,6 @@
 import { Check } from 'lucide-react';
 import type { Accent, ColorStyle, Theme } from '../../../../shared/types';
-import type { Appearance } from '../../lib/appearance';
+import { effectiveStyle, type Appearance } from '../../lib/appearance';
 
 export interface AppearanceTabProps {
   appearance: Appearance;
@@ -19,6 +19,7 @@ const STYLES: { id: ColorStyle; label: string; note: string }[] = [
 /** Theme, accent color, color style and motion. Every choice applies at once. */
 export function AppearanceTab({ appearance, onChange }: AppearanceTabProps) {
   const rainbow = appearance.accent === 'rainbow';
+  const shownStyle = effectiveStyle(appearance); // Rainbow renders vivid whatever is stored
   return (
     <div className="appearance">
       <section>
@@ -54,8 +55,8 @@ export function AppearanceTab({ appearance, onChange }: AppearanceTabProps) {
         <p className="hint">How much the accent shows up. Rainbow is always vivid.</p>
         <div className={`style-cards${rainbow ? ' locked' : ''}`} role="radiogroup" aria-label="Color style" aria-disabled={rainbow}>
           {STYLES.map((s) => (
-            <button key={s.id} role="radio" aria-checked={appearance.colorStyle === s.id} disabled={rainbow}
-              className={`choice-card${appearance.colorStyle === s.id ? ' on' : ''}`} onClick={() => onChange({ colorStyle: s.id })}>
+            <button key={s.id} role="radio" aria-checked={shownStyle === s.id} disabled={rainbow}
+              className={`choice-card${shownStyle === s.id ? ' on' : ''}`} onClick={() => onChange({ colorStyle: s.id })}>
               <span className={`style-prev ${s.id}`}>
                 {s.id === 'vivid' && <span className="sp-glow" />}
                 <span className="sp-btn" /><span className="sp-line" /><span className="sp-line short" />
