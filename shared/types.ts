@@ -502,6 +502,35 @@ export interface MediaStatsResponse {
 }
 
 /** Things OpenChat made that a chat can attach: images from image threads, and each chat's latest generated files. */
+export type LibraryFileType = 'image' | 'video' | 'doc' | 'code';
+
+/** One chat a Library file is in; `at` is when it appeared there. */
+export interface LibraryChatRef { chatId: string; kind: ThreadKind; title: string; at: number }
+
+/** Where a Library file's bytes come from: a stored attachment, a file block a reply wrote, or a finished clip. */
+export type LibrarySource =
+  | { type: 'attachment'; attachmentId: string; kind: AttachmentKind }
+  | { type: 'chatFile'; messageId: string; name: string }
+  | { type: 'video'; messageId: string };
+
+/** One file in the Library; copies with the same contents are one item listing every chat they are in. */
+export interface LibraryItem {
+  /** Unique and stable: `att:<id>`, `file:<messageId>/<name>` or `video:<messageId>`. */
+  key: string;
+  type: LibraryFileType;
+  name: string;
+  /** Bytes; for videos, the size of the .mp4. */
+  size: number;
+  /** The newest `at` among `chats`. */
+  createdAt: number;
+  /** The newest copy (for generated files, the copy that was made). */
+  source: LibrarySource;
+  /** Each chat once, newest first; never empty. */
+  chats: LibraryChatRef[];
+}
+
+export interface LibraryResponse { uploads: LibraryItem[]; generated: LibraryItem[] }
+
 export interface GeneratedItems {
   images: { attachmentId: string; threadId: string; threadTitle: string; createdAt: number }[];
   files: { chatId: string; chatTitle: string; messageId: string; name: string; size: number }[];
