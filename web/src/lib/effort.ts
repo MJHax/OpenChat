@@ -26,3 +26,13 @@ export function saveEffort(chatId: string | null, effort: Effort | null): void {
 }
 
 export const EFFORT_TOOLTIP = 'How long the model thinks before answering. Higher effort can give better answers to hard questions, but uses more tokens and costs more.';
+
+/** The effort picker's name for a level; null is the model's own default. */
+export const effortLabel = (effort: Effort | null): string => (effort ? `${effort[0].toUpperCase()}${effort.slice(1)}` : 'Default');
+
+export const EFFORT_HINTS: Record<Effort | 'default', string> = {
+  default: "The model's usual setting",
+  low: 'Quick answers, fewest tokens',
+  medium: 'A balance of speed and depth',
+  high: 'Thinks longest; best for hard problems',
+};

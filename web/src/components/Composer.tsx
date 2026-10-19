@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { EFFORTS, type Attachment, type Effort, type LibraryModel } from '../../../shared/types';
 import { sendBlockReason, skippedImagesNotice } from '../lib/attachments';
 import type { CompareState } from '../lib/compare';
-import { ArrowUp, Brain, Columns2, Globe, Square } from 'lucide-react';
+import { ArrowUp, Brain, Check, ChevronDown, Columns2, Globe, Square } from 'lucide-react';
 import { ModelPicker } from './ModelPicker';
+import { ChipPopover } from './ChipPopover';
 import { SEARCH_TOOLTIP } from '../lib/search';
-import { EFFORT_TOOLTIP } from '../lib/effort';
+import { EFFORT_HINTS, EFFORT_TOOLTIP, effortLabel } from '../lib/effort';
 import { AttachmentChips } from './AttachmentChips';
 import { AttachButton, useFileDrop } from './AttachButton';
 import { useAttachmentDraft } from './useAttachmentDraft';
@@ -118,13 +119,21 @@ export function Composer({
             )}
             <ModelPicker models={models} modelId={modelId} onModelChange={onModelChange} compare={compare} onCompareChange={onCompareChange} />
             {replyModels.some((m) => m.supportsReasoning) && (
-              <label className={`chip ghost effort-chip${effort ? ' on' : ''}`} title={EFFORT_TOOLTIP}>
-                <Brain size={13} />
-                <select value={effort ?? ''} aria-label="Reasoning effort" onChange={(e) => onEffortChange((e.target.value || null) as Effort | null)}>
-                  <option value="">Default</option>
-                  {EFFORTS.map((x) => <option key={x} value={x}>{`${x[0].toUpperCase()}${x.slice(1)}`}</option>)}
-                </select>
-              </label>
+              <ChipPopover title={EFFORT_TOOLTIP} className={`ghost effort-chip${effort ? ' on' : ''}`} panelClassName="effort-panel"
+                icon={<Brain size={13} />} label={<>{effortLabel(effort)}<ChevronDown size={12} /></>}>
+                {(close) => (
+                  <>
+                    <div className="pop-label">Reasoning effort</div>
+                    {[null, ...EFFORTS].map((x) => (
+                      <button key={x ?? 'default'} className={`pop-item${x === effort ? ' sel' : ''}`} aria-current={x === effort ? 'true' : undefined}
+                        onClick={() => { onEffortChange(x); close(); }}>
+                        <span>{effortLabel(x)}<small>{EFFORT_HINTS[x ?? 'default']}</small></span>
+                        {x === effort && <Check size={15} className="check" />}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </ChipPopover>
             )}
           </div>
           {streaming ? (
