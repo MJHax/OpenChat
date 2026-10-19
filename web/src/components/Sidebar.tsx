@@ -3,7 +3,7 @@ import type { ChatSummary, SearchHit, ThreadKind } from '../../../shared/types';
 import { api, attachmentUrl } from '../api';
 import { Segmented } from './stats/Segmented';
 import { groupByDate, splitSnippet } from '../lib/format';
-import { navigate } from '../lib/route';
+import { navigate, threadHome, threadHref } from '../lib/route';
 import { forgetChatPrefs } from '../lib/chatPrefs';
 import { Clapperboard, PanelLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 
@@ -20,8 +20,6 @@ const MODES: { id: ThreadKind; label: string }[] = [
   { id: 'chat', label: 'Chats' }, { id: 'image', label: 'Images' }, { id: 'video', label: 'Video' }, { id: 'discussion', label: 'Discussions' },
 ];
 const NEW_LABEL: Record<ThreadKind, string> = { chat: 'New chat', image: 'New image', video: 'New video', discussion: 'New discussion' };
-const HOME: Record<ThreadKind, string> = { chat: '#/', image: '#/images', video: '#/video', discussion: '#/discussions' };
-export const threadHref = (kind: ThreadKind, id: string) => (kind === 'chat' ? `#/chat/${id}` : `${HOME[kind]}/${id}`);
 
 export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -61,7 +59,7 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
   async function remove(chat: ChatSummary) {
     if (!window.confirm(`Delete "${chat.title}"? This cannot be undone.`)) return;
     await api.deleteChat(chat.id).then(() => forgetChatPrefs([chat.id])).catch(() => {});
-    if (chat.id === activeChatId) navigate(HOME[mode]);
+    if (chat.id === activeChatId) navigate(threadHome(mode));
     onChatsChanged();
   }
 
@@ -71,7 +69,7 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
     return (
       <aside className="sidebar collapsed">
         <button className="icon" onClick={() => setCollapsed(false)} aria-label="Expand sidebar" title="Expand sidebar"><PanelLeft size={16} /></button>
-        <button className="icon" onClick={() => navigate(HOME[mode])} aria-label={newLabel} title={newLabel}><Plus size={16} /></button>
+        <button className="icon" onClick={() => navigate(threadHome(mode))} aria-label={newLabel} title={newLabel}><Plus size={16} /></button>
       </aside>
     );
   }
@@ -82,8 +80,8 @@ export function Sidebar({ mode, chats, activeChatId, onChatsChanged, onOpenChat 
         <span className="brand">OpenChat</span>
         <button className="icon" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar" title="Collapse sidebar"><PanelLeft size={16} /></button>
       </div>
-      <Segmented label="Mode" options={MODES} value={mode} onChange={(m) => navigate(HOME[m])} />
-      <button className="new-chat" onClick={() => navigate(HOME[mode])}><Plus size={16} /> {newLabel}</button>
+      <Segmented label="Mode" options={MODES} value={mode} onChange={(m) => navigate(threadHome(m))} />
+      <button className="new-chat" onClick={() => navigate(threadHome(mode))}><Plus size={16} /> {newLabel}</button>
       <input className="search" type="search" placeholder="Search" value={query} onChange={(e) => setQuery(e.target.value)} />
 
       <nav className="chat-list">

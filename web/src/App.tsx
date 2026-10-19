@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatSummary, LibraryModel, SettingsView, ThreadKind } from '../../shared/types';
 import { api } from './api';
-import { navigate, useRoute } from './lib/route';
-import { Sidebar, threadHref } from './components/Sidebar';
+import { navigate, threadHref, useRoute } from './lib/route';
+import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { ImageThread } from './pages/ImageThread';
 import { VideoThread } from './pages/VideoThread';
