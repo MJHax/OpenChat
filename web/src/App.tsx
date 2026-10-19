@@ -12,6 +12,7 @@ import { loadLibrarySort, saveLibrarySort, sortLibrary, type LibrarySort } from 
 import { ModelLibrary } from './pages/ModelLibrary';
 import { Settings } from './pages/Settings';
 import { Stats } from './pages/Stats';
+import { useAppearance } from './components/useAppearance';
 
 export function App() {
   const route = useRoute();
@@ -73,9 +74,7 @@ export function App() {
     return () => clearInterval(timer);
   }, [anyBusy, refreshChats]);
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = settings?.theme ?? 'system';
-  }, [settings?.theme]);
+  const { appearance, setAppearance, systemDark } = useAppearance(settings);
 
   const openChat = useCallback((chatId: string, kind: ThreadKind) => {
     navigate(threadHref(kind, chatId));

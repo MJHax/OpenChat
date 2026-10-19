@@ -4,6 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OpenChat</title>
+    <script>
+      // Paint the saved look before anything renders. Mirrors htmlAttrs in web/src/lib/appearance.ts.
+      (function () {
+        var a = {};
+        try { a = JSON.parse(localStorage.getItem('openchat.appearance') || '{}') || {}; } catch (e) {}
+        var mm = function (q) { return window.matchMedia && window.matchMedia(q).matches; };
+        var theme = a.theme === 'light' || a.theme === 'dark' ? a.theme : (mm('(prefers-color-scheme: dark)') ? 'dark' : 'light');
+        var accent = ['blue', 'orange', 'green', 'rainbow'].indexOf(a.accent) >= 0 ? a.accent : 'blue';
+        var style = accent === 'rainbow' ? 'vivid' : (a.colorStyle === 'flat' ? 'flat' : 'vivid');
+        var reduce = mm('(prefers-reduced-motion: reduce)');
+        var d = document.documentElement.dataset;
+        d.theme = theme;
+        d.accent = accent;
+        d.style = style;
+        d.motion = a.animations !== false && !reduce ? 'on' : 'off';
+        d.tilt = a.tiltCards !== false && !reduce ? 'on' : 'off';
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

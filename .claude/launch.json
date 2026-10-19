@@ -4,8 +4,24 @@
     {
       "name": "openchat",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 5173
+    },
+    {
+      "name": "openchat-verify",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 5173,
+      "env": {
+        "OPENCHAT_PORT": "3100",
+        "OPENCHAT_DB": ".superpowers/verify/openchat.db"
+      }
     }
   ]
 }
