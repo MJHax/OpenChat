@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-accent="blue" data-style="vivid">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenChat Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --radius: 14px;
+}
+html[data-theme='dark'] {
+  --bg: #0a0a0a; --panel: #0f0f0f; --surface: #151515; --surface-2: #1c1c1c;
+  --border: #242424; --border-strong: #333; --text: #fafafa; --muted: #8f8f8f; --faint: #5a5a5a;
+  --bubble: #1c1c1c; --glare: #ffffff; --shadow: 0 20px 50px -20px rgba(0,0,0,.8);
+  --code: #111;
+}
+html[data-theme='light'] {
+  --bg: #ffffff; --panel: #fafafa; --surface: #ffffff; --surface-2: #f4f4f5;
+  --border: #e7e7e7; --border-strong: #d4d4d4; --text: #0a0a0a; --muted: #6b6b6b; --faint: #a3a3a3;
+  --bubble: #f4f4f5; --glare: #000000; --shadow: 0 20px 50px -24px rgba(0,0,0,.18);
+  --code: #0f0f0f;
+}
+html[data-accent='blue']   { --accent: #3b82f6; --accent-fill: #3b82f6; --on-accent: #fff; }
+html[data-accent='orange'] { --accent: #f97316; --accent-fill: #f97316; --on-accent: #fff; }
+html[data-accent='green']  { --accent: #22c55e; --accent-fill: #22c55e; --on-accent: #04130a; }
+html[data-theme='light'][data-accent='green'] { --accent: #16a34a; --accent-fill: #16a34a; --on-accent: #fff; }
+html[data-accent='rainbow'] {
+  --accent: #8b5cf6;
+  --accent-fill: linear-gradient(110deg, #ff5f6d, #ffc371, #47e891, #3bb2ff, #a066ff, #ff5f6d);
+  --on-accent: #fff;
+}
+/* Vivid: each solid accent becomes a slow duotone drift plus an ambient glow (rainbow is always vivid) */
+html[data-style='vivid'][data-accent='blue']   { --accent-fill: linear-gradient(110deg, #2563eb, #3b82f6, #22d3ee, #6366f1, #2563eb); --glow-a: #3b82f6; --glow-b: #22d3ee; }
+html[data-style='vivid'][data-accent='orange'] { --accent-fill: linear-gradient(110deg, #ea580c, #f97316, #f59e0b, #f43f5e, #ea580c); --glow-a: #f97316; --glow-b: #f43f5e; }
+html[data-style='vivid'][data-accent='green']  { --accent-fill: linear-gradient(110deg, #16a34a, #22c55e, #a3e635, #14b8a6, #16a34a); --glow-a: #22c55e; --glow-b: #14b8a6; }
+html[data-accent='rainbow'] { --glow-a: #a066ff; --glow-b: #3bb2ff; }
+html[data-accent='rainbow'] .fill, html[data-style='vivid'] .fill { background-size: 300% 100%; animation: drift 8s linear infinite; }
+html[data-style='vivid'] .greet h2 em { background-size: 300% 100%; animation: drift 8s linear infinite; }
+/* ambient aurora behind the main area */
+.main::before { content: ''; position: absolute; inset: -20% 0 auto; height: 70%; pointer-events: none; opacity: 0; transition: opacity .6s;
+  background: radial-gradient(40% 50% at 35% 30%, var(--glow-a), transparent 70%), radial-gradient(35% 45% at 70% 25%, var(--glow-b), transparent 70%);
+  filter: blur(40px); animation: aurora 14s ease-in-out infinite alternate; }
+html[data-style='vivid'] .main::before, html[data-accent='rainbow'] .main::before { opacity: .13; }
+html[data-theme='light'][data-style='vivid'] .main::before, html[data-theme='light'][data-accent='rainbow'] .main::before { opacity: .09; }
+@keyframes aurora { to { transform: translateX(6%) scale(1.08); } }
+.main > .screen { position: relative; }
+html[data-style="vivid"], html[data-accent="rainbow"] { --glare-c: color-mix(in srgb, var(--accent) 65%, var(--glare)); }
+/* accent-tinted details */
+html[data-style='vivid'] .sugg .ico, html[data-accent='rainbow'] .sugg .ico { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
+html[data-style='vivid'] .tilt:hover, html[data-accent='rainbow'] .tilt:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); box-shadow: 0 12px 30px -14px color-mix(in srgb, var(--accent) 50%, transparent); }
+html[data-style='vivid'] .rail-ind::before, html[data-accent='rainbow'] .rail-ind::before { box-shadow: 0 0 10px var(--accent); }
+html[data-style='vivid'] .send, html[data-accent='rainbow'] .send { box-shadow: 0 4px 16px -4px var(--accent); }
+html[data-style='vivid'] .m.user .bubble { background: color-mix(in srgb, var(--accent) 9%, var(--bubble)); border-color: color-mix(in srgb, var(--accent) 22%, var(--border)); }
+@keyframes drift { to { background-position: 300% 0; } }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 14px/1.55 'Geist', system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+  transition: background .4s var(--ease-out), color .4s var(--ease-out);
+}
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+.fill { background: var(--accent-fill); color: var(--on-accent); }
+.press { transition: transform .25s var(--ease-spring), background .2s, border-color .2s, color .2s; }
+.press:active { transform: scale(.95); }
+
+/* ---------- Demo toolbar (not part of the app) ---------- */
+.demo {
+  position: sticky; top: 0; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 18px;
+  padding: 10px 18px; background: color-mix(in srgb, var(--bg) 80%, transparent);
+  backdrop-filter: blur(12px); border-bottom: 1px solid var(--border);
+}
+.demo .label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
+.demo-group { display: flex; align-items: center; gap: 6px; }
+.demo-title { font-weight: 600; margin-right: auto; }
+.demo-title span { color: var(--muted); font-weight: 400; }
+
+.seg { position: relative; display: inline-flex; padding: 3px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
+.seg button { position: relative; z-index: 1; padding: 5px 12px; border-radius: 7px; color: var(--muted); font-size: 13px; transition: color .25s; }
+.seg button.on { color: var(--text); }
+.seg .pill { position: absolute; top: 3px; bottom: 3px; border-radius: 7px; background: var(--surface); border: 1px solid var(--border-strong);
+  box-shadow: 0 1px 2px rgba(0,0,0,.15); transition: left .45s var(--ease-spring), width .45s var(--ease-spring); }
+
+.swatch { width: 26px; height: 26px; border-radius: 50%; position: relative; outline: 2px solid transparent; outline-offset: 2px; transition: outline-color .2s, transform .25s var(--ease-spring); }
+.swatch:hover { transform: scale(1.1); }
+.swatch.on { outline-color: var(--text); }
+.sw-blue { background: #3b82f6; } .sw-orange { background: #f97316; } .sw-green { background: #22c55e; }
+.sw-rainbow { background: conic-gradient(#ff5f6d, #ffc371, #47e891, #3bb2ff, #a066ff, #ff5f6d); }
+
+/* ---------- App shell ---------- */
+.stage { padding: 22px; display: flex; justify-content: center; }
+.app {
+  width: min(1240px, 100%); height: 760px; display: grid; grid-template-columns: 60px 260px 1fr;
+  border: 1px solid var(--border); border-radius: 18px; overflow: hidden; background: var(--bg); box-shadow: var(--shadow); position: relative;
+}
+.rail { background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding: 14px 0; gap: 4px; position: relative; }
+.logo { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; margin-bottom: 14px; font-weight: 700; font-size: 15px; }
+.rail-btn { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; color: var(--muted); position: relative; z-index: 1; }
+.rail-btn:hover { color: var(--text); background: var(--surface-2); }
+.rail-btn.on { color: var(--text); }
+.rail-btn.on svg { color: var(--accent); }
+.rail-ind { position: absolute; left: 10px; width: 40px; height: 40px; border-radius: 11px; background: var(--surface-2); border: 1px solid var(--border);
+  transition: top .5s var(--ease-spring); }
+.rail-ind::before { content: ''; position: absolute; left: -11px; top: 11px; width: 3px; height: 18px; border-radius: 3px; background: var(--accent-fill); }
+.rail-sep { width: 24px; height: 1px; background: var(--border); margin: 8px 0; }
+.rail-spacer { flex: 1; }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: grid; place-items: center; font-size: 12px; font-weight: 600; margin-top: 6px; }
+.tip { position: absolute; left: 50px; white-space: nowrap; background: var(--text); color: var(--bg); font-size: 12px; padding: 3px 8px; border-radius: 6px;
+  opacity: 0; transform: translateX(-4px); pointer-events: none; transition: .2s var(--ease-out); }
+.rail-btn:hover .tip { opacity: 1; transform: none; }
+
+.threads { background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-width: 0; }
+.threads-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 14px 10px; }
+.threads-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.icon-btn { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--muted); border: 1px solid var(--border); background: var(--surface); }
+.icon-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.search { margin: 0 14px 8px; display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface); color: var(--faint); font-size: 13px; }
+kbd { margin-left: auto; font: 11px 'Geist Mono', monospace; padding: 1px 5px; border-radius: 5px; border: 1px solid var(--border); color: var(--muted); }
+.list { overflow-y: auto; padding: 0 8px 12px; flex: 1; }
+.group { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); padding: 14px 8px 6px; }
+.item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; transition: background .15s, color .15s, transform .25s var(--ease-out); }
+.item:hover { background: var(--surface-2); color: var(--text); transform: translateX(2px); }
+.item.on { background: var(--surface-2); color: var(--text); }
+.item.on::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px; border-radius: 2px; background: var(--accent-fill); }
+.item .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-fill); flex-shrink: 0; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+.usage { margin: 8px 14px 14px; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); }
+.usage-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.bar { height: 5px; border-radius: 5px; background: var(--surface-2); margin-top: 8px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 38%; border-radius: 5px; }
+
+.main { display: flex; flex-direction: column; min-width: 0; position: relative; }
+.screen { display: none; flex: 1; min-height: 0; flex-direction: column; }
+.screen.on { display: flex; animation: rise .5s var(--ease-out); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+.topbar { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--border); min-height: 54px; }
+.topbar h1 { font-size: 14px; font-weight: 500; margin: 0; margin-right: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); font-size: 12.5px; color: var(--text); white-space: nowrap; }
+.chip:hover { border-color: var(--border-strong); }
+.chip .mdot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-fill); }
+.chip.ghost { color: var(--muted); }
+
+/* Home */
+.home { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; gap: 26px; }
+.greet { text-align: center; }
+.greet h2 { font-size: 34px; font-weight: 600; letter-spacing: -.03em; margin: 0; }
+.greet h2 em { font-style: normal; background: var(--accent-fill); -webkit-background-clip: text; background-clip: text; color: transparent; }
+html[data-accent='rainbow'] .greet h2 em { background-size: 300% 100%; animation: drift 8s linear infinite; }
+.greet p { color: var(--muted); margin: 6px 0 0; }
+
+.composer { width: min(720px, 100%); border-radius: 20px; border: 1px solid var(--border); background: var(--surface); padding: 14px 14px 10px; position: relative;
+  transition: border-color .3s, box-shadow .3s; }
+.composer:focus-within { border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent), 0 10px 40px -10px color-mix(in srgb, var(--accent) 35%, transparent); }
+.composer textarea { width: 100%; border: 0; outline: 0; resize: none; background: none; color: var(--text); font: inherit; font-size: 15px; min-height: 48px; padding: 2px 4px; }
+.composer textarea::placeholder { color: var(--faint); }
+.comp-row { display: flex; align-items: center; gap: 6px; }
+.comp-row .grow { flex: 1; }
+.send { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; }
+.send:hover { filter: brightness(1.1); }
+
+.picker-wrap { position: relative; }
+.popover { position: absolute; bottom: calc(100% + 8px); left: 0; width: 280px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface);
+  box-shadow: var(--shadow); padding: 6px; transform-origin: bottom left; transform: scale(.92) translateY(6px); opacity: 0; pointer-events: none;
+  transition: transform .35s var(--ease-spring), opacity .2s; z-index: 10; }
+.popover.open { transform: none; opacity: 1; pointer-events: auto; }
+.popover.down { bottom: auto; top: calc(100% + 8px); transform-origin: top right; left: auto; right: 0; }
+.pop-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; width: 100%; text-align: left; }
+.pop-item:hover { background: var(--surface-2); }
+.pop-item small { display: block; color: var(--muted); font-size: 12px; }
+.pop-item .check { margin-left: auto; color: var(--accent); opacity: 0; }
+.pop-item.sel .check { opacity: 1; }
+.pop-body { padding: 4px 10px 8px; display: flex; flex-direction: column; gap: 8px; }
+.kv { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+.kv b { color: var(--text); font-weight: 500; font-family: 'Geist Mono', monospace; font-size: 12px; }
+.pop-note { margin: 2px 0 0; font-size: 12px; color: var(--muted); line-height: 1.45; }
+.pop-cta { padding: 7px 10px; border-radius: 9px; font-size: 13px; font-weight: 500; }
+.big-num { font-size: 26px; font-weight: 600; letter-spacing: -.02em; font-family: 'Geist Mono', monospace; }
+.ring { width: 13px; height: 13px; border-radius: 50%; background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--border-strong) 0); -webkit-mask: radial-gradient(circle, transparent 3.5px, #000 4px); mask: radial-gradient(circle, transparent 3.5px, #000 4px); }
+.pop-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); padding: 8px 10px 4px; }
+
+.suggest { width: min(720px, 100%); display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.tilt { position: relative; overflow: hidden; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); will-change: transform; transform-style: preserve-3d; cursor: pointer; }
+.tilt .glare { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s; }
+.tilt:hover .glare { opacity: .12; }
+html[data-theme='light'] .tilt:hover .glare { opacity: .06; }
+.tilt:hover { border-color: var(--border-strong); }
+.sugg { padding: 16px; min-height: 118px; display: flex; flex-direction: column; gap: 10px; }
+.sugg .ico { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: var(--surface-2); color: var(--accent); border: 1px solid var(--border); }
+.sugg b { font-weight: 500; }
+.sugg span { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+
+/* Chat */
+.msgs { flex: 1; overflow-y: auto; }
+.msgs-inner { max-width: 740px; margin: 0 auto; padding: 28px 22px; display: flex; flex-direction: column; gap: 26px; }
+.m { animation: rise .55s var(--ease-out) both; }
+.m:nth-child(2) { animation-delay: .08s; } .m:nth-child(3) { animation-delay: .16s; } .m:nth-child(4) { animation-delay: .24s; }
+.m.user { align-self: flex-end; max-width: 80%; }
+.m.user .bubble { background: var(--bubble); border: 1px solid var(--border); padding: 10px 14px; border-radius: 18px 18px 6px 18px; }
+.m.ai { display: grid; grid-template-columns: 26px 1fr; gap: 12px; }
+.ai-mark { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+.ai-name { font-size: 12.5px; color: var(--muted); margin-bottom: 4px; display: flex; gap: 8px; align-items: center; }
+.ai-body p { margin: 0 0 10px; }
+.ai-body code { font-family: 'Geist Mono', monospace; font-size: 12.5px; background: var(--surface-2); border: 1px solid var(--border); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code); color: #e5e5e5; border: 1px solid var(--border); border-radius: 12px; padding: 0; margin: 4px 0 10px; overflow: hidden; font: 12.5px/1.6 'Geist Mono', monospace; }
+pre .pre-head { display: flex; justify-content: space-between; padding: 7px 12px; border-bottom: 1px solid #222; color: #888; font-size: 11.5px; }
+pre code { display: block; padding: 12px 14px; background: none !important; border: 0 !important; }
+.k { color: #c792ea; } .s { color: #c3e88d; } .f { color: #82aaff; } .c { color: #616161; }
+.actions { display: flex; gap: 2px; margin-top: 4px; opacity: 0; transform: translateY(-3px); transition: .25s var(--ease-out); }
+.m.ai:hover .actions { opacity: 1; transform: none; }
+.act { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--muted); }
+.act:hover { background: var(--surface-2); color: var(--text); }
+.thinking { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px;
+  background: linear-gradient(90deg, var(--faint) 0%, var(--faint) 40%, var(--text) 50%, var(--faint) 60%, var(--faint) 100%);
+  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 2.2s linear infinite; }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+.cursor { display: inline-block; width: 8px; height: 16px; border-radius: 2px; vertical-align: -3px; margin-left: 2px; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.dock { padding: 10px 22px 18px; display: flex; justify-content: center; }
+
+/* Library */
+.lib { padding: 20px 22px; overflow-y: auto; flex: 1; }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.filters .chip.on { border-color: transparent; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.model { padding: 18px; display: flex; flex-direction: column; gap: 10px; min-height: 170px; }
+.model-top { display: flex; align-items: center; gap: 10px; }
+.prov { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--border); font-weight: 600; font-size: 13px; }
+.model h3 { margin: 0; font-size: 14.5px; font-weight: 600; }
+.model .sub { color: var(--muted); font-size: 12px; }
+.tags { display: flex; gap: 5px; flex-wrap: wrap; }
+.tag { font-size: 11px; padding: 2px 7px; border-radius: 6px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+.model-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); }
+.model-foot b { color: var(--text); font-weight: 500; font-family: 'Geist Mono', monospace; }
+.added { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-weight: 500; }
+.add-btn { padding: 4px 10px; border-radius: 8px; border: 1px solid var(--border); font-size: 12px; }
+.add-btn:hover { border-color: var(--border-strong); }
+
+/* Settings overlay */
+.overlay { position: absolute; inset: 0; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; z-index: 20; }
+.overlay.on { display: flex; animation: fade .3s var(--ease-out); }
+@keyframes fade { from { opacity: 0; } }
+.sheet { width: min(820px, 92%); height: 560px; border-radius: 18px; border: 1px solid var(--border); background: var(--panel); box-shadow: var(--shadow); display: grid; grid-template-columns: 200px 1fr; overflow: hidden;
+  animation: pop .45s var(--ease-spring); }
+@keyframes pop { from { transform: scale(.96) translateY(10px); opacity: 0; } }
+.tabs { border-right: 1px solid var(--border); padding: 16px 10px; display: flex; flex-direction: column; gap: 2px; }
+.tabs h3 { margin: 0 8px 12px; font-size: 15px; }
+.tab { text-align: left; padding: 7px 10px; border-radius: 8px; color: var(--muted); display: flex; gap: 9px; align-items: center; }
+.tab:hover { color: var(--text); background: var(--surface-2); }
+.tab.on { color: var(--text); background: var(--surface-2); }
+.pane { padding: 22px 26px; overflow-y: auto; position: relative; }
+.pane h4 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+.pane .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+.sec { margin-bottom: 26px; }
+.close { position: absolute; top: 14px; right: 14px; }
+.themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.theme-card { border: 1px solid var(--border); border-radius: 12px; padding: 8px; text-align: left; background: var(--surface); }
+.theme-card.on { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+.mini { height: 70px; border-radius: 8px; display: grid; grid-template-columns: 22% 1fr; overflow: hidden; border: 1px solid rgba(128,128,128,.25); margin-bottom: 8px; }
+.mini.l { background: #fff; } .mini.l i { background: #f4f4f5; }
+.mini.d { background: #0a0a0a; } .mini.d i { background: #151515; }
+.mini.s { background: linear-gradient(110deg, #fff 50%, #0a0a0a 50%); } .mini.s i { background: transparent; }
+.mini b { display: block; margin: 12px 10px 0; height: 8px; border-radius: 4px; width: 60%; background: var(--accent-fill); }
+.theme-card span { font-size: 13px; }
+.accents { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.accent-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px 10px 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; background: var(--surface); font-size: 13px; }
+.accent-card .big { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+.accent-card.on { border-color: var(--border-strong); background: var(--surface-2); }
+.accent-card .big svg { opacity: 0; transform: scale(.4); transition: .35s var(--ease-spring); }
+.accent-card.on .big svg { opacity: 1; transform: none; }
+html[data-accent='blue']   { --vf: linear-gradient(110deg, #2563eb, #3b82f6, #22d3ee, #6366f1, #2563eb); }
+html[data-accent='orange'] { --vf: linear-gradient(110deg, #ea580c, #f97316, #f59e0b, #f43f5e, #ea580c); }
+html[data-accent='green']  { --vf: linear-gradient(110deg, #16a34a, #22c55e, #a3e635, #14b8a6, #16a34a); }
+html[data-accent='rainbow'] { --vf: linear-gradient(110deg, #ff5f6d, #ffc371, #47e891, #3bb2ff, #a066ff, #ff5f6d); }
+.styles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; transition: opacity .3s; }
+html[data-accent='rainbow'] .styles { opacity: .45; pointer-events: none; }
+.style-card { display: flex; flex-direction: column; gap: 8px; text-align: left; border: 1px solid var(--border); border-radius: 12px; padding: 8px 8px 10px; background: var(--surface); }
+.style-card.on { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+.style-card b { display: block; font-weight: 500; font-size: 13px; padding: 0 4px; }
+.style-card small { display: block; color: var(--muted); font-size: 12px; padding: 0 4px; }
+.style-prev { position: relative; height: 74px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); overflow: hidden; padding: 14px; display: flex; flex-direction: column; gap: 7px; }
+.style-prev .sp-btn { width: 42px; height: 14px; border-radius: 5px; position: relative; }
+.style-prev .sp-line { height: 6px; width: 75%; border-radius: 3px; background: var(--surface-2); position: relative; }
+.style-prev .sp-line.short { width: 45%; }
+.style-prev.flat .sp-btn { background: var(--accent); }
+.style-prev.vivid .sp-btn { background: var(--vf); background-size: 300% 100%; animation: drift 8s linear infinite; box-shadow: 0 3px 10px -2px var(--accent); }
+.style-prev .sp-glow { position: absolute; inset: -30% 10% auto; height: 90%; background: var(--vf); filter: blur(22px); opacity: .25; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-top: 1px solid var(--border); }
+.toggle-row:first-of-type { border-top: 0; }
+.toggle-row small { display: block; color: var(--muted); font-size: 12px; }
+.switch { width: 38px; height: 22px; border-radius: 999px; background: var(--border-strong); position: relative; transition: background .25s; flex-shrink: 0; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .4s var(--ease-spring); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.switch.on { background: var(--accent-fill); }
+.switch.on::after { transform: translateX(16px); }
+
+.note { max-width: 1240px; margin: 0 auto; padding: 0 22px 30px; color: var(--muted); font-size: 13px; }
+.note b { color: var(--text); font-weight: 500; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="demo">
+  <div class="demo-title">OpenChat redesign <span>· interactive mockup</span></div>
+  <div class="demo-group"><span class="label">Screen</span>
+    <div class="seg" id="screenSeg">
+      <span class="pill"></span>
+      <button data-screen="home" class="on">Home</button>
+      <button data-screen="chat">Chat</button>
+      <button data-screen="library">Library</button>
+      <button data-screen="settings">Settings</button>
+    </div>
+  </div>
+  <div class="demo-group"><span class="label">Accent</span>
+    <button class="swatch sw-blue on" data-accent="blue" title="Blue"></button>
+    <button class="swatch sw-orange" data-accent="orange" title="Orange"></button>
+    <button class="swatch sw-green" data-accent="green" title="Green"></button>
+    <button class="swatch sw-rainbow" data-accent="rainbow" title="Rainbow"></button>
+  </div>
+  <div class="demo-group"><span class="label">Solid style</span>
+    <div class="seg" id="styleSeg">
+      <span class="pill"></span>
+      <button data-style="flat">Flat</button>
+      <button data-style="vivid" class="on">Vivid</button>
+    </div>
+  </div>
+  <div class="demo-group"><span class="label">Mode</span>
+    <div class="seg" id="themeSeg">
+      <span class="pill"></span>
+      <button data-theme="light">Light</button>
+      <button data-theme="dark" class="on">Dark</button>
+    </div>
+  </div>
+</div>
+
+<div class="stage">
+<div class="app">
+
+  <!-- Icon rail -->
+  <nav class="rail" id="rail">
+    <div class="logo fill">O</div>
+    <span class="rail-ind" id="railInd"></span>
+    <button class="rail-btn on press" data-nav="chat"><i data-i="chat"></i><span class="tip">Chats</span></button>
+    <button class="rail-btn press" data-nav="image"><i data-i="image"></i><span class="tip">Images</span></button>
+    <button class="rail-btn press" data-nav="video"><i data-i="video"></i><span class="tip">Video</span></button>
+    <button class="rail-btn press" data-nav="discuss"><i data-i="users"></i><span class="tip">Discussions</span></button>
+    <span class="rail-sep"></span>
+    <button class="rail-btn press" data-nav="library"><i data-i="box"></i><span class="tip">Model Library</span></button>
+    <button class="rail-btn press" data-nav="stats"><i data-i="chart"></i><span class="tip">Stats</span></button>
+    <span class="rail-spacer"></span>
+    <button class="rail-btn press" id="railTheme"><i data-i="moon"></i><span class="tip">Toggle light / dark</span></button>
+    <button class="rail-btn press" data-nav="settings"><i data-i="gear"></i><span class="tip">Settings</span></button>
+    <div class="avatar">C</div>
+  </nav>
+
+  <!-- Thread list -->
+  <aside class="threads">
+    <div class="threads-head"><h2>Chats</h2><button class="icon-btn press" title="New chat"><i data-i="plus"></i></button></div>
+    <div class="search"><i data-i="search" data-s="14"></i>Search or jump to…<kbd>Ctrl K</kbd></div>
+    <div class="list">
+      <div class="group">Today</div>
+      <div class="item on" data-goto="chat">Debounce hook for search box</div>
+      <div class="item"><span class="dot"></span>Compare Opus vs GPT on SQL</div>
+      <div class="item">Trip plan: Lisbon in March</div>
+      <div class="group">Yesterday</div>
+      <div class="item">Refactor SSE parser</div>
+      <div class="item">Cover letter draft</div>
+      <div class="item">Explain CRDTs simply</div>
+      <div class="group">Previous 7 days</div>
+      <div class="item">Vite build is slow</div>
+      <div class="item">Sourdough hydration math</div>
+      <div class="item">Regex for ISO dates</div>
+      <div class="item">Fantasy league names</div>
+    </div>
+    <div class="usage">
+      <div class="usage-row"><span>This month</span><span>$3.82 / $10</span></div>
+      <div class="bar"><i class="fill"></i></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- HOME -->
+    <section class="screen on" data-s="home">
+      <div class="topbar"><h1></h1><span class="chip ghost"><i data-i="sliders" data-s="13"></i>Instructions</span></div>
+      <div class="home">
+        <div class="greet">
+          <h2>Good evening. <em>What's next?</em></h2>
+          <p>Ask anything, generate images or video, or set two models talking.</p>
+        </div>
+        <div class="composer" id="homeComposer">
+          <textarea placeholder="Message Claude Opus 5.5…"></textarea>
+          <div class="comp-row">
+            <button class="icon-btn press" title="Attach"><i data-i="clip" data-s="15"></i></button>
+            <button class="icon-btn press" title="Web search"><i data-i="globe" data-s="15"></i></button>
+            <div class="picker-wrap">
+              <button class="chip press" data-pop="modelPop"><span class="mdot"></span>Claude Opus 5.5<i data-i="down" data-s="12"></i></button>
+              <div class="popover" id="modelPop">
+                <div class="pop-label">Your models</div>
+                <button class="pop-item sel"><span class="prov">A</span><span>Claude Opus 5.5<small>$5 / $25 per M · 1M ctx</small></span><i class="check" data-i="check"></i></button>
+                <button class="pop-item"><span class="prov">O</span><span>GPT-6<small>$4 / $16 per M · 400K ctx</small></span><i class="check" data-i="check"></i></button>
+                <button class="pop-item"><span class="prov">G</span><span>Gemini 3.5 Pro<small>$2 / $12 per M · 2M ctx</small></span><i class="check" data-i="check"></i></button>
+                <button class="pop-item"><span class="prov">D</span><span>DeepSeek V4<small>$0.3 / $1.1 per M · 128K ctx</small></span><i class="check" data-i="check"></i></button>
+              </div>
+            </div>
+            <button class="chip ghost press"><i data-i="brain" data-s="13"></i>Medium</button>
+            <span class="grow"></span>
+            <button class="send fill press" title="Send"><i data-i="up" data-s="16"></i></button>
+          </div>
+        </div>
+        <div class="suggest">
+          <div class="tilt sugg"><span class="ico"><i data-i="pen" data-s="16"></i></span><b>Write</b><span>Draft, rewrite or tighten anything</span><div class="glare"></div></div>
+          <div class="tilt sugg"><span class="ico"><i data-i="code" data-s="16"></i></span><b>Code</b><span>Debug, explain or build a feature</span><div class="glare"></div></div>
+          <div class="tilt sugg"><span class="ico"><i data-i="image" data-s="16"></i></span><b>Imagine</b><span>Generate or edit an image</span><div class="glare"></div></div>
+          <div class="tilt sugg"><span class="ico"><i data-i="users" data-s="16"></i></span><b>Discuss</b><span>Let two models debate a topic</span><div class="glare"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CHAT -->
+    <section class="screen" data-s="chat">
+      <div class="topbar">
+        <h1>Debounce hook for search box</h1>
+        <div class="picker-wrap">
+          <button class="chip ghost press" data-pop="ctxPop"><span class="ring" style="--p:12"></span>12% context</button>
+          <div class="popover down" id="ctxPop" style="width:290px">
+            <div class="pop-label">Context window</div>
+            <div class="pop-body">
+              <div class="usage-row"><span>24.1K of 200K tokens</span><span>12%</span></div>
+              <div class="bar"><i class="fill" style="width:12%"></i></div>
+              <div class="kv"><span>System + instructions</span><b>1.2K</b></div>
+              <div class="kv"><span>Messages (4)</span><b>22.9K</b></div>
+              <p class="pop-note">When this fills up, summarize the chat and continue in a fresh one.</p>
+              <button class="pop-cta fill press">Summarize & continue</button>
+            </div>
+          </div>
+        </div>
+        <div class="picker-wrap">
+          <button class="chip ghost press" data-pop="costPop"><i data-i="chart" data-s="13"></i>$0.042</button>
+          <div class="popover down" id="costPop" style="width:270px">
+            <div class="pop-label">This chat</div>
+            <div class="pop-body">
+              <div class="big-num">$0.042</div>
+              <div class="kv"><span>Claude Opus 5.5 · 3 replies</span><b>$0.038</b></div>
+              <div class="kv"><span>Title generation</span><b>$0.004</b></div>
+              <div class="kv"><span>Tokens in / out</span><b>31.4K / 2.2K</b></div>
+              <div class="kv"><span>Avg. reply time</span><b>2.1s</b></div>
+            </div>
+          </div>
+        </div>
+        <div class="picker-wrap">
+          <button class="icon-btn press" data-pop="moreMenu"><i data-i="more" data-s="15"></i></button>
+          <div class="popover down" id="moreMenu" style="width:220px">
+            <button class="pop-item"><i data-i="sliders" data-s="15"></i>Chat instructions</button>
+            <button class="pop-item"><i data-i="split" data-s="15"></i>Compare models</button>
+          </div>
+        </div>
+      </div>
+      <div class="msgs"><div class="msgs-inner">
+        <div class="m user"><div class="bubble">Can you write a React hook that debounces a search query? Keep it tiny.</div></div>
+        <div class="m ai">
+          <div class="ai-mark fill">A</div>
+          <div>
+            <div class="ai-name">Claude Opus 5.5 <span>· 1.8s · $0.004</span></div>
+            <div class="ai-body">
+              <p>Here's a minimal <code>useDebounced</code> hook — it returns the value only after it stops changing for <code>ms</code> milliseconds:</p>
+              <pre><div class="pre-head"><span>ts</span><span>Copy</span></div><code><span class="k">export function</span> <span class="f">useDebounced</span>&lt;T&gt;(value: T, ms = <span class="s">250</span>) {
+  <span class="k">const</span> [v, setV] = <span class="f">useState</span>(value);
+  <span class="f">useEffect</span>(() =&gt; {
+    <span class="k">const</span> t = <span class="f">setTimeout</span>(() =&gt; <span class="f">setV</span>(value), ms);
+    <span class="k">return</span> () =&gt; <span class="f">clearTimeout</span>(t); <span class="c">// reset on every keystroke</span>
+  }, [value, ms]);
+  <span class="k">return</span> v;
+}</code></pre>
+            </div>
+            <div class="actions">
+              <button class="act" title="Copy"><i data-i="copy" data-s="14"></i></button>
+              <button class="act" title="Regenerate"><i data-i="refresh" data-s="14"></i></button>
+              <button class="act" title="Fork"><i data-i="split" data-s="14"></i></button>
+              <button class="act" title="Remember"><i data-i="bookmark" data-s="14"></i></button>
+            </div>
+          </div>
+        </div>
+        <div class="m user"><div class="bubble">Nice. What about cancelling the in-flight fetch too?</div></div>
+        <div class="m ai">
+          <div class="ai-mark fill">A</div>
+          <div>
+            <div class="ai-name">Claude Opus 5.5</div>
+            <div class="ai-body"><span class="thinking"><i data-i="brain" data-s="14"></i>Thinking about AbortController…</span>
+              <p style="margin-top:8px">Pair it with an <code>AbortController</code> in the effect that fetches<span class="cursor fill"></span></p>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <div class="dock">
+        <div class="composer">
+          <textarea placeholder="Reply…" style="min-height:28px"></textarea>
+          <div class="comp-row">
+            <button class="icon-btn press"><i data-i="clip" data-s="15"></i></button>
+            <button class="chip press"><span class="mdot"></span>Claude Opus 5.5<i data-i="down" data-s="12"></i></button>
+            <button class="chip ghost press"><i data-i="brain" data-s="13"></i>Medium</button>
+            <span class="grow"></span>
+            <button class="send fill press"><i data-i="stop" data-s="14"></i></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIBRARY -->
+    <section class="screen" data-s="library">
+      <div class="topbar"><h1>Model Library</h1><span class="chip ghost"><i data-i="search" data-s="13"></i>Search 400+ models</span><span class="chip ghost">Sort: Date added<i data-i="down" data-s="12"></i></span></div>
+      <div class="lib">
+        <div class="filters">
+          <span class="chip fill on">My models</span><span class="chip ghost">Browse all</span><span class="chip ghost">Vision</span><span class="chip ghost">Reasoning</span><span class="chip ghost">Free</span><span class="chip ghost">Long context</span>
+        </div>
+        <div class="grid">
+          <div class="tilt model"><div class="model-top"><span class="prov">A</span><div><h3>Claude Opus 5.5</h3><div class="sub">Anthropic</div></div></div><div class="tags"><span class="tag">Reasoning</span><span class="tag">Vision</span><span class="tag">1M ctx</span></div><div class="model-foot"><span><b>$5</b> in · <b>$25</b> out</span><span class="added"><i data-i="check" data-s="13"></i>Default</span></div><div class="glare"></div></div>
+          <div class="tilt model"><div class="model-top"><span class="prov">O</span><div><h3>GPT-6</h3><div class="sub">OpenAI</div></div></div><div class="tags"><span class="tag">Reasoning</span><span class="tag">Vision</span><span class="tag">400K ctx</span></div><div class="model-foot"><span><b>$4</b> in · <b>$16</b> out</span><span class="added"><i data-i="check" data-s="13"></i>Added</span></div><div class="glare"></div></div>
+          <div class="tilt model"><div class="model-top"><span class="prov">G</span><div><h3>Gemini 3.5 Pro</h3><div class="sub">Google</div></div></div><div class="tags"><span class="tag">Vision</span><span class="tag">2M ctx</span></div><div class="model-foot"><span><b>$2</b> in · <b>$12</b> out</span><span class="added"><i data-i="check" data-s="13"></i>Added</span></div><div class="glare"></div></div>
+          <div class="tilt model"><div class="model-top"><span class="prov">D</span><div><h3>DeepSeek V4</h3><div class="sub">DeepSeek</div></div></div><div class="tags"><span class="tag">Reasoning</span><span class="tag">128K ctx</span></div><div class="model-foot"><span><b>$0.30</b> in · <b>$1.10</b> out</span><span class="added"><i data-i="check" data-s="13"></i>Added</span></div><div class="glare"></div></div>
+          <div class="tilt model"><div class="model-top"><span class="prov">M</span><div><h3>Mistral Large 4</h3><div class="sub">Mistral</div></div></div><div class="tags"><span class="tag">256K ctx</span></div><div class="model-foot"><span><b>$1.5</b> in · <b>$4.5</b> out</span><button class="add-btn press">＋ Add</button></div><div class="glare"></div></div>
+          <div class="tilt model"><div class="model-top"><span class="prov">Q</span><div><h3>Qwen 4 Max</h3><div class="sub">Alibaba</div></div></div><div class="tags"><span class="tag">Reasoning</span><span class="tag">Free tier</span></div><div class="model-foot"><span><b>$0</b> in · <b>$0</b> out</span><button class="add-btn press">＋ Add</button></div><div class="glare"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Settings overlay sits over whatever's behind -->
+    <div class="overlay" id="settings">
+      <div class="sheet">
+        <div class="tabs">
+          <h3>Settings</h3>
+          <button class="tab"><i data-i="gear" data-s="15"></i>General</button>
+          <button class="tab on"><i data-i="palette" data-s="15"></i>Appearance</button>
+          <button class="tab"><i data-i="bookmark" data-s="15"></i>Memory</button>
+          <button class="tab"><i data-i="box" data-s="15"></i>Data</button>
+          <button class="tab"><i data-i="chart" data-s="15"></i>Spending limits</button>
+        </div>
+        <div class="pane">
+          <button class="icon-btn close press" id="closeSettings"><i data-i="x" data-s="15"></i></button>
+          <div class="sec">
+            <h4>Theme</h4><p class="hint">Mostly black and white, with your accent on the important bits.</p>
+            <div class="themes">
+              <button class="theme-card press" data-theme="light"><div class="mini l"><i></i><div><b></b></div></div><span>Light</span></button>
+              <button class="theme-card press on" data-theme="dark"><div class="mini d"><i></i><div><b></b></div></div><span>Dark</span></button>
+              <button class="theme-card press" data-theme="system"><div class="mini s"><i></i><div><b></b></div></div><span>System</span></button>
+            </div>
+          </div>
+          <div class="sec">
+            <h4>Accent color</h4><p class="hint">Used for the send button, focus glow, active nav and highlights.</p>
+            <div class="accents">
+              <button class="accent-card press on" data-accent="blue"><span class="big sw-blue"><i data-i="check" data-s="18"></i></span>Blue</button>
+              <button class="accent-card press" data-accent="orange"><span class="big sw-orange"><i data-i="check" data-s="18"></i></span>Orange</button>
+              <button class="accent-card press" data-accent="green"><span class="big sw-green"><i data-i="check" data-s="18"></i></span>Green</button>
+              <button class="accent-card press" data-accent="rainbow"><span class="big sw-rainbow"><i data-i="check" data-s="18"></i></span>Rainbow</button>
+            </div>
+          </div>
+          <div class="sec">
+            <h4>Color style</h4><p class="hint" id="styleHint">How much the accent shows up. Rainbow is always vivid.</p>
+            <div class="styles" id="styleCards">
+              <button class="style-card press" data-style="flat">
+                <div class="style-prev flat"><span class="sp-btn"></span><span class="sp-line"></span><span class="sp-line short"></span></div>
+                <span><b>Flat</b><small>Solid accent, clean and quiet</small></span>
+              </button>
+              <button class="style-card press on" data-style="vivid">
+                <div class="style-prev vivid"><span class="sp-glow"></span><span class="sp-btn"></span><span class="sp-line"></span><span class="sp-line short"></span></div>
+                <span><b>Vivid</b><small>Drifting duotone, soft glow</small></span>
+              </button>
+            </div>
+          </div>
+          <div class="sec">
+            <h4>Motion</h4>
+            <div class="toggle-row"><div>Animations<small>Springs, fades and the sliding nav indicator</small></div><button class="switch on" data-toggle></button></div>
+            <div class="toggle-row"><div>Tilt cards<small>3D tilt + glare on library and suggestion cards</small></div><button class="switch on" data-toggle id="tiltToggle"></button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+</div>
+
+<div class="note">
+  <b>Try:</b> hover the suggestion and model cards (tilt + glare) · click the <b>Claude Opus 5.5</b> chip on Home (model picker) · hover a reply on Chat (actions fade in) · the ⋯ menu on Chat · the rail icons (sliding indicator + tooltips) · the moon icon in the rail · swatches anywhere.
+</div>
+
+<script>
+/* ---- Icons (Lucide-style paths) ---- */
+const P = {
+  chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
+  video: '<path d="m16 13 5.2 3.1a.5.5 0 0 0 .8-.4V8.3a.5.5 0 0 0-.8-.4L16 11"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+  box: '<path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>',
+  chart: '<path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/>',
+  gear: '<path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.7l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.7v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  clip: '<path d="m21.4 11-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/>',
+  globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/>',
+  down: '<path d="m6 9 6 6 6-6"/>',
+  up: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+  brain: '<path d="M12 5a3 3 0 1 0-6 .1 4 4 0 0 0-2.5 5.8 4 4 0 0 0 .6 6.6A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 6 .1 4 4 0 0 1 2.5 5.8 4 4 0 0 1-.6 6.6A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  pen: '<path d="M12 20h9"/><path d="M16.4 3.6a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/>',
+  code: '<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>',
+  layers: '<path d="m12 2 10 5-10 5L2 7Z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/>',
+  more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  split: '<circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><path d="M6 9v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9M12 12v3"/>',
+  copy: '<rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2"/>',
+  refresh: '<path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M8 16H3v5"/>',
+  bookmark: '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>',
+  palette: '<circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/><path d="M12 2a10 10 0 0 0 0 20 1.7 1.7 0 0 0 1.7-1.7c0-.4-.2-.8-.4-1.1a1.6 1.6 0 0 1 1.2-2.7h2A5.6 5.6 0 0 0 22 11c0-5-4.5-9-10-9Z"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+};
+function icon(el) {
+  const s = el.dataset.s || 18;
+  el.outerHTML = `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[el.dataset.i]}</svg>`;
+}
+document.querySelectorAll('i[data-i]').forEach(icon);
+
+const root = document.documentElement;
+const $$ = (s) => document.querySelectorAll(s);
+
+/* ---- Segmented pills ---- */
+function placePill(seg) {
+  const on = seg.querySelector('button.on'), pill = seg.querySelector('.pill');
+  pill.style.left = on.offsetLeft + 'px'; pill.style.width = on.offsetWidth + 'px';
+}
+$$('.seg').forEach(placePill);
+document.fonts && document.fonts.ready.then(() => $$('.seg').forEach(placePill));
+
+/* ---- Theme + accent ---- */
+function setTheme(t) {
+  const resolved = t === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : t;
+  root.dataset.theme = resolved;
+  $$('#themeSeg button').forEach(b => b.classList.toggle('on', b.dataset.theme === resolved));
+  placePill(document.getElementById('themeSeg'));
+  $$('.theme-card').forEach(b => b.classList.toggle('on', b.dataset.theme === t));
+  const rt = document.querySelector('#railTheme svg');
+  rt.outerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[resolved === 'dark' ? 'sun' : 'moon']}</svg>`;
+}
+function setAccent(a) {
+  root.dataset.accent = a;
+  $$('[data-accent]').forEach(b => { if (b !== root) b.classList.toggle('on', b.dataset.accent === a); });
+}
+$$('#themeSeg button, .theme-card').forEach(b => b.onclick = () => setTheme(b.dataset.theme));
+$$('button[data-accent]').forEach(b => b.onclick = () => setAccent(b.dataset.accent));
+document.getElementById('railTheme').onclick = () => setTheme(root.dataset.theme === 'dark' ? 'light' : 'dark');
+setTheme('dark');
+function setStyle(s) {
+  root.dataset.style = s;
+  $$('#styleSeg button, .style-card').forEach(x => x.classList.toggle('on', x.dataset.style === s));
+  placePill(document.getElementById('styleSeg'));
+}
+$$('#styleSeg button, .style-card').forEach(b => b.onclick = () => setStyle(b.dataset.style));
+
+/* ---- Screens ---- */
+const overlay = document.getElementById('settings');
+let lastScreen = 'home';
+function show(name) {
+  $$('#screenSeg button').forEach(b => b.classList.toggle('on', b.dataset.screen === name));
+  placePill(document.getElementById('screenSeg'));
+  if (name === 'settings') { overlay.classList.add('on'); moveRail('settings'); return; }
+  overlay.classList.remove('on');
+  lastScreen = name;
+  $$('.screen').forEach(s => s.classList.toggle('on', s.dataset.s === name));
+  moveRail(name === 'library' ? 'library' : 'chat');
+}
+$$('#screenSeg button').forEach(b => b.onclick = () => show(b.dataset.screen));
+document.getElementById('closeSettings').onclick = () => show(lastScreen);
+overlay.onclick = (e) => { if (e.target === overlay) show(lastScreen); };
+$$('[data-goto]').forEach(el => el.onclick = () => show(el.dataset.goto));
+document.querySelector('.threads-head .icon-btn').onclick = () => show('home');
+
+/* ---- Rail indicator ---- */
+const ind = document.getElementById('railInd');
+function moveRail(nav) {
+  const btn = document.querySelector(`.rail-btn[data-nav="${nav}"]`);
+  $$('.rail-btn').forEach(b => b.classList.toggle('on', b === btn));
+  ind.style.top = btn.offsetTop + 'px';
+}
+$$('.rail-btn[data-nav]').forEach(b => b.onclick = () => {
+  const n = b.dataset.nav;
+  if (n === 'library') show('library'); else if (n === 'settings') show('settings'); else if (n === 'chat') show('home'); else moveRail(n);
+});
+moveRail('chat');
+
+/* ---- Popovers ---- */
+$$('[data-pop]').forEach(b => b.onclick = (e) => {
+  e.stopPropagation();
+  const pop = document.getElementById(b.dataset.pop);
+  const open = !pop.classList.contains('open');
+  $$('.popover').forEach(p => p.classList.remove('open'));
+  pop.classList.toggle('open', open);
+});
+document.addEventListener('click', () => $$('.popover').forEach(p => p.classList.remove('open')));
+$$('.popover').forEach(p => p.onclick = e => e.stopPropagation());
+$$('#modelPop .pop-item').forEach(it => it.onclick = () => {
+  $$('#modelPop .pop-item').forEach(x => x.classList.toggle('sel', x === it));
+  const name = it.querySelector('span:not(.prov)').firstChild.textContent;
+  document.querySelector('[data-pop="modelPop"]').childNodes[1].textContent = name;
+  document.querySelector('#homeComposer textarea').placeholder = `Message ${name}…`;
+  setTimeout(() => document.getElementById('modelPop').classList.remove('open'), 150);
+});
+
+/* ---- Toggles ---- */
+let tiltOn = true;
+$$('[data-toggle]').forEach(s => s.onclick = () => { s.classList.toggle('on'); if (s.id === 'tiltToggle') tiltOn = s.classList.contains('on'); });
+
+/* ---- Tilt card (port of the BeUI TiltCard: spring toward target, radial glare) ---- */
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+$$('.tilt').forEach(card => {
+  const glare = card.querySelector('.glare');
+  const max = card.classList.contains('model') ? 10 : 14;
+  let tx = 0, ty = 0, x = 0, y = 0, vx = 0, vy = 0, raf = null;
+  const k = 200, d = 15, m = 0.3; // SPRING_MOUSE
+  function step() {
+    const dt = 1 / 60;
+    vx += ((-k * (x - tx) - d * vx) / m) * dt; x += vx * dt;
+    vy += ((-k * (y - ty) - d * vy) / m) * dt; y += vy * dt;
+    card.style.transform = `perspective(1000px) rotateX(${x}deg) rotateY(${y}deg)`;
+    if (Math.abs(x - tx) + Math.abs(y - ty) + Math.abs(vx) + Math.abs(vy) > 0.01) raf = requestAnimationFrame(step); else raf = null;
+  }
+  const kick = () => { if (!raf) raf = requestAnimationFrame(step); };
+  card.addEventListener('mousemove', e => {
+    if (reduce || !tiltOn) return;
+    const r = card.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
+    ty = (px - 0.5) * max; tx = (0.5 - py) * max;
+    glare.style.background = `radial-gradient(circle at ${px * 100}% ${py * 100}%, var(--glare-c, var(--glare)), transparent 50%)`;
+    kick();
+  });
+  card.addEventListener('mouseleave', () => { tx = 0; ty = 0; kick(); });
+});
+</script>
+</body>
+</html>
