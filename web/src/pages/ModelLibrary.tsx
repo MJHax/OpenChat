@@ -11,7 +11,8 @@ import {
   countLabel, filterCatalog, isFiltering, latestOnly, NO_FILTER, popularFor, sortCatalog, topProviders, type CatalogFilter,
   type SortKey,
 } from '../lib/catalog';
-import { LIBRARY_SORTS, type LibrarySort } from '../lib/models';
+import type { LibrarySort } from '../lib/models';
+import { LibraryHeading } from '../components/LibraryHeading';
 
 export interface ModelLibraryProps {
   /** Already in the user's chosen order. */
@@ -97,17 +98,7 @@ export function ModelLibrary({ models, onChanged, sort: librarySort, onSort: onL
         <div className="stats-head"><h1>Model Library</h1>{switcher}</div>
         {actionError && <p className="error-text">{actionError}</p>}
 
-        <div className="section-head">
-          <h2>My models</h2>
-          {models.length > 1 && (
-            <label className="muted small">
-              Sort by{' '}
-              <select value={librarySort} onChange={(e) => onLibrarySort(e.target.value as LibrarySort)} aria-label="Sort my models">
-                {LIBRARY_SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-              </select>
-            </label>
-          )}
-        </div>
+        <LibraryHeading title="My models" count={models.length} sort={librarySort} onSort={onLibrarySort} />
         {models.length === 0 ? (
           <p className="muted">No models yet. Add some from the catalog below.</p>
         ) : (

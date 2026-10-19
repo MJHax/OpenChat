@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { usd, videoPrice, type VideoModel } from '../../../shared/videoModels';
 import type { MediaCatalog, MediaLibraryModel } from '../../../shared/types';
 import { api } from '../api';
+import { loadLibrarySort, saveLibrarySort, sortMediaLibrary, type LibrarySort } from '../lib/models';
+import { LibraryHeading } from './LibraryHeading';
 import { formatVideoRate, videoBadges } from '../lib/videoUi';
 
 const provider = (id: string) => id.split('/')[0];
@@ -48,6 +50,9 @@ export function VideoModelLibrary() {
   const [query, setQuery] = useState('');
   const [providers, setProviders] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [sort, setSort] = useState<LibrarySort>(() => loadLibrarySort('video'));
+  const changeSort = (next: LibrarySort) => { setSort(next); saveLibrarySort(next, 'video'); };
+  const mine = useMemo(() => sortMediaLibrary(library, sort), [library, sort]);
 
   const load = (refresh = false) => {
     setLoading(true);
@@ -81,10 +86,10 @@ export function VideoModelLibrary() {
   return (
     <>
       {error && <p className="error-text">{error}</p>}
-      <h2>My video models</h2>
+      <LibraryHeading title="My video models" count={library.length} sort={sort} onSort={changeSort} />
       {library.length === 0 ? <p className="muted">No video models yet. Add some below to use them in the Video tab.</p> : (
         <ul className="model-list">
-          {library.map((e) => (
+          {mine.map((e) => (
             <li key={e.id} className="model-row">
               <div className="model-main"><span>{e.displayName}</span><code>{e.id}</code></div>
               <div className="model-side">

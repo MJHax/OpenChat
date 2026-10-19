@@ -27,10 +27,12 @@ interface Props {
   /** An edit of this message the server refused before taking it: the edit box reopens with it. */
   restoredEdit?: { text: string; attachments: Attachment[] } | null;
   onCompareVersions(): void;
+  /** Opens a new chat holding the conversation up to this reply. */
+  onFork(): void;
 }
 
 export function MessageItem({
-  message, modelName, models, disabled, compareMode, onSelectSibling, onRegenerate, replyModels, onEdit, restoredEdit, onCompareVersions,
+  message, modelName, models, disabled, compareMode, onSelectSibling, onRegenerate, replyModels, onEdit, restoredEdit, onCompareVersions, onFork,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
@@ -144,6 +146,7 @@ export function MessageItem({
         {(message.webSearches ?? 0) > 0 && <span>· searched {message.webSearches}×</span>}
         <button className="link" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
         {rememberButton}
+        <button className="link" disabled={disabled} onClick={onFork}>Fork</button>
         {compareMode ? (
           <button className="link" disabled={disabled} onClick={() => onRegenerate(null)}>↻ Compare again</button>
         ) : (

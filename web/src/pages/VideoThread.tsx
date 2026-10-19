@@ -3,6 +3,7 @@ import { defaultVideoSettings, snapVideoSettings, usd, type VideoModel, type Vid
 import type { Attachment, ChatDetail, MediaLibraryModel, PathMessage, SettingsView } from '../../../shared/types';
 import { api, attachmentUrl, videoUrl } from '../api';
 import { navigate } from '../lib/route';
+import { loadLibrarySort, sortMediaLibrary } from '../lib/models';
 import { renderHint, renderingNote } from '../lib/videoUi';
 import { askNotifyPermission } from '../lib/notify';
 import { VideoComposer } from '../components/VideoComposer';
@@ -69,7 +70,7 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
     if (viewing.current === id) setDetail(next);
   };
 
-  useEffect(() => { api.listMediaModels('video').then(setLibrary).catch((e: Error) => setError(e.message)); }, []);
+  useEffect(() => { api.listMediaModels('video').then((l) => setLibrary(sortMediaLibrary(l, loadLibrarySort('video')))).catch((e: Error) => setError(e.message)); }, []);
   useEffect(() => {
     viewing.current = threadId;
     setError(null);

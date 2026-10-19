@@ -6,6 +6,7 @@ import {
   setInstructions,
 } from '../chats';
 import { continueChat } from '../continue';
+import { forkChat } from '../fork';
 import { getChatMessages, getMessage } from '../messages';
 import { newestLeafFrom, repliesTo } from '../tree';
 import { computeChatStats } from '../stats';
@@ -82,6 +83,13 @@ export function chatRoutes(deps: Deps): Hono {
     const body = await readJson<{ modelId?: unknown }>(c);
     if (typeof body.modelId !== 'string' || !body.modelId.trim()) throw new HttpError(400, 'Pick a model first.');
     return c.json(await continueChat(deps, c.req.param('id'), body.modelId.trim()), 201);
+  });
+
+  /** A new chat holding the conversation up to `messageId`, to take it somewhere else without touching this one. */
+  r.post('/:id/fork', async (c) => {
+    const body = await readJson<{ messageId?: unknown }>(c);
+    if (typeof body.messageId !== 'string' || !body.messageId) throw new HttpError(400, 'messageId is required.');
+    return c.json(forkChat(db, c.req.param('id'), body.messageId), 201);
   });
 
   r.delete('/:id', (c) => {

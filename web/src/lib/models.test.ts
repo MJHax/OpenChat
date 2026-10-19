@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { initialModelId, sortLibrary } from './models';
-import type { LibraryModel, Message } from '../../../shared/types';
+import { initialModelId, sortLibrary, sortMediaLibrary } from './models';
+import type { VideoModel } from '../../../shared/videoModels';
+import type { LibraryModel, MediaLibraryModel, Message } from '../../../shared/types';
 
 const lib = (id: string, isDefault = false): LibraryModel => ({ id, displayName: id, contextLength: null, promptPrice: null, completionPrice: null, isDefault, inputModalities: ['text'], supportsTools: false });
 const reply = (modelId: string): Pick<Message, 'role' | 'modelId'> => ({ role: 'assistant', modelId });
@@ -46,5 +47,22 @@ describe('sortLibrary', () => {
 
   it('sorts cheapest first, with unknown and varying prices last by name', () => {
     expect(ids(sortLibrary(list, 'cost'))).toEqual(['x/3', 'x/1', 'x/2', 'x/4']);
+  });
+});
+
+describe('sortMediaLibrary', () => {
+  const video = (id: string, name: string, perSecond: string | null): MediaLibraryModel => ({
+    id, displayName: name, kind: 'video', avgRenderMs: null, recentRenderMs: [], avgCost: {},
+    model: perSecond === null ? null : {
+      id, name, description: '', created: null, durations: [5], resolutions: ['720p'], aspects: ['16:9'], sizes: [],
+      frames: { first: false, last: false }, sound: false, skus: { duration_seconds_720p: perSecond },
+    } satisfies VideoModel,
+  });
+  const list = [video('v/1', 'Veo', '0.4'), video('v/2', 'gone', null), video('v/3', 'Kling', '0.1')];
+
+  it('sorts video models by their cheapest rate per second, unpriced last', () => {
+    expect(sortMediaLibrary(list, 'cost').map((m) => m.id)).toEqual(['v/3', 'v/1', 'v/2']);
+    expect(sortMediaLibrary(list, 'name').map((m) => m.id)).toEqual(['v/2', 'v/3', 'v/1']);
+    expect(sortMediaLibrary(list, 'added')).toBe(list);
   });
 });

@@ -26,6 +26,7 @@ export const api = {
   setContextNote: (id: string, contextNote: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { contextNote }),
   /** "Summarize and continue": resolves with the new chat once the summary is written. */
   continueChat: (id: string, modelId: string) => json<ChatSummary>('POST', `/api/chats/${id}/continue`, { modelId }),
+  forkChat: (id: string, messageId: string) => json<ChatSummary>('POST', `/api/chats/${id}/fork`, { messageId }),
   getChat: (id: string) => json<ChatDetail>('GET', `/api/chats/${id}`),
   renameChat: (id: string, title: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { title }),
   selectMessage: (id: string, messageId: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { selectMessageId: messageId }),

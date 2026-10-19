@@ -3,6 +3,7 @@ import { defaultSettings, snapSettings, type ImageSettings } from '../../../shar
 import type { Attachment, ChatDetail, ImageGeneration, MediaLibraryModel, PathMessage, SettingsView } from '../../../shared/types';
 import { api, attachmentUrl, deleteAttachment, uploadAttachment } from '../api';
 import { navigate } from '../lib/route';
+import { loadLibrarySort, sortMediaLibrary } from '../lib/models';
 import { editTarget, pickImageModel } from '../lib/imageTarget';
 import { money } from '../lib/imagePrice';
 import { shrinkFile } from '../lib/shrinkImage';
@@ -67,7 +68,7 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
     if (viewing.current === id) setDetail(next);
   };
 
-  useEffect(() => { api.listMediaModels('image').then(setLibrary).catch((e: Error) => setError(e.message)); }, []);
+  useEffect(() => { api.listMediaModels('image').then((l) => setLibrary(sortMediaLibrary(l, loadLibrarySort('image')))).catch((e: Error) => setError(e.message)); }, []);
 
   useEffect(() => {
     viewing.current = threadId;

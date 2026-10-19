@@ -313,7 +313,18 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       setContinuing(false);
     }
   };
-  const canContinue = !!chatId && messages.some((m) => m.role === 'user') && !streaming && !(settings !== null && !settings.hasApiKey);
+  const fork = async (messageId: string) => {
+    if (!chatId) return;
+    setError(null);
+    try {
+      const created = await api.forkChat(chatId, messageId);
+      onChatsChanged();
+      navigate(`#/chat/${created.id}`);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  const canContinue =!!chatId && messages.some((m) => m.role === 'user') && !streaming && !(settings !== null && !settings.hasApiKey);
   const regenerate = (index: number, model: string | null) => {
     const list = model ? [model] : compareList;
     if (list) run({ kind: 'regenerate', parentId: messages[index].parentId!, baseLength: index, models: list });
@@ -438,6 +449,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
                 onEdit={(text, attachments) => { void edit(i, text, attachments); }}
                 restoredEdit={failedEdit?.messageId === m.id ? failedEdit : null}
                 onCompareVersions={() => openVersions(i)}
+                onFork={() => { void fork(m.id); }}
               />
             ))}
 
