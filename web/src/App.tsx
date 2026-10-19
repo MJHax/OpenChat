@@ -16,6 +16,7 @@ import { ModelLibrary } from './pages/ModelLibrary';
 import { Settings } from './pages/Settings';
 import { Stats } from './pages/Stats';
 import { Library } from './pages/Library';
+import type { ReuseDraft } from './lib/reuse';
 import { useAppearance } from './components/useAppearance';
 import { Clapperboard, X } from 'lucide-react';
 
@@ -51,6 +52,12 @@ export function App() {
   const changeLibrarySort = (sort: LibrarySort) => { setLibrarySort(sort); saveLibrarySort(sort); };
   const [settings, setSettings] = useState<SettingsView | null>(null);
   const [chatReload, setChatReload] = useState(0);
+  /** Files the Library is starting a new chat with; ChatView takes them and clears this. */
+  const [startDraft, setStartDraft] = useState<(ReuseDraft & { nonce: number }) | null>(null);
+  const startChatWith = (d: ReuseDraft) => {
+    setStartDraft((s) => ({ ...d, nonce: (s?.nonce ?? 0) + 1 }));
+    navigate('#/');
+  };
   const [loadError, setLoadError] = useState<string | null>(null);
   // The sidebar keeps showing the last mode while on Model Library, Stats or Settings.
   const [lastMode, setLastMode] = useState<ThreadKind>('chat');
@@ -199,7 +206,8 @@ export function App() {
         <div className="page-slot" inert={overlayOpen}>
         {loadError && <div className="banner error">Can't reach the OpenChat server: {loadError}</div>}
         {page.page === 'chat' && (
-          <ChatView chatId={page.chatId} title={title} reloadToken={chatReload} models={models} settings={settings} onChatsChanged={refreshChats} />
+          <ChatView chatId={page.chatId} title={title} reloadToken={chatReload} models={models} settings={settings} onChatsChanged={refreshChats}
+            startDraft={page.chatId ? null : startDraft} onStartDraftUsed={() => setStartDraft(null)} />
         )}
         {page.page === 'images' && (
           <ImageThread threadId={page.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />
@@ -213,7 +221,7 @@ export function App() {
         )}
         {page.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} sort={librarySort} onSort={changeLibrarySort} />}
         {page.page === 'stats' && <Stats />}
-        {page.page === 'library' && <Library />}
+        {page.page === 'library' && <Library onReuse={startChatWith} />}
         </div>
         {route.page === 'settings' && (
           <Settings models={models} tab={route.tab} section={route.section} onChanged={refreshSettings} onClose={closeSettings}
