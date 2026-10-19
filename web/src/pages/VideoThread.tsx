@@ -11,6 +11,7 @@ import { ErrorText } from '../components/ErrorText';
 import { SpendNotice } from '../components/SpendNotice';
 import { MediaStatsPopover } from '../components/MediaStatsPopover';
 import { SiblingNav } from '../components/SiblingNav';
+import { HomeGreeting } from '../components/ChatHome';
 
 interface Props {
   threadId: string | null;
@@ -155,7 +156,7 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
     : rendering ? 'A clip is still rendering in this thread.' : sending ? '' : null;
 
   return (
-    <div className="chat">
+    <div className={`chat${threadId ? '' : ' home'}`}>
       <header className="chat-header">
         <h1>{threadId ? title : 'New video'}</h1>
         <div className="chat-header-tools">
@@ -164,7 +165,7 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
       </header>
       <div className="messages" ref={listRef}>
         <div className="messages-inner">
-          {!threadId && <div className="empty">Pick a start (and end) photo, and describe what happens.</div>}
+          {!threadId && <HomeGreeting prompt="What should we film?" note="Pick a start (and end) photo, and describe what happens." />}
           {messages.map((m) => {
             if (m.role === 'user') {
               return (

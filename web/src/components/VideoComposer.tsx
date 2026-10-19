@@ -70,7 +70,7 @@ export function VideoComposer(p: Props) {
             </select>
           )}
           {m?.sound && (
-            <button className="toggle" aria-pressed={p.settings.sound} onClick={() => set({ sound: !p.settings.sound })}>
+            <button className="chip ghost toggle-chip" aria-pressed={p.settings.sound} onClick={() => set({ sound: !p.settings.sound })}>
               {p.settings.sound ? <><Volume2 size={14} /> Sound on</> : <><VolumeX size={14} /> Sound off</>}
             </button>
           )}

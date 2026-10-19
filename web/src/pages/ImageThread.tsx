@@ -14,6 +14,7 @@ import { MediaStatsPopover } from '../components/MediaStatsPopover';
 import { Lightbox } from '../components/Lightbox';
 import { SiblingNav } from '../components/SiblingNav';
 import { TiltCard } from '../components/TiltCard';
+import { HomeGreeting } from '../components/ChatHome';
 
 interface Props {
   threadId: string | null;
@@ -186,7 +187,7 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
     : running ? 'An image is still being made in this thread.' : sending ? '' : null;
 
   return (
-    <div className="chat">
+    <div className={`chat${threadId ? '' : ' home'}`}>
       <header className="chat-header">
         <h1>{threadId ? title : 'New image'}</h1>
         <div className="chat-header-tools">
@@ -195,7 +196,7 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
       </header>
       <div className="messages" ref={listRef}>
         <div className="messages-inner">
-          {!threadId && <div className="empty">What should we make?</div>}
+          {!threadId && <HomeGreeting prompt="What should we make?" note="Describe an image, or attach a photo to edit." />}
           {messages.map((m) => {
             if (m.role === 'user') {
               return (

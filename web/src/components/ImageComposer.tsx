@@ -65,7 +65,7 @@ export function ImageComposer(p: Props) {
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && reason === null) { e.preventDefault(); p.onGenerate(); } }}
         />
         <div className="row image-controls">
-          <button className="icon" aria-label="Attach photo" title="Attach photo" disabled={p.uploading} onClick={() => fileInput.current?.click()}><Paperclip size={16} /></button>
+          <button className="icon-btn" aria-label="Attach photo" title="Attach photo" disabled={p.uploading} onClick={() => fileInput.current?.click()}><Paperclip size={16} /></button>
           <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={(e) => { p.onFiles([...(e.target.files ?? [])]); e.target.value = ''; }} />
           <select aria-label="Image model" value={m?.id ?? ''} onChange={(e) => p.onModelChange(e.target.value)} disabled={p.library.length === 0}>
             {p.library.length === 0 && <option value="">No image models</option>}
@@ -87,10 +87,10 @@ export function ImageComposer(p: Props) {
             </select>
           )}
           {m?.transparent && (
-            <button className="toggle" aria-pressed={p.settings.transparent} onClick={() => set({ transparent: !p.settings.transparent })}>Transparent</button>
+            <button className="chip ghost toggle-chip" aria-pressed={p.settings.transparent} onClick={() => set({ transparent: !p.settings.transparent })}>Transparent</button>
           )}
           {p.hasTarget && (
-            <button className="toggle" aria-pressed={p.newImage} onClick={() => p.onNewImage(!p.newImage)} title="Make a new image instead of editing">
+            <button className="chip ghost toggle-chip" aria-pressed={p.newImage} onClick={() => p.onNewImage(!p.newImage)} title="Make a new image instead of editing">
               New image instead
             </button>
           )}

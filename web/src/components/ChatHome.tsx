@@ -3,12 +3,12 @@ import { greeting } from '../lib/greeting';
 import { navigate } from '../lib/route';
 import { TiltCard } from './TiltCard';
 
-/** The Chat home's heading, above the composer. */
-export function HomeGreeting() {
+/** A mode's home heading, above the composer: the time of day, then a highlighted prompt and a one-line hint. */
+export function HomeGreeting({ prompt = "What's next?", note = 'Ask anything, generate images or video, or set two models talking.' }: { prompt?: string; note?: string }) {
   return (
     <div className="home-greet">
-      <h2>{greeting(new Date().getHours())} <em className="accent-text">What's next?</em></h2>
-      <p>Ask anything, generate images or video, or set two models talking.</p>
+      <h2>{greeting(new Date().getHours())} <em className="accent-text">{prompt}</em></h2>
+      <p>{note}</p>
     </div>
   );
 }

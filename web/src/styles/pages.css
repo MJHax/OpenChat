@@ -195,3 +195,11 @@ button.chip.on { background: var(--accent-fill); color: var(--on-accent); border
 .stat-tiles { gap: 12px; }
 .chart { border-bottom-color: var(--border); }
 .heat-cell { background: var(--surface-2); }
+
+/* Image and video home: greeting and composer centered like the chat home (which centers with its suggestion cards). */
+.chat.home:not(:has(.suggest))::after { content: ''; flex: 1 1 0; }
+.image-composer .image-controls, .video-composer .image-controls { justify-content: flex-start; align-items: center; margin-top: 8px; }
+.toggle-chip { cursor: pointer; }
+.toggle-chip[aria-pressed='true'] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.image-composer .primary, .video-composer .primary { white-space: nowrap; }
+.frame-slot .frame-empty { border-radius: var(--radius-sm); }
