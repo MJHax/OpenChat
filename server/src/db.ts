@@ -87,7 +87,9 @@ CREATE TABLE IF NOT EXISTS attachments (
   data BLOB NOT NULL,
   created_at INTEGER NOT NULL,
   -- SHA-256 of data, so the Library can tell when two rows are the same file.
-  hash TEXT
+  hash TEXT,
+  -- For a copy re-encoded from another file (a shrunk image), that file's hash, so it still counts as the same file.
+  origin_hash TEXT
 );
 CREATE INDEX IF NOT EXISTS attachments_message ON attachments(message_id, position);
 
@@ -259,6 +261,7 @@ function migrate(db: DB): void {
   if (!videoJobColumns.includes('download_failed_at')) db.exec('ALTER TABLE video_jobs ADD COLUMN download_failed_at INTEGER');
   const attachmentColumns = (db.prepare('PRAGMA table_info(attachments)').all() as { name: string }[]).map((c) => c.name);
   if (!attachmentColumns.includes('hash')) db.exec('ALTER TABLE attachments ADD COLUMN hash TEXT');
+  if (!attachmentColumns.includes('origin_hash')) db.exec('ALTER TABLE attachments ADD COLUMN origin_hash TEXT');
   db.exec('CREATE INDEX IF NOT EXISTS attachments_hash ON attachments(hash)');
   backfillHashes(db);
   backfillUsage(db);

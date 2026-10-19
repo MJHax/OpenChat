@@ -29,7 +29,7 @@ interface AttachmentHit {
 }
 
 const ATTACHMENT_HITS = `
-  SELECT a.id, a.kind, a.filename, a.size, a.hash, m.created_at AS at, c.id AS chatId, c.kind AS chatKind, c.title
+  SELECT a.id, a.kind, a.filename, a.size, COALESCE(a.origin_hash, a.hash) AS hash, m.created_at AS at, c.id AS chatId, c.kind AS chatKind, c.title
   FROM attachments a JOIN messages m ON m.id = a.message_id JOIN chats c ON c.id = m.chat_id`;
 
 const ref = (chatId: string, kind: ThreadKind, title: string, at: number): LibraryChatRef => ({ chatId, kind, title, at });

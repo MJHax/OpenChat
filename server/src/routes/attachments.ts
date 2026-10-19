@@ -35,7 +35,8 @@ export function attachmentRoutes({ db }: Deps): Hono {
       if (detected.bytes.length === 0) throw new HttpError(400, emptyFileMessage(filename)); // only a byte-order mark
       if (raw.length > ATTACHMENT_LIMITS[detected.kind]) throw new HttpError(413, tooLargeMessage(filename, detected.kind));
       cleanupPending(db);
-      return c.json(insertPending(db, { filename, kind: detected.kind, mime: detected.mime, data: detected.bytes }), 201);
+      const copyOf = typeof body.copyOf === 'string' ? body.copyOf : undefined;
+      return c.json(insertPending(db, { filename, kind: detected.kind, mime: detected.mime, data: detected.bytes, copyOf }), 201);
     },
   );
 

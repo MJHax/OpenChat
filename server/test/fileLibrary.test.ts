@@ -191,6 +191,28 @@ describe('libraryItems', () => {
   });
 });
 
+describe('reusing a shrunk copy', () => {
+  it('an upload marked as a copy of a generated image counts as a reuse even though its bytes differ', async () => {
+    const ctx = makeApp();
+    const img = chat(ctx.db, 'Big', 'image');
+    const iu = insertMessage(ctx.db, { chatId: img.id, parentId: null, role: 'user', content: 'huge' });
+    const big = insertGenerated(ctx.db, { messageId: reply(ctx.db, img.id, iu.id, '').id, filename: 'big.png', kind: 'image', mime: 'image/png', data: PNG });
+    const form = new FormData();
+    const shrunk = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+    form.append('file', new File([shrunk], 'big.jpg'));
+    form.append('copyOf', big.id);
+    const res = await ctx.app.request('/api/attachments', { method: 'POST', body: form });
+    expect(res.status).toBe(201);
+    const copy = await res.json();
+    const d = chat(ctx.db, 'D');
+    const m = insertMessage(ctx.db, { chatId: d.id, parentId: null, role: 'user', content: 'look' });
+    attachToMessage(ctx.db, m.id, [getAttachmentRow(ctx.db, copy.id)!]);
+    const { uploads, generated } = libraryItems(ctx.db, ctx.deps.mediaDir);
+    expect(uploads).toEqual([]);
+    expect(generated[0].chats.map((x) => x.chatId)).toEqual([d.id, img.id]);
+  });
+});
+
 describe('/api/library', () => {
   it('lists the library', async () => {
     const ctx = makeApp();

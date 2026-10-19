@@ -94,7 +94,8 @@ export const api = {
 };
 
 /** Uploads one file, reporting progress from 0 to 1. Rejects with the server's error message. */
-export function uploadAttachment(file: File, onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<Attachment> {
+/** `copyOf`: the attachment `file` was re-encoded from, so the Library still counts it as that file. */
+export function uploadAttachment(file: File, onProgress: (fraction: number) => void, signal?: AbortSignal, copyOf?: string): Promise<Attachment> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/attachments');
@@ -110,6 +111,7 @@ export function uploadAttachment(file: File, onProgress: (fraction: number) => v
     signal?.addEventListener('abort', () => xhr.abort());
     const form = new FormData();
     form.append('file', file);
+    if (copyOf) form.append('copyOf', copyOf);
     xhr.send(form);
   });
 }

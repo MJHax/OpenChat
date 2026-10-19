@@ -61,10 +61,14 @@ export function cleanFilename(name: string): string {
   return clean || 'file';
 }
 
-export function insertPending(db: DB, a: { filename: string; kind: AttachmentKind; mime: string; data: Uint8Array }): Attachment {
+/** `copyOf` is the attachment this file was re-encoded from (a shrunk image), so the Library treats it as that file. */
+export function insertPending(db: DB, a: { filename: string; kind: AttachmentKind; mime: string; data: Uint8Array; copyOf?: string }): Attachment {
   const id = newId();
-  db.prepare('INSERT INTO attachments (id, message_id, kind, filename, mime, size, data, created_at, hash) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)')
-    .run(id, a.kind, a.filename, a.mime, a.data.length, Buffer.from(a.data), now(), hashBytes(a.data));
+  const origin = a.copyOf
+    ? (db.prepare('SELECT COALESCE(origin_hash, hash) FROM attachments WHERE id = ?').pluck().get(a.copyOf) as string | null | undefined) ?? null
+    : null;
+  db.prepare('INSERT INTO attachments (id, message_id, kind, filename, mime, size, data, created_at, hash, origin_hash) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(id, a.kind, a.filename, a.mime, a.data.length, Buffer.from(a.data), now(), hashBytes(a.data), origin);
   return { id, kind: a.kind, filename: a.filename, mime: a.mime, size: a.data.length };
 }
 
@@ -112,8 +116,8 @@ export function resolveAttachmentIds(db: DB, ids: unknown, opts: { editedMessage
 export function attachToMessage(db: DB, messageId: string, list: AttachmentRow[]): void {
   const claim = db.prepare('UPDATE attachments SET message_id = ?, position = ? WHERE id = ?');
   const copy = db.prepare(
-    `INSERT INTO attachments (id, message_id, position, kind, filename, mime, size, data, created_at, hash)
-     SELECT ?, ?, ?, kind, filename, mime, size, data, ?, hash FROM attachments WHERE id = ?`,
+    `INSERT INTO attachments (id, message_id, position, kind, filename, mime, size, data, created_at, hash, origin_hash)
+     SELECT ?, ?, ?, kind, filename, mime, size, data, ?, hash, origin_hash FROM attachments WHERE id = ?`,
   );
   list.forEach((a, position) => {
     if (a.messageId === null) claim.run(messageId, position, a.id);

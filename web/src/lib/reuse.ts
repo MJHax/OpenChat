@@ -1,13 +1,13 @@
 import type { Attachment, LibraryItem } from '../../../shared/types';
-import { api, librarySrc } from '../api';
+import { api, librarySrc, uploadAttachment } from '../api';
 import { needsShrinking } from './generated';
 import { shrinkImage } from './shrinkImage';
 
 export interface ReuseDraft { attachments: Attachment[]; files: File[] }
 
 /**
- * A Library file ready to drop into a new chat's composer: a pending copy on the server, or (for an image too big
- * to attach as it is) a shrunk file the composer uploads like any other.
+ * A Library file ready to drop into a new chat's composer, as a pending copy on the server. An image too big to
+ * attach as it is gets shrunk here and uploaded as a copy of the original, so the Library still counts it as that file.
  */
 export async function reuseItem(item: LibraryItem): Promise<ReuseDraft> {
   const { source } = item;
@@ -16,7 +16,8 @@ export async function reuseItem(item: LibraryItem): Promise<ReuseDraft> {
   if (source.kind === 'image' && needsShrinking(item.size)) {
     const blob = await (await fetch(librarySrc(source))).blob();
     const base = item.name.replace(/\.[^.]+$/, '') || 'image';
-    return { attachments: [], files: [new File([await shrinkImage(blob)], `${base}.jpg`, { type: 'image/jpeg' })] };
+    const file = new File([await shrinkImage(blob)], `${base}.jpg`, { type: 'image/jpeg' });
+    return { attachments: [await uploadAttachment(file, () => {}, undefined, source.attachmentId)], files: [] };
   }
   return { attachments: [await api.copyGenerated({ attachmentId: source.attachmentId })], files: [] };
 }
