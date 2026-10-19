@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Attachment, LibraryModel } from '../../../shared/types';
+import { EFFORTS, type Attachment, type Effort, type LibraryModel } from '../../../shared/types';
 import { sendBlockReason, skippedImagesNotice } from '../lib/attachments';
 import { MAX_COMPARE, toggleModel, type CompareState } from '../lib/compare';
 import { SEARCH_TOOLTIP } from '../lib/search';
+import { EFFORT_TOOLTIP } from '../lib/effort';
 import { AttachmentChips } from './AttachmentChips';
 import { AttachButton, useFileDrop } from './AttachButton';
 import { useAttachmentDraft } from './useAttachmentDraft';
@@ -18,6 +19,9 @@ interface Props {
   onCompareChange(next: CompareState): void;
   webSearch: boolean;
   onWebSearchChange(on: boolean): void;
+  /** Reasoning effort; null leaves it to the model. */
+  effort: Effort | null;
+  onEffortChange(effort: Effort | null): void;
   /** The model(s) the next send goes to, for the image checks. */
   replyModels: LibraryModel[];
   /** The chat's messages so far, to warn when earlier images will be skipped. */
@@ -28,7 +32,8 @@ interface Props {
 }
 
 export function Composer({
-  disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, webSearch, onWebSearchChange, replyModels, path,
+  disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, webSearch, onWebSearchChange, effort, onEffortChange,
+  replyModels, path,
   onSend, onStop,
 }: Props) {
   const [text, setText] = useState('');
@@ -95,6 +100,18 @@ export function Composer({
             >
               Compare
             </button>
+            {replyModels.some((m) => m.supportsReasoning) && (
+              <select
+                className={`effort${effort ? ' on' : ''}`}
+                value={effort ?? ''}
+                title={EFFORT_TOOLTIP}
+                aria-label="Reasoning effort"
+                onChange={(e) => onEffortChange((e.target.value || null) as Effort | null)}
+              >
+                <option value="">Default effort</option>
+                {EFFORTS.map((x) => <option key={x} value={x}>{`${x[0].toUpperCase()}${x.slice(1)} effort`}</option>)}
+              </select>
+            )}
             {compare.enabled ? (
               <div className="compare-picker">
                 {models.map((m) => {

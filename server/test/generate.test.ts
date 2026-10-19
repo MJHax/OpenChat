@@ -618,3 +618,42 @@ describe('file generation', () => {
     expect(prompts[0]).not.toContain('SECRET BODY');
   });
 });
+
+describe('reasoning effort', () => {
+  function recording() {
+    const efforts: (string | undefined)[] = [];
+    const streamChat: OpenRouterClient['streamChat'] = async function* ({ effort }): AsyncGenerator<StreamEvent> {
+      efforts.push(effort);
+      yield { type: 'delta', text: 'ok' };
+      yield { type: 'usage', usage: USAGE };
+    };
+    return { streamChat, efforts };
+  }
+
+  it('sends the effort to models that support reasoning, saves it on the reply, and uses the new one on regenerate', async () => {
+    const { streamChat, efforts } = recording();
+    const { call, db } = makeApp({ streamChat });
+    addModel(db, withCatalogDefaults({ id: 'r/thinker', name: 'Thinker', supportsReasoning: true }));
+    const chatId = await newChat(call);
+
+    const sent = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: 'r/thinker', effort: 'low' }));
+    expect(sent.find((e) => e.event === 'done')!.data.message.effort).toBe('low');
+    const parentId = sent[0].data.userMessageId as string;
+    await readEvents(await call('POST', `/api/chats/${chatId}/regenerate`, { parentId, modelId: 'r/thinker', effort: 'high' }));
+    await readEvents(await call('POST', `/api/chats/${chatId}/regenerate`, { parentId, modelId: 'r/thinker' }));
+    expect(efforts).toEqual(['low', 'high', undefined]);
+    expect(getChatMessages(db, chatId).filter((m) => m.role === 'assistant').map((m) => m.effort)).toEqual(['low', 'high', null]);
+  });
+
+  it('leaves the effort out for models without reasoning, and refuses unknown values', async () => {
+    const { streamChat, efforts } = recording();
+    const { call, db } = makeApp({ streamChat });
+    addModel(db, withCatalogDefaults({ id: 'p/plain', name: 'Plain', supportsReasoning: false }));
+    const chatId = await newChat(call);
+
+    const sent = await readEvents(await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: 'p/plain', effort: 'high' }));
+    expect(efforts).toEqual([undefined]);
+    expect(sent.find((e) => e.event === 'done')!.data.message.effort).toBeNull();
+    expect((await call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: 'p/plain', effort: 'max' })).status).toBe(400);
+  });
+});

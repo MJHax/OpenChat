@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { Attachment, ChatDetail, LibraryModel, Message, SettingsView } from '../../../shared/types';
+import type { Attachment, ChatDetail, Effort, LibraryModel, Message, SettingsView } from '../../../shared/types';
 import { api, streamComparison, streamGeneration } from '../api';
 import { COMPARE_OFF, compareModels, loadCompare, saveCompare, type CompareState } from '../lib/compare';
 import { initialModelId } from '../lib/models';
 import { loadSearch, saveSearch } from '../lib/search';
+import { loadEffort, saveEffort } from '../lib/effort';
 import { navigate } from '../lib/route';
 import { AttachmentChips } from './AttachmentChips';
 import { ChatStatsPopover } from './ChatStatsPopover';
@@ -77,6 +78,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   const [modelId, setModelId] = useState('');
   const [compare, setCompareState] = useState<CompareState>(COMPARE_OFF);
   const [webSearch, setWebSearchState] = useState(false);
+  const [effort, setEffortState] = useState<Effort | null>(() => loadEffort(chatId));
   /** Instructions set on a new chat before it exists; sent when the first message creates it. */
   const [draftInstructions, setDraftInstructions] = useState('');
   /** A continued chat's summary note as being edited; null when the chat has none. */
@@ -117,6 +119,11 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     if (chatId) saveSearch(chatId, on);
   }
 
+  function setEffort(next: Effort | null) {
+    setEffortState(next);
+    saveEffort(chatId, next);
+  }
+
   // Load the chat whenever the route (or an explicit reload request) changes.
   useEffect(() => {
     viewChatRef.current = chatId;
@@ -131,6 +138,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     setPending((p) => (p && p.chatId === chatId ? p : null));
     setCompareState(chatId ? loadCompare(chatId) : COMPARE_OFF);
     setWebSearchState(chatId ? loadSearch(chatId) : false);
+    setEffortState(loadEffort(chatId));
     if (!chatId) {
       setDetail(null);
       setDraftInstructions('');
@@ -166,6 +174,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       viewChatRef.current = id;
       saveCompare(id, compare);
       saveSearch(id, webSearch);
+      saveEffort(id, effort);
       navigate(`#/chat/${id}`);
       onChatsChanged();
       return id;
@@ -201,7 +210,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     };
 
     const url = `/api/chats/${streamChat}/${opts.kind === 'send' ? 'messages' : opts.kind}`;
-    const modelField = opts.models.length === 1 ? { modelId: opts.models[0] } : { modelIds: opts.models };
+    // Regenerate uses the effort picked now, so a reply can be retried at a different one.
+    const modelField = { ...(opts.models.length === 1 ? { modelId: opts.models[0] } : { modelIds: opts.models }), ...(effort ? { effort } : {}) };
     const body =
       opts.kind === 'send' ? { content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), webSearch, ...modelField }
       : opts.kind === 'regenerate' ? { parentId: opts.parentId, ...modelField }
@@ -517,6 +527,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
           onCompareChange={setCompare}
           webSearch={webSearch}
           onWebSearchChange={setWebSearch}
+          effort={effort}
+          onEffortChange={setEffort}
           replyModels={replyModels}
           path={messages}
           onSend={send}

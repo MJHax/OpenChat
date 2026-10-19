@@ -143,6 +143,7 @@ export function MessageItem({
         <span className="model-tag">{modelName}</span>
         {tokens > 0 && <span>{formatTokens(tokens)} tok</span>}
         {message.cost !== null && <span>· {formatCost(message.cost)}</span>}
+        {message.effort && <span>· {message.effort} effort</span>}
         {(message.webSearches ?? 0) > 0 && <span>· searched {message.webSearches}×</span>}
         <button className="link" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
         {rememberButton}

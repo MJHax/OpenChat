@@ -209,6 +209,11 @@ describe('streamChat web search', () => {
     expect(body).not.toHaveProperty('tools');
     expect(body).not.toHaveProperty('max_tool_calls');
     expect(body).not.toHaveProperty('plugins');
+    expect(body).not.toHaveProperty('reasoning');
+  });
+
+  it('sends a reasoning effort when one is given', async () => {
+    expect((await bodyOf({ effort: 'high' })).reasoning).toEqual({ effort: 'high' });
   });
 
   it('turns streamed citations into sources and reads the search count', async () => {

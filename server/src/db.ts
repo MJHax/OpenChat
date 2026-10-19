@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS models (
   completion_price REAL,
   added_at INTEGER NOT NULL,
   input_modalities TEXT,
-  supports_tools INTEGER
+  supports_tools INTEGER,
+  supports_reasoning INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS memories (
@@ -58,7 +59,8 @@ CREATE TABLE IF NOT EXISTS messages (
   web_searches INTEGER,
   -- Discussions: who said it (null for host lines), and whom a moderator turn handed the floor to.
   participant_id TEXT,
-  handoff_to TEXT
+  handoff_to TEXT,
+  effort TEXT
 );
 CREATE INDEX IF NOT EXISTS messages_chat ON messages(chat_id, created_at);
 
@@ -243,12 +245,14 @@ function migrate(db: DB): void {
   const modelColumns = (db.prepare('PRAGMA table_info(models)').all() as { name: string }[]).map((c) => c.name);
   if (!modelColumns.includes('input_modalities')) db.exec('ALTER TABLE models ADD COLUMN input_modalities TEXT');
   if (!modelColumns.includes('supports_tools')) db.exec('ALTER TABLE models ADD COLUMN supports_tools INTEGER');
+  if (!modelColumns.includes('supports_reasoning')) db.exec('ALTER TABLE models ADD COLUMN supports_reasoning INTEGER');
   const messageColumns = (db.prepare('PRAGMA table_info(messages)').all() as { name: string }[]).map((c) => c.name);
   if (!messageColumns.includes('web_search')) db.exec('ALTER TABLE messages ADD COLUMN web_search INTEGER NOT NULL DEFAULT 0');
   if (!messageColumns.includes('sources')) db.exec('ALTER TABLE messages ADD COLUMN sources TEXT');
   if (!messageColumns.includes('web_searches')) db.exec('ALTER TABLE messages ADD COLUMN web_searches INTEGER');
   if (!messageColumns.includes('participant_id')) db.exec('ALTER TABLE messages ADD COLUMN participant_id TEXT');
   if (!messageColumns.includes('handoff_to')) db.exec('ALTER TABLE messages ADD COLUMN handoff_to TEXT');
+  if (!messageColumns.includes('effort')) db.exec('ALTER TABLE messages ADD COLUMN effort TEXT');
   const videoJobColumns = (db.prepare('PRAGMA table_info(video_jobs)').all() as { name: string }[]).map((c) => c.name);
   if (!videoJobColumns.includes('download_failed_at')) db.exec('ALTER TABLE video_jobs ADD COLUMN download_failed_at INTEGER');
   backfillUsage(db);

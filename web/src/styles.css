@@ -256,6 +256,7 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-weight: 500;
 .chip input { margin: 0; }
 button.toggle { padding: 4px 10px; font-size: 13px; }
 button.toggle[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
+select.effort.on { border-color: var(--accent); color: var(--accent); }
 .composer-hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
 .remember-box { width: min(600px, 80vw); display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .msg.assistant .remember-box { width: 100%; max-width: 600px; }

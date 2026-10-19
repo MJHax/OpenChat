@@ -19,9 +19,9 @@ export function forkChat(db: DB, chatId: string, messageId: string): ChatSummary
 
   const copyMessage = db.prepare(
     `INSERT INTO messages (id, chat_id, parent_id, role, content, model_id, prompt_tokens, completion_tokens, cost, status, created_at,
-       web_search, sources, web_searches, participant_id, handoff_to)
+       web_search, sources, web_searches, participant_id, handoff_to, effort)
      SELECT ?, ?, ?, role, content, model_id, prompt_tokens, completion_tokens, cost, status, created_at,
-       web_search, sources, web_searches, participant_id, handoff_to
+       web_search, sources, web_searches, participant_id, handoff_to, effort
      FROM messages WHERE id = ?`,
   );
   const copyAttachments = db.prepare(

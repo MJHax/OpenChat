@@ -6,13 +6,13 @@ import { getChatRow, setActiveLeaf, touchChat } from './chats';
 import { getChatMessages, insertMessage } from './messages';
 import { OpenRouterError, type Usage, type WebSearchMode } from './openrouter';
 import { chatImageNames, getAttachmentData } from './attachments';
-import { modelModalities, modelSupportsTools } from './library';
+import { modelModalities, modelSupportsReasoning, modelSupportsTools } from './library';
 import { buildMessages, pdfPlugins, withCacheMarkers, type ChatMessage, type Plugin } from './prompt';
 import { chatPersona, resolveApiKey } from './settings';
 import { maybeGenerateTitle } from './title';
 import { activePath } from './tree';
 import { recordUsage, type ReplyKind, type UsageStatus } from './usage';
-import type { Message, MessageStatus, Source, StreamDone, StreamError, StreamStart, StreamTitle } from '../../shared/types';
+import type { Effort, Message, MessageStatus, Source, StreamDone, StreamError, StreamStart, StreamTitle } from '../../shared/types';
 
 export function replyErrorMessage(err: unknown): string {
   if (err instanceof OpenRouterError) return err.message;
@@ -24,13 +24,15 @@ export interface Prompt {
   messages: ChatMessage[];
   plugins?: Plugin[];
   webSearch?: WebSearchMode;
+  /** The effort asked for, kept only when the model supports reasoning. */
+  effort?: Effort;
 }
 
 /**
  * The prompt for `modelId` replying to `parentId`: images it can't view become notes, PDFs get an engine it can use,
  * and when the user message asked for web search, the model searches with the tool if it can, else the plugin.
  */
-export function promptFor(deps: Deps, chatId: string, parentId: string, modelId: string): Prompt {
+export function promptFor(deps: Deps, chatId: string, parentId: string, modelId: string, effort?: Effort): Prompt {
   const { db } = deps;
   const path = activePath(getChatMessages(db, chatId), parentId);
   const inputModalities = modelModalities(db, modelId);
@@ -38,7 +40,10 @@ export function promptFor(deps: Deps, chatId: string, parentId: string, modelId:
   const webSearch = path.at(-1)?.webSearch ? (modelSupportsTools(db, modelId) ? 'tool' : 'plugin') : undefined;
   const note = getChatRow(db, chatId)?.context_note;
   const messages = buildMessages(chatPersona(db, chatId), path, { inputModalities, loadData }, { imageNames: chatImageNames(db, chatId) }, note);
-  return { messages: withCacheMarkers(modelId, messages), plugins: pdfPlugins(path, inputModalities), webSearch };
+  return {
+    messages: withCacheMarkers(modelId, messages), plugins: pdfPlugins(path, inputModalities), webSearch,
+    effort: effort && modelSupportsReasoning(db, modelId) ? effort : undefined,
+  };
 }
 
 /** Adds sources not seen yet (by URL), keeping arrival order and the first title. */
@@ -62,6 +67,7 @@ interface ReplyOptions {
   kind: ReplyKind;
   /** Files on the user message being answered, for send/edit; 0 for regenerate. */
   attachments: number;
+  effort?: Effort;
   /** Called once, as soon as the reply is saved or the stream ends, whichever comes first. */
   onFinish?: () => void;
 }
@@ -101,7 +107,7 @@ export const failureStatus = (signal: AbortSignal): UsageStatus => (signal.abort
  */
 export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
   const { db, openrouter, env } = deps;
-  const prompt = promptFor(deps, o.chatId, o.parentId, o.modelId);
+  const prompt = promptFor(deps, o.chatId, o.parentId, o.modelId, o.effort);
   const { key } = resolveApiKey(db, env);
   const assistantId = newId();
   const abort = new AbortController();
@@ -150,6 +156,7 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
         status,
         sources,
         webSearches: searchCount(prompt.webSearch, usage, sources),
+        effort: prompt.effort ?? null,
       });
       setActiveLeaf(db, o.chatId, message.id);
       touchChat(db, o.chatId);

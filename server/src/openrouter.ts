@@ -1,5 +1,5 @@
 import { parseSSE } from '../../shared/sse';
-import type { CatalogModel, Category, Source } from '../../shared/types';
+import type { CatalogModel, Category, Effort, Source } from '../../shared/types';
 import type { ChatMessage, Plugin } from './prompt';
 import { parseImageModel, type ImageModel, type ImageSettings } from '../../shared/imageModels';
 import { parseVideoModel, type VideoModel } from '../../shared/videoModels';
@@ -141,6 +141,8 @@ export interface OpenRouterClient {
   complete(o: { apiKey: string; model: string; messages: ChatMessage[]; maxTokens?: number; onUsage?: (usage: Usage) => void }): Promise<string>;
   streamChat(o: {
     apiKey: string; model: string; messages: ChatMessage[]; plugins?: Plugin[]; webSearch?: WebSearchMode; tools?: FunctionTool[]; signal?: AbortSignal;
+    /** Only for models that support reasoning; left out, the model uses its own default. */
+    effort?: Effort;
   }): AsyncGenerator<StreamEvent>;
   /** Image models with their pricing; a model whose pricing can't be fetched is listed with an unknown price. */
   listImageModels(): Promise<ImageModel[]>;
@@ -311,12 +313,14 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
       return { data, mime, usage: json.usage ? parseUsage(json.usage) : null };
     },
 
-    async *streamChat({ apiKey, model, messages, plugins, webSearch, tools, signal }) {
+    async *streamChat({ apiKey, model, messages, plugins, webSearch, tools, signal, effort }) {
       const res = await request('/chat/completions', {
         method: 'POST',
         apiKey,
         signal,
-        body: JSON.stringify({ model, messages, stream: true, usage: { include: true }, ...toolFields(webSearch, plugins, tools) }),
+        body: JSON.stringify({
+          model, messages, stream: true, usage: { include: true }, ...toolFields(webSearch, plugins, tools), ...(effort ? { reasoning: { effort } } : {}),
+        }),
       });
       if (!res.body) throw new OpenRouterError('Empty response from OpenRouter.', 502);
       // Function calls stream in pieces by index: the name once, the arguments as text fragments.

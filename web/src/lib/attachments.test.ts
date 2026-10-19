@@ -4,7 +4,7 @@ import { MB, TOO_MANY_FILES, TOO_MUCH_TOTAL, UNSUPPORTED_TYPE } from '../../../s
 import type { Attachment, LibraryModel } from '../../../shared/types';
 
 const model = (id: string, displayName: string, inputModalities: string[]): LibraryModel => ({
-  id, displayName, contextLength: null, promptPrice: null, completionPrice: null, isDefault: false, inputModalities, supportsTools: false,
+  id, displayName, contextLength: null, promptPrice: null, completionPrice: null, isDefault: false, inputModalities, supportsTools: false, supportsReasoning: false,
 });
 const vision = model('v/vision', 'Vision', ['text', 'image']);
 const textOnly = model('t/text', 'Text Model', ['text']);

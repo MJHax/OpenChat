@@ -3,12 +3,12 @@ import { makeApp } from './appHelpers';
 import { OpenRouterError } from '../src/openrouter';
 import type { CatalogModel, CatalogResponse, LibraryModel } from '../../shared/types';
 import { withCatalogDefaults } from '../../shared/types';
-import { modelModalities, modelSupportsTools } from '../src/library';
+import { modelModalities, modelSupportsReasoning, modelSupportsTools } from '../src/library';
 
 const CATALOG: CatalogModel[] = [
   { id: 'openai/gpt-4o:free', name: 'GPT-4o (free)', contextLength: 128000, promptPrice: 0, completionPrice: 0 },
   { id: '~anthropic/claude', name: 'Claude', contextLength: 200000, promptPrice: 0.000003, completionPrice: 0.000015 },
-  { id: 'google/gemini', name: 'Gemini', contextLength: 1000000, promptPrice: 0.000001, completionPrice: 0.000004, inputModalities: ['text', 'image', 'file'], supportsTools: true },
+  { id: 'google/gemini', name: 'Gemini', contextLength: 1000000, promptPrice: 0.000001, completionPrice: 0.000004, inputModalities: ['text', 'image', 'file'], supportsTools: true, supportsReasoning: true },
 ].map(withCatalogDefaults);
 
 function setup(listModels?: () => Promise<CatalogModel[]>) {
@@ -155,7 +155,7 @@ describe('model library', () => {
     const { call } = setup();
     const added = (await (await call('POST', '/api/models', { id: 'openai/gpt-4o:free' })).json()) as LibraryModel[];
     expect(added).toEqual([
-      { id: 'openai/gpt-4o:free', displayName: 'GPT-4o (free)', contextLength: 128000, promptPrice: 0, completionPrice: 0, isDefault: true, inputModalities: ['text'], supportsTools: false },
+      { id: 'openai/gpt-4o:free', displayName: 'GPT-4o (free)', contextLength: 128000, promptPrice: 0, completionPrice: 0, isDefault: true, inputModalities: ['text'], supportsTools: false, supportsReasoning: false },
     ]);
 
     await call('POST', '/api/models', { id: '~anthropic/claude' });
@@ -242,5 +242,19 @@ describe('tool support', () => {
     db.prepare('UPDATE models SET supports_tools = NULL').run();
     db.prepare('DELETE FROM model_catalog_cache').run();
     expect(modelSupportsTools(db, 'google/gemini')).toBe(false);
+  });
+});
+
+describe('reasoning support', () => {
+  it('stores reasoning support and backfills it from the catalog', async () => {
+    const { call, db } = setup();
+    await call('POST', '/api/models', { id: 'google/gemini' });
+    await call('POST', '/api/models', { id: '~anthropic/claude' });
+    expect(modelSupportsReasoning(db, 'google/gemini')).toBe(true);
+    expect(modelSupportsReasoning(db, '~anthropic/claude')).toBe(false);
+
+    db.prepare('UPDATE models SET supports_reasoning = NULL').run();
+    const list = (await (await call('GET', '/api/models')).json()) as LibraryModel[];
+    expect(list.map((m) => m.supportsReasoning)).toEqual([true, false]);
   });
 });

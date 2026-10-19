@@ -1,5 +1,5 @@
-// Per-chat settings the browser keeps (web/src/lib/compare.ts, web/src/lib/search.ts).
-const PER_CHAT = ['openchat.compare.', 'openchat.search.'];
+// Per-chat settings the browser keeps (web/src/lib/compare.ts, web/src/lib/search.ts, web/src/lib/effort.ts).
+const PER_CHAT = ['openchat.compare.', 'openchat.search.', 'openchat.effort.'];
 
 function keys(): string[] {
   const out: string[] = [];

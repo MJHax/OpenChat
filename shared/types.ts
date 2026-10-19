@@ -50,6 +50,8 @@ export interface Message {
   participantId: string | null;
   /** Discussions: the participant a moderator turn handed the floor to; null otherwise. */
   handoffTo: string | null;
+  /** Assistant messages: the reasoning effort asked for; null when the model's default was used. */
+  effort: Effort | null;
 }
 
 export interface DiscussionParticipant {
@@ -254,7 +256,13 @@ export interface LibraryModel {
   inputModalities: string[];
   /** Whether it can call tools, e.g. to moderate a discussion; false when unknown. */
   supportsTools: boolean;
+  /** Whether it takes a reasoning effort; false when unknown. */
+  supportsReasoning: boolean;
 }
+
+/** How hard a reasoning model thinks before answering; OpenRouter maps it to each provider's own setting. */
+export type Effort = 'low' | 'medium' | 'high';
+export const EFFORTS: Effort[] = ['low', 'medium', 'high'];
 
 export interface Memory {
   id: number;

@@ -1,7 +1,7 @@
 import type { DB } from './db';
 import { attachmentsFor } from './attachments';
 import { newId, now } from './db';
-import type { Message, MessageStatus, Role, Source } from '../../shared/types';
+import type { Effort, Message, MessageStatus, Role, Source } from '../../shared/types';
 
 interface MessageRow {
   id: string;
@@ -20,6 +20,7 @@ interface MessageRow {
   web_searches: number | null;
   participant_id: string | null;
   handoff_to: string | null;
+  effort: string | null;
 }
 
 const toMessage = (r: MessageRow, attachments: Map<string, Message['attachments']>): Message => ({
@@ -40,24 +41,25 @@ const toMessage = (r: MessageRow, attachments: Map<string, Message['attachments'
   webSearches: r.web_searches,
   participantId: r.participant_id ?? null,
   handoffTo: r.handoff_to ?? null,
+  effort: (r.effort as Effort | null) ?? null,
 });
 
 export type NewMessage = Pick<Message, 'chatId' | 'parentId' | 'role' | 'content'> &
   Partial<Pick<Message,
-    'id' | 'modelId' | 'promptTokens' | 'completionTokens' | 'cost' | 'status' | 'webSearch' | 'sources' | 'webSearches' | 'participantId' | 'handoffTo'
+    'id' | 'modelId' | 'promptTokens' | 'completionTokens' | 'cost' | 'status' | 'webSearch' | 'sources' | 'webSearches' | 'participantId' | 'handoffTo' | 'effort'
   >>;
 
 export function insertMessage(db: DB, m: NewMessage): Message {
   const id = m.id ?? newId();
   db.prepare(
     `INSERT INTO messages (id, chat_id, parent_id, role, content, model_id, prompt_tokens, completion_tokens, cost, status, created_at,
-       web_search, sources, web_searches, participant_id, handoff_to)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       web_search, sources, web_searches, participant_id, handoff_to, effort)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id, m.chatId, m.parentId, m.role, m.content, m.modelId ?? null,
     m.promptTokens ?? null, m.completionTokens ?? null, m.cost ?? null, m.status ?? 'complete', now(),
     m.webSearch ? 1 : 0, m.sources?.length ? JSON.stringify(m.sources) : null, m.webSearches ?? null,
-    m.participantId ?? null, m.handoffTo ?? null,
+    m.participantId ?? null, m.handoffTo ?? null, m.effort ?? null,
   );
   return getMessage(db, id)!;
 }

@@ -13,22 +13,24 @@ interface ModelRow {
   completion_price: number | null;
   input_modalities: string | null;
   supports_tools: number | null;
+  supports_reasoning: number | null;
 }
 
 const TEXT_ONLY = ['text'];
 
 /** Rows added before capabilities were stored are filled in from the cached catalog when it knows the model. */
 function backfillCapabilities(db: DB, rows: ModelRow[]): void {
-  const missing = rows.filter((r) => r.input_modalities === null || r.supports_tools === null);
+  const missing = rows.filter((r) => r.input_modalities === null || r.supports_tools === null || r.supports_reasoning === null);
   if (missing.length === 0) return;
   const cached = cachedCapabilities(db);
-  const update = db.prepare('UPDATE models SET input_modalities = ?, supports_tools = ? WHERE id = ?');
+  const update = db.prepare('UPDATE models SET input_modalities = ?, supports_tools = ?, supports_reasoning = ? WHERE id = ?');
   for (const r of missing) {
     const caps = cached.get(r.id);
     if (!caps) continue;
     r.input_modalities ??= JSON.stringify(caps.inputModalities);
     r.supports_tools ??= caps.supportsTools ? 1 : 0;
-    update.run(r.input_modalities, r.supports_tools, r.id);
+    r.supports_reasoning ??= caps.supportsReasoning ? 1 : 0;
+    update.run(r.input_modalities, r.supports_tools, r.supports_reasoning, r.id);
   }
 }
 
@@ -48,6 +50,14 @@ export function modelSupportsTools(db: DB, id: string): boolean {
   if (!row) return false;
   backfillCapabilities(db, [row]);
   return row.supports_tools === 1;
+}
+
+/** Whether a model takes a reasoning effort; false when unknown. */
+export function modelSupportsReasoning(db: DB, id: string): boolean {
+  const row = db.prepare('SELECT * FROM models WHERE id = ?').get(id) as ModelRow | undefined;
+  if (!row) return false;
+  backfillCapabilities(db, [row]);
+  return row.supports_reasoning === 1;
 }
 
 /** A model's context window in tokens; null when it isn't in the library or OpenRouter didn't say. */
@@ -74,6 +84,7 @@ export function listLibrary(db: DB): LibraryModel[] {
     isDefault: r.id === defaultId,
     inputModalities: parseModalities(r.input_modalities),
     supportsTools: r.supports_tools === 1,
+    supportsReasoning: r.supports_reasoning === 1,
   }));
 }
 
@@ -83,8 +94,11 @@ export function requireLibraryModel(db: DB, id: string): void {
 
 export function addModel(db: DB, meta: CatalogModel): void {
   db.prepare(
-    'INSERT OR IGNORE INTO models (id, display_name, context_length, prompt_price, completion_price, added_at, input_modalities, supports_tools) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-  ).run(meta.id, meta.name, meta.contextLength, meta.promptPrice, meta.completionPrice, now(), JSON.stringify(meta.inputModalities), meta.supportsTools ? 1 : 0);
+    'INSERT OR IGNORE INTO models (id, display_name, context_length, prompt_price, completion_price, added_at, input_modalities, supports_tools, supports_reasoning) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  ).run(
+    meta.id, meta.name, meta.contextLength, meta.promptPrice, meta.completionPrice, now(), JSON.stringify(meta.inputModalities),
+    meta.supportsTools ? 1 : 0, meta.supportsReasoning ? 1 : 0,
+  );
   if (!getSetting(db, 'default_model_id')) setSetting(db, 'default_model_id', meta.id);
 }
 

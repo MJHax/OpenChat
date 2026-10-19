@@ -26,10 +26,10 @@ function readCache(db: DB): Cached | undefined {
  * Input modalities per model id from the cached catalog, however old; empty when nothing is cached.
  * A legacy cache predates modalities (its ['text'] is only a default), so it counts as knowing nothing.
  */
-export function cachedCapabilities(db: DB): Map<string, { inputModalities: string[]; supportsTools: boolean }> {
+export function cachedCapabilities(db: DB): Map<string, { inputModalities: string[]; supportsTools: boolean; supportsReasoning: boolean }> {
   const cached = readCache(db);
   if (!cached || cached.legacy) return new Map();
-  return new Map(cached.models.map((m) => [m.id, { inputModalities: m.inputModalities, supportsTools: m.supportsTools }]));
+  return new Map(cached.models.map((m) => [m.id, { inputModalities: m.inputModalities, supportsTools: m.supportsTools, supportsReasoning: m.supportsReasoning }]));
 }
 
 /** Per-token prompt and cache-read prices from the cached catalog, however old; empty when nothing (or a legacy cache) is cached. */

@@ -7,7 +7,7 @@ import { attachToMessage, requireViewable, resolveAttachmentIds, type Attachment
 import { streamReply } from '../generate';
 import { streamComparison } from '../compare';
 import type { DB } from '../db';
-import type { Message } from '../../../shared/types';
+import { EFFORTS, type Effort, type Message } from '../../../shared/types';
 import type { ReplyKind } from '../usage';
 import { checkSpend } from '../limits';
 
@@ -20,6 +20,13 @@ const requireFlag = (value: unknown): boolean => {
   if (value === undefined) return false;
   if (typeof value !== 'boolean') throw new HttpError(400, 'webSearch must be true or false.');
   return value;
+};
+
+/** A reasoning effort, or undefined for the model's default. */
+const requireEffort = (value: unknown): Effort | undefined => {
+  if (value === undefined || value === null) return undefined;
+  if (!EFFORTS.includes(value as Effort)) throw new HttpError(400, `effort must be one of ${EFFORTS.join(', ')}.`);
+  return value as Effort;
 };
 
 /** Message text, which may be empty when the message has attachments. */
@@ -67,6 +74,7 @@ export function generationRoutes(deps: Deps): Hono {
 
   function reply(c: Context, o: {
     chatId: string; parentId: string; modelIds: string[]; userMessageId: string | null; kind: ReplyKind; attachments: number;
+    effort: Effort | undefined;
   }): Response {
     const onFinish = () => inFlight.delete(o.chatId);
     try {
@@ -91,8 +99,9 @@ export function generationRoutes(deps: Deps): Hono {
   r.post('/:id/messages', async (c) => {
     const chatId = c.req.param('id');
     const chat = requireChat(db, chatId);
-    const body = await readJson<{ content?: string; modelId?: unknown; modelIds?: unknown; attachmentIds?: unknown; webSearch?: unknown }>(c);
+    const body = await readJson<{ content?: string; modelId?: unknown; modelIds?: unknown; attachmentIds?: unknown; webSearch?: unknown; effort?: unknown }>(c);
     const webSearch = requireFlag(body.webSearch);
+    const effort = requireEffort(body.effort);
     const attachments = resolveAttachmentIds(db, body.attachmentIds, { editedMessageId: null });
     const content = requireContent(body.content, attachments);
     const modelIds = requireModels(body);
@@ -101,24 +110,28 @@ export function generationRoutes(deps: Deps): Hono {
     const user = saveUserMessage(chatId, chat.active_leaf_id, content, attachments, webSearch);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
-    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id, kind: 'send', attachments: attachments.length });
+    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id, kind: 'send', attachments: attachments.length, effort });
   });
 
   r.post('/:id/regenerate', async (c) => {
     const chatId = c.req.param('id');
     const chat = requireChat(db, chatId);
-    const body = await readJson<{ parentId?: string; modelId?: unknown; modelIds?: unknown }>(c);
+    const body = await readJson<{ parentId?: string; modelId?: unknown; modelIds?: unknown; effort?: unknown }>(c);
+    const effort = requireEffort(body.effort);
     const parent = requireUserMessage(db, chatId, body.parentId);
     const modelIds = requireModels(body);
     claim(chat);
-    return reply(c, { chatId, parentId: parent.id, modelIds, userMessageId: null, kind: 'regenerate', attachments: 0 });
+    return reply(c, { chatId, parentId: parent.id, modelIds, userMessageId: null, kind: 'regenerate', attachments: 0, effort });
   });
 
   r.post('/:id/edit', async (c) => {
     const chatId = c.req.param('id');
     const chat = requireChat(db, chatId);
-    const body = await readJson<{ messageId?: string; content?: string; modelId?: unknown; modelIds?: unknown; attachmentIds?: unknown; webSearch?: unknown }>(c);
+    const body = await readJson<{
+      messageId?: string; content?: string; modelId?: unknown; modelIds?: unknown; attachmentIds?: unknown; webSearch?: unknown; effort?: unknown;
+    }>(c);
     const webSearch = requireFlag(body.webSearch);
+    const effort = requireEffort(body.effort);
     const original = requireUserMessage(db, chatId, body.messageId);
     const attachments = resolveAttachmentIds(db, body.attachmentIds, { editedMessageId: original.id });
     const content = requireContent(body.content, attachments);
@@ -129,7 +142,7 @@ export function generationRoutes(deps: Deps): Hono {
     const user = saveUserMessage(chatId, original.parentId, content, attachments, webSearch);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
-    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id, kind: 'edit', attachments: attachments.length });
+    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id, kind: 'edit', attachments: attachments.length, effort });
   });
 
   return r;

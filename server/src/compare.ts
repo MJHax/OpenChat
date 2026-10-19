@@ -10,6 +10,7 @@ import { OpenRouterError, type Usage } from './openrouter';
 import { resolveApiKey } from './settings';
 import { maybeGenerateTitle } from './title';
 import type {
+  Effort,
   CompareDone, CompareSlot, CompareSlotDone, CompareSlotError, CompareSlotText, CompareStart, Message, MessageStatus, Source, StreamTitle,
 } from '../../shared/types';
 
@@ -23,6 +24,8 @@ interface CompareOptions {
   kind: ReplyKind;
   /** Files on the user message being answered, for send/edit; 0 for regenerate. */
   attachments: number;
+  /** Applied to each model that supports reasoning. */
+  effort?: Effort;
   /** Called once, when every reply is saved or the stream ends, whichever comes first. */
   onFinish?: () => void;
 }
@@ -91,7 +94,7 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
     let usage: Usage | null = null;
     let sources: Source[] = [];
     // Each model gets its own prompt: one may see an image another can only read a note about, and search differently.
-    const prompt = promptFor(deps, o.chatId, o.parentId, slot.modelId);
+    const prompt = promptFor(deps, o.chatId, o.parentId, slot.modelId, o.effort);
     const timer = callTimer();
     const log = (status: UsageStatus, messageId: string | null) =>
       recordUsage(db, {
@@ -113,6 +116,7 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
         status,
         sources,
         webSearches: searchCount(prompt.webSearch, usage, sources),
+        effort: prompt.effort ?? null,
       });
 
     try {
