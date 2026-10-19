@@ -34,13 +34,14 @@ function useNarrow(): boolean {
 export function App() {
   const route = useRoute();
   // Settings opens over the page it came from; `page` is that page (or the route itself).
-  const lastPage = useRef<Route | null>(null);
-  if (route.page !== 'settings') lastPage.current = route;
-  const page = route.page === 'settings' ? settingsBackdrop(lastPage.current) : route;
+  // Adjusted while rendering (not in an effect), so the first frame with Settings open already has its backdrop.
+  const [lastPage, setLastPage] = useState<Route | null>(null);
+  if (route.page !== 'settings' && route !== lastPage) setLastPage(route);
+  const page = route.page === 'settings' ? settingsBackdrop(lastPage) : route;
   const closeSettings = useCallback(() => {
-    if (settingsCloseAction(lastPage.current) === 'back') window.history.back();
-    else replaceHash(routeHash(settingsBackdrop(lastPage.current)));
-  }, []);
+    if (settingsCloseAction(lastPage) === 'back') window.history.back();
+    else replaceHash(routeHash(settingsBackdrop(lastPage)));
+  }, [lastPage]);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [libraryModels, setModels] = useState<LibraryModel[]>([]);
   // Every model picker follows the order chosen in the Model Library.

@@ -428,7 +428,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     <FilePanelContext.Provider value={filePanel}>
       <div className={`chat${openFile ? ' with-file' : ''}${home ? ' home' : ''}`} style={{ '--file-panel-width': `${panelWidth}px` } as CSSProperties}>
         <header className="chat-header">
-          <h1>{chatId ? title : ''}</h1>
+          <h1 className={chatId ? undefined : 'visually-hidden'}>{chatId ? title : 'New chat'}</h1>
           <div className="chat-header-tools">
             <ContextPopover context={context} show={!!runModels?.length} nameOf={nameOf} onContinue={canContinue ? summarize : null} continuing={continuing} />
             <ChatStatsPopover chatId={chatId} totalCost={detail?.chat.totalCost ?? 0} refreshKey={detail} />

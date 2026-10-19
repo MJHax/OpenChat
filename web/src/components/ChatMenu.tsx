@@ -21,7 +21,7 @@ export function ChatMenu({ instructions, onSaveInstructions, compare, onCompareC
 
   return (
     <div className="chip-pop" ref={root}>
-      <button type="button" className="icon-btn menu-btn" aria-label="Chat options" title="Chat options" aria-expanded={open} aria-haspopup="menu"
+      <button type="button" className="icon-btn menu-btn" aria-label="Chat options" title="Chat options" aria-expanded={open}
         onClick={() => setOpen(!open)}>
         <MoreHorizontal size={16} />
         {instructions && <i className="instructions-dot" aria-label="(instructions set)" />}
@@ -31,11 +31,11 @@ export function ChatMenu({ instructions, onSaveInstructions, compare, onCompareC
           <InstructionsEditor value={instructions} onSave={onSaveInstructions} onDone={() => setOpen(false)} />
         </div>
       ) : (
-        <div className="popover down right chat-menu" role="menu">
-          <button className="pop-item" role="menuitem" onClick={() => setEditing(true)}>
+        <div className="popover down right chat-menu" role="group" aria-label="Chat options">
+          <button className="pop-item" onClick={() => setEditing(true)}>
             <SlidersHorizontal size={15} /><span>Chat instructions<small>{instructions ? 'Set for this chat' : 'Only for this chat'}</small></span>
           </button>
-          <button className="pop-item" role="menuitemcheckbox" aria-checked={compare.enabled} disabled={!canCompare && !compare.enabled}
+          <button className="pop-item" aria-pressed={compare.enabled} disabled={!canCompare && !compare.enabled}
             onClick={() => { onCompareChange({ ...compare, enabled: !compare.enabled }); setOpen(false); }}>
             <Columns2 size={15} /><span>Compare models<small>Send each message to several models</small></span>
             {compare.enabled && <Check size={15} className="check" />}

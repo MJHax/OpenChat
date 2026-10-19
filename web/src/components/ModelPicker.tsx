@@ -33,7 +33,7 @@ export function ModelPicker({ models, modelId, onModelChange, compare, onCompare
                 const on = compare.modelIds.includes(m.id);
                 return (
                   <button key={m.id} className={`pop-item${on ? ' sel' : ''}`} disabled={!on && compare.modelIds.length >= MAX_COMPARE}
-                    role="menuitemcheckbox" aria-checked={on} onClick={() => onCompareChange(toggleModel(compare, m.id))}>
+                    aria-pressed={on} onClick={() => onCompareChange(toggleModel(compare, m.id))}>
                     <span>{m.displayName}<small>{details(m)}</small></span>
                     {on && <Check size={15} className="check" />}
                   </button>
@@ -56,7 +56,7 @@ export function ModelPicker({ models, modelId, onModelChange, compare, onCompare
         <>
           <div className="pop-label">Your models</div>
           {models.map((m) => (
-            <button key={m.id} className={`pop-item${m.id === modelId ? ' sel' : ''}`} role="menuitemradio" aria-checked={m.id === modelId}
+            <button key={m.id} className={`pop-item${m.id === modelId ? ' sel' : ''}`} aria-current={m.id === modelId ? 'true' : undefined}
               onClick={() => { onModelChange(m.id); close(); }}>
               <span>{m.displayName}<small>{details(m)}</small></span>
               {m.id === modelId && <Check size={15} className="check" />}
