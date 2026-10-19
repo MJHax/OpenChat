@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import type { ContextParts, ContextUsage } from '../../../shared/types';
 import { api } from '../api';
 import { contextLevel } from '../lib/context';
 import { compactNumber, formatPercent } from '../lib/stats';
 import { usePopover } from './usePopover';
-import { ChevronDown } from 'lucide-react';
 
 export interface ContextState {
   usages: ContextUsage[] | null;
@@ -96,12 +95,13 @@ export function ContextPopover({ context, show, nameOf, onContinue, continuing }
 
   return (
     <div className="stats-pop" ref={root}>
-      <button type="button" className={`link stats-pop-button${level === 'full' ? ' over' : level === 'warn' ? ' warn' : ''}`} aria-expanded={open}
-        aria-haspopup="dialog" onClick={() => setOpen(!open)}>
-        Context {fullest ? (f !== null ? `${tilde(fullest)}${percent(f)}` : `${tilde(fullest)}${compactNumber(fullest.used)}`) : '…'} <ChevronDown size={14} />
+      <button type="button" className={`chip ghost ctx-chip${level === 'full' ? ' over' : level === 'warn' ? ' warn' : ''}`} aria-expanded={open}
+        aria-haspopup="dialog" onClick={() => setOpen(!open)} title="Context window">
+        <span className="ring" style={{ '--p': Math.min(100, Math.round((f ?? 0) * 100)) } as CSSProperties} aria-hidden />
+        {fullest ? (f !== null ? `${tilde(fullest)}${percent(f)}` : `${tilde(fullest)}${compactNumber(fullest.used)}`) : '…'} context
       </button>
       {open && (
-        <div className="stats-pop-panel" role="dialog" aria-label="Context window">
+        <div className="stats-pop-panel popover down right" role="dialog" aria-label="Context window">
           <h4>Context window</h4>
           {error ? (
             <p className="error-text small">{error}</p>

@@ -25,7 +25,7 @@ import { fileKind, fileVersions, parseFileBlocks, type FileBlock } from '../../.
 import { inlineImages } from '../lib/filePreview';
 import { useChatImages } from '../lib/useChatImages';
 import { panelView } from '../lib/filePanelState';
-import { MessageItem } from './MessageItem';
+import { MessageItem, ModelMark } from './MessageItem';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { toDraft } from './useAttachmentDraft';
 import { X } from 'lucide-react';
@@ -470,16 +470,19 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
             ))}
 
             {pending?.userText != null && (
-              <div className="msg user">
+              <div className="msg user pending-msg">
                 <AttachmentChips items={pending.userAttachments.map(toDraft)} inMessage />
                 {pending.userText && <div className="bubble">{pending.userText}</div>}
               </div>
             )}
             {pending && pending.slots.length === 1 && (
-              <div className="msg assistant">
-                {!pending.slots[0].text && <ThinkingIndicator startedAt={pending.startedAt} reasoning={pending.slots[0].reasoning} webSearch={pending.webSearch} />}
-                {pending.slots[0].text && <div className="msg-body"><MessageBody text={pending.slots[0].text} messageId={null} streaming /></div>}
-                <div className="msg-meta"><span className="model-tag">{nameOf(pending.slots[0].modelId)}</span></div>
+              <div className="msg assistant pending-msg">
+                <ModelMark name={nameOf(pending.slots[0].modelId)} />
+                <div className="msg-col">
+                  <div className="msg-head"><span className="model-tag">{nameOf(pending.slots[0].modelId)}</span></div>
+                  {!pending.slots[0].text && <ThinkingIndicator startedAt={pending.startedAt} reasoning={pending.slots[0].reasoning} webSearch={pending.webSearch} />}
+                  {pending.slots[0].text && <div className="msg-body streaming"><MessageBody text={pending.slots[0].text} messageId={null} streaming /></div>}
+                </div>
               </div>
             )}
             {pending && pending.slots.length > 1 && (

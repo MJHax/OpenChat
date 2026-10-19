@@ -10,7 +10,7 @@ import { copyText } from '../../../shared/files';
 import { RememberBox } from './RememberBox';
 import { Sources } from './Sources';
 import { SiblingNav } from './SiblingNav';
-import { RotateCw } from 'lucide-react';
+import { Bookmark, BookmarkCheck, Check, Columns2, Copy, GitBranch, Pencil, RotateCw } from 'lucide-react';
 
 interface Props {
   message: PathMessage;
@@ -58,8 +58,9 @@ export function MessageItem({
     selectionRef.current = text && sel?.anchorNode && bodyRef.current?.contains(sel.anchorNode) ? text : '';
   };
   const rememberButton = (
-    <button className="link" onMouseDown={captureSelection} onClick={() => setRemembering(selectionRef.current || message.content)}>
-      {rememberedNote ? 'Saved to memory' : 'Remember'}
+    <button className="act" onMouseDown={captureSelection} onClick={() => setRemembering(selectionRef.current || message.content)}
+      aria-label={rememberedNote ? 'Saved to memory' : 'Remember'} title={rememberedNote ? 'Saved to memory' : 'Remember (a selection, or the whole message)'}>
+      {rememberedNote ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
     </button>
   );
   const rememberBox = remembering !== null && (
@@ -111,9 +112,12 @@ export function MessageItem({
             {message.content && <div className="bubble" ref={bodyRef}>{message.content}</div>}
             <div className="msg-meta">
               {nav}
-              <button className="link" disabled={disabled} onClick={() => { setDraft(message.content); files.reset(message.attachments); setEditing(true); }}>Edit</button>
-              <button className="link" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
-              {rememberButton}
+              <span className="actions">
+                <button className="act" disabled={disabled} aria-label="Edit" title="Edit"
+                  onClick={() => { setDraft(message.content); files.reset(message.attachments); setEditing(true); }}><Pencil size={14} /></button>
+                <button className="act" onClick={copy} aria-label={copied ? 'Copied' : 'Copy'} title={copied ? 'Copied' : 'Copy'}>{copied ? <Check size={14} /> : <Copy size={14} />}</button>
+                {rememberButton}
+              </span>
             </div>
             {rememberBox}
           </>
@@ -136,38 +140,54 @@ export function MessageItem({
 
   return (
     <div className="msg assistant">
-      <div className="msg-body" ref={bodyRef}><MessageBody text={message.content} messageId={message.id} streaming={false} /></div>
-      {message.status === 'stopped' && <div className="muted small">Response stopped</div>}
-      <Sources sources={message.sources} />
-      <div className="msg-meta">
-        {nav}
-        <span className="model-tag">{modelName}</span>
-        {tokens > 0 && <span>{formatTokens(tokens)} tok</span>}
-        {message.cost !== null && <span>· {formatCost(message.cost)}</span>}
-        {message.effort && <span>· {message.effort} effort</span>}
-        {(message.webSearches ?? 0) > 0 && <span>· searched {message.webSearches}×</span>}
-        <button className="link" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
-        {rememberButton}
-        <button className="link" disabled={disabled} onClick={onFork}>Fork</button>
-        {compareMode ? (
-          <button className="link" disabled={disabled} onClick={() => onRegenerate(null)}><RotateCw size={14} /> Compare again</button>
-        ) : (
-          <select
-            className="regen"
-            value=""
-            disabled={disabled || models.length === 0}
-            onChange={(e) => e.target.value && onRegenerate(e.target.value)}
-            aria-label="Regenerate with model"
-          >
-            <option value="">Regenerate</option>
-            {regenerateChoices.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
-          </select>
-        )}
-        {message.siblingIds.length > 1 && (
-          <button className="link" disabled={disabled} onClick={onCompareVersions}>Compare versions</button>
-        )}
+      <ModelMark name={modelName} />
+      <div className="msg-col">
+        <div className="msg-head">
+          <span className="model-tag">{modelName}</span>
+          {tokens > 0 && <span>· {formatTokens(tokens)} tok</span>}
+          {message.cost !== null && <span>· {formatCost(message.cost)}</span>}
+          {message.effort && <span>· {message.effort} effort</span>}
+          {(message.webSearches ?? 0) > 0 && <span>· searched {message.webSearches}×</span>}
+        </div>
+        <div className="msg-body" ref={bodyRef}><MessageBody text={message.content} messageId={message.id} streaming={false} /></div>
+        {message.status === 'stopped' && <div className="muted small">Response stopped</div>}
+        <Sources sources={message.sources} />
+        <div className="msg-meta">
+          {nav}
+          <span className="actions">
+            <button className="act" onClick={copy} aria-label={copied ? 'Copied' : 'Copy'} title={copied ? 'Copied' : 'Copy'}>{copied ? <Check size={14} /> : <Copy size={14} />}</button>
+            {compareMode ? (
+              <button className="act wide" disabled={disabled} onClick={() => onRegenerate(null)} title="Compare again"><RotateCw size={14} /> Compare again</button>
+            ) : (
+              <label className="act regen-act" title="Regenerate">
+                <RotateCw size={14} />
+                <select
+                  className="regen"
+                  value=""
+                  disabled={disabled || models.length === 0}
+                  onChange={(e) => e.target.value && onRegenerate(e.target.value)}
+                  aria-label="Regenerate with model"
+                >
+                  <option value="">Regenerate</option>
+                  {regenerateChoices.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
+                </select>
+              </label>
+            )}
+            <button className="act" disabled={disabled} onClick={onFork} aria-label="Fork" title="Fork into a new chat from here"><GitBranch size={14} /></button>
+            {rememberButton}
+            {message.siblingIds.length > 1 && (
+              <button className="act" disabled={disabled} onClick={onCompareVersions} aria-label="Compare versions" title="Compare versions"><Columns2 size={14} /></button>
+            )}
+          </span>
+        </div>
+        {rememberBox}
       </div>
-      {rememberBox}
     </div>
   );
+}
+
+/** The small accent tile beside a reply, with the model's first letter. */
+export function ModelMark({ name }: { name: string }) {
+  const letter = (name.split(':').pop() ?? name).trim().charAt(0).toUpperCase() || '·';
+  return <span className="model-mark fill" aria-hidden>{letter}</span>;
 }
