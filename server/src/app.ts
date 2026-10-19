@@ -14,6 +14,7 @@ import { chatRoutes } from './routes/chats';
 import { searchRoutes } from './routes/search';
 import { generationRoutes } from './routes/generate';
 import { attachmentRoutes } from './routes/attachments';
+import { libraryRoutes } from './routes/library';
 import { statsRoutes } from './routes/stats';
 import { contextRoutes } from './routes/context';
 import { dataRoutes } from './routes/data';
@@ -66,6 +67,7 @@ export function createApp(deps: Deps): Hono {
   app.route('/api/videos', videoFileRoutes(deps));
   app.route('/api/search', searchRoutes(deps));
   app.route('/api/attachments', attachmentRoutes(deps));
+  app.route('/api/library', libraryRoutes(deps));
   app.route('/api/stats', statsRoutes(deps));
   app.route('/api/context', contextRoutes(deps));
   app.route('/api/data', dataRoutes(deps));

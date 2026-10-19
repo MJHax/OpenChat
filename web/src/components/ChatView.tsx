@@ -14,7 +14,8 @@ import { contextLevel } from '../lib/context';
 import { ChatMenu } from './ChatMenu';
 import { HomeGreeting, SuggestionCards } from './ChatHome';
 import { CompareColumns, type Column } from './CompareColumns';
-import { Composer } from './Composer';
+import { Composer, type ComposerPrefill } from './Composer';
+import type { ReuseDraft } from '../lib/reuse';
 import { ErrorText } from './ErrorText';
 import { SpendNotice } from './SpendNotice';
 import { MessageBody } from './MessageBody';
@@ -37,6 +38,9 @@ export interface ChatViewProps {
   models: LibraryModel[];
   settings: SettingsView | null;
   onChatsChanged(): void;
+  /** Files to start a new chat with (from the Library); a new nonce applies them, then onStartDraftUsed clears them. */
+  startDraft?: (ReuseDraft & { nonce: number }) | null;
+  onStartDraftUsed?(): void;
 }
 
 interface SlotState {
@@ -71,7 +75,7 @@ type RunOptions =
 /** The model that summarized each chat continued in this session, so the new chat starts on it. */
 const continuedModels = new Map<string, string>();
 
-export function ChatView({ chatId, title, reloadToken, models, settings, onChatsChanged }: ChatViewProps) {
+export function ChatView({ chatId, title, reloadToken, models, settings, onChatsChanged, startDraft, onStartDraftUsed }: ChatViewProps) {
   const [detail, setDetail] = useState<ChatDetail | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -86,8 +90,13 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   /** A continued chat's summary note as being edited; null when the chat has none. */
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
   const [continuing, setContinuing] = useState(false);
-  /** Text a suggestion card drops into the composer. */
-  const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
+  /** Text a suggestion card, or files the Library, drops into the composer. */
+  const [prefill, setPrefill] = useState<ComposerPrefill | null>(null);
+  useEffect(() => {
+    if (!startDraft) return;
+    setPrefill((p) => ({ nonce: (p?.nonce ?? 0) + 1, attachments: startDraft.attachments, files: startDraft.files }));
+    onStartDraftUsed?.();
+  }, [startDraft?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Chats whose context warning was dismissed (until reload). */
   const [warningDismissed, setWarningDismissed] = useState<Set<string>>(() => new Set());
   /** "Compare versions" view: the path index of the reply being compared, and all its versions. */

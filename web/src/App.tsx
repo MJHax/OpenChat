@@ -15,6 +15,8 @@ import { loadLibrarySort, saveLibrarySort, sortLibrary, type LibrarySort } from 
 import { ModelLibrary } from './pages/ModelLibrary';
 import { Settings } from './pages/Settings';
 import { Stats } from './pages/Stats';
+import { Library } from './pages/Library';
+import type { ReuseDraft } from './lib/reuse';
 import { useAppearance } from './components/useAppearance';
 import { Clapperboard, X } from 'lucide-react';
 
@@ -50,6 +52,12 @@ export function App() {
   const changeLibrarySort = (sort: LibrarySort) => { setLibrarySort(sort); saveLibrarySort(sort); };
   const [settings, setSettings] = useState<SettingsView | null>(null);
   const [chatReload, setChatReload] = useState(0);
+  /** Files the Library is starting a new chat with; ChatView takes them and clears this. */
+  const [startDraft, setStartDraft] = useState<(ReuseDraft & { nonce: number }) | null>(null);
+  const startChatWith = (d: ReuseDraft) => {
+    setStartDraft((s) => ({ ...d, nonce: (s?.nonce ?? 0) + 1 }));
+    navigate('#/');
+  };
   const [loadError, setLoadError] = useState<string | null>(null);
   // The sidebar keeps showing the last mode while on Model Library, Stats or Settings.
   const [lastMode, setLastMode] = useState<ThreadKind>('chat');
@@ -149,7 +157,7 @@ export function App() {
   }, []);
   const runCommand = (id: string) => {
     const go: Record<string, string> = {
-      'new-chat': '#/', 'new-image': '#/images', 'new-video': '#/video', 'new-discussion': '#/discussions', 'go-models': '#/models', 'go-stats': '#/stats',
+      'new-chat': '#/', 'new-image': '#/images', 'new-video': '#/video', 'new-discussion': '#/discussions', 'go-models': '#/models', 'go-stats': '#/stats', 'go-library': '#/library',
     };
     if (go[id]) return navigate(go[id]);
     if (id.startsWith('go-settings-')) {
@@ -177,7 +185,8 @@ export function App() {
     if (wasOpen.current && !overlayOpen) requestAnimationFrame(() => { if (lastFocus.current?.isConnected) lastFocus.current.focus(); });
     wasOpen.current = overlayOpen;
   }, [overlayOpen]);
-  const railActive: RailItem = route.page === 'settings' ? 'settings' : page.page === 'models' ? 'models' : page.page === 'stats' ? 'stats' : mode;
+  const railActive: RailItem = route.page === 'settings' ? 'settings' : page.page === 'models' ? 'models' : page.page === 'stats' ? 'stats'
+    : page.page === 'library' ? 'library' : mode;
   const shownTheme = resolvedTheme(appearance.theme, systemDark);
 
   return (
@@ -197,7 +206,8 @@ export function App() {
         <div className="page-slot" inert={overlayOpen}>
         {loadError && <div className="banner error">Can't reach the OpenChat server: {loadError}</div>}
         {page.page === 'chat' && (
-          <ChatView chatId={page.chatId} title={title} reloadToken={chatReload} models={models} settings={settings} onChatsChanged={refreshChats} />
+          <ChatView chatId={page.chatId} title={title} reloadToken={chatReload} models={models} settings={settings} onChatsChanged={refreshChats}
+            startDraft={page.chatId ? null : startDraft} onStartDraftUsed={() => setStartDraft(null)} />
         )}
         {page.page === 'images' && (
           <ImageThread threadId={page.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />
@@ -211,6 +221,7 @@ export function App() {
         )}
         {page.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} sort={librarySort} onSort={changeLibrarySort} />}
         {page.page === 'stats' && <Stats />}
+        {page.page === 'library' && <Library onReuse={startChatWith} />}
         </div>
         {route.page === 'settings' && (
           <Settings models={models} tab={route.tab} section={route.section} onChanged={refreshSettings} onClose={closeSettings}

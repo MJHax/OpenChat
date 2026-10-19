@@ -4,6 +4,7 @@ import type {
   Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle, StatsRange, StatsResponse, ChatStats, ContextUsage,
   GeneratedItems, MediaCatalog, MediaKind, MediaLibraryModel, MediaStatsResponse, MediaThreadStats, ThreadKind, StorageUsage, DeleteTarget, LimitStatus,
   DiscussionDetail, DiscussionState, DiscussionSummary, DiscussionTurnDone, DiscussionTurnError, DiscussionTurnStart, NewDiscussion,
+  LibraryResponse, LibrarySource,
 } from '../../shared/types';
 import type { ImageSettings } from '../../shared/imageModels';
 import type { VideoSettings } from '../../shared/videoModels';
@@ -58,6 +59,7 @@ export const api = {
     json<MediaStatsResponse>('GET', `/api/stats?view=${view}&range=${range}&tz=${encodeURIComponent(tz)}`),
   generated: () => json<GeneratedItems>('GET', '/api/attachments/generated'),
   copyGenerated: (source: { attachmentId: string } | { messageId: string; name: string }) => json<Attachment>('POST', '/api/attachments/copy', source),
+  library: () => json<LibraryResponse>('GET', '/api/library'),
 
   listMediaModels: (kind: MediaKind) => json<MediaLibraryModel[]>('GET', `/api/media-models?kind=${kind}`),
   mediaCatalog: (kind: MediaKind, refresh = false) => json<MediaCatalog>('GET', `/api/media-models/catalog?kind=${kind}${refresh ? '&refresh=1' : ''}`),
@@ -92,7 +94,8 @@ export const api = {
 };
 
 /** Uploads one file, reporting progress from 0 to 1. Rejects with the server's error message. */
-export function uploadAttachment(file: File, onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<Attachment> {
+/** `copyOf`: the attachment `file` was re-encoded from, so the Library still counts it as that file. */
+export function uploadAttachment(file: File, onProgress: (fraction: number) => void, signal?: AbortSignal, copyOf?: string): Promise<Attachment> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/attachments');
@@ -108,6 +111,7 @@ export function uploadAttachment(file: File, onProgress: (fraction: number) => v
     signal?.addEventListener('abort', () => xhr.abort());
     const form = new FormData();
     form.append('file', file);
+    if (copyOf) form.append('copyOf', copyOf);
     xhr.send(form);
   });
 }
@@ -116,6 +120,14 @@ export const deleteAttachment = (id: string) => json<{ ok: true }>('DELETE', `/a
 
 export const attachmentUrl = (id: string): string => `/api/attachments/${id}`;
 export const videoUrl = (messageId: string): string => `/api/videos/${messageId}`;
+export const libraryFileUrl = (messageId: string, name: string): string => `/api/library/files/${messageId}/${encodeURIComponent(name)}`;
+
+/** Where a Library file's bytes are served. */
+export function librarySrc(source: LibrarySource): string {
+  if (source.type === 'attachment') return attachmentUrl(source.attachmentId);
+  if (source.type === 'chatFile') return libraryFileUrl(source.messageId, source.name);
+  return videoUrl(source.messageId);
+}
 
 export interface StreamHandlers {
   onStart(e: StreamStart): void;

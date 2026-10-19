@@ -1,14 +1,12 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Deps } from '../app';
-import { HttpError, readJson } from '../http';
+import { HttpError, readJson, rfc5987 } from '../http';
 import {
   cleanFilename, cleanupPending, copyGenerated, deletePending, detectKind, generatedItems, getAttachmentData, getAttachmentRow, insertPending,
 } from '../attachments';
 import { ATTACHMENT_LIMITS, MB, UNSUPPORTED_TYPE, emptyFileMessage, tooLargeMessage } from '../../../shared/attachments';
 
-/** RFC 5987 value-chars: encodeURIComponent leaves `'()*` alone, but they are not allowed unencoded. */
-const rfc5987 = (value: string) => encodeURIComponent(value).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 
 export function attachmentRoutes({ db }: Deps): Hono {
   const r = new Hono();
@@ -37,7 +35,8 @@ export function attachmentRoutes({ db }: Deps): Hono {
       if (detected.bytes.length === 0) throw new HttpError(400, emptyFileMessage(filename)); // only a byte-order mark
       if (raw.length > ATTACHMENT_LIMITS[detected.kind]) throw new HttpError(413, tooLargeMessage(filename, detected.kind));
       cleanupPending(db);
-      return c.json(insertPending(db, { filename, kind: detected.kind, mime: detected.mime, data: detected.bytes }), 201);
+      const copyOf = typeof body.copyOf === 'string' ? body.copyOf : undefined;
+      return c.json(insertPending(db, { filename, kind: detected.kind, mime: detected.mime, data: detected.bytes, copyOf }), 201);
     },
   );
 

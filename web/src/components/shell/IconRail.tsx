@@ -1,9 +1,9 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { BarChart3, Box, Image, MessageSquare, Moon, Settings, Sun, Users, Video } from 'lucide-react';
+import { BarChart3, Box, Image, Library as LibraryIcon, MessageSquare, Moon, Settings, Sun, Users, Video } from 'lucide-react';
 import type { ThreadKind } from '../../../../shared/types';
 import { navigate, threadHome } from '../../lib/route';
 
-export type RailItem = ThreadKind | 'models' | 'stats' | 'settings';
+export type RailItem = ThreadKind | 'models' | 'stats' | 'library' | 'settings';
 
 export interface IconRailProps {
   active: RailItem;
@@ -49,6 +49,7 @@ export function IconRail({ active, mode, resolvedTheme, onToggleTheme, onToggleP
       <span className="rail-sep" />
       {item('models', 'Model Library', Box, () => navigate('#/models'))}
       {item('stats', 'Stats', BarChart3, () => navigate('#/stats'))}
+      {item('library', 'Library', LibraryIcon, () => navigate('#/library'))}
       <span className="rail-spacer" />
       <button className="rail-btn" aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} onClick={onToggleTheme}>
         {resolvedTheme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}

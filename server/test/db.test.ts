@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { openDb, now } from '../src/db';
-import { insertPending } from '../src/attachments';
+import { hashBytes, insertPending } from '../src/attachments';
 import Database from 'better-sqlite3';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -139,6 +139,18 @@ describe('image and video storage', () => {
     expect(db.prepare("SELECT kind FROM chats WHERE id = 'c1'").get()).toEqual({ kind: 'chat' });
     expect(db.prepare('SELECT thread_kind FROM usage_events').get()).toEqual({ thread_kind: 'chat' });
     db.close();
+  });
+
+  it('backfills hashes for attachments written before the column existed', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'openchat-')), 'old.db');
+    const db = openDb(file);
+    const data = new TextEncoder().encode('hello');
+    const a = insertPending(db, { filename: 'a.txt', kind: 'text', mime: 'text/plain', data });
+    db.prepare('UPDATE attachments SET hash = NULL').run();
+    db.close();
+    const again = openDb(file);
+    expect(again.prepare('SELECT hash FROM attachments WHERE id = ?').get(a.id)).toEqual({ hash: hashBytes(data) });
+    again.close();
   });
 });
 

@@ -11,6 +11,7 @@ export type Route =
   | { page: 'discussions'; discussionId: string | null }
   | { page: 'models' }
   | { page: 'stats' }
+  | { page: 'library' }
   /** `section` is an element id inside the tab to scroll to, e.g. `#/settings/general/limits`. */
   | { page: 'settings'; tab: SettingsTab; section: string | null };
 
@@ -27,6 +28,7 @@ export function parseHash(hash: string): Route {
     return { page: 'settings', tab: tab ?? 'general', section: tab && parts[2] ? decodeURIComponent(parts[2]) : null };
   }
   if (parts[0] === 'stats') return { page: 'stats' };
+  if (parts[0] === 'library') return { page: 'library' };
   if (parts[0] === 'chat' && parts[1]) return { page: 'chat', chatId: decodeURIComponent(parts[1]) };
   return { page: 'chat', chatId: null };
 }
@@ -78,6 +80,7 @@ export function routeHash(route: Route): string {
     case 'discussions': return `#/discussions${id(route.discussionId)}`;
     case 'models': return '#/models';
     case 'stats': return '#/stats';
+    case 'library': return '#/library';
     case 'settings': return `#/settings/${route.tab}${id(route.section)}`;
   }
 }

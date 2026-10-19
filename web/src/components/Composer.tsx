@@ -33,9 +33,12 @@ interface Props {
   onStop(): void;
   /** The one-click compare toggle; only before the first message (later it lives in the ⋯ menu). */
   showCompareToggle: boolean;
-  /** Text to drop into the box; a new nonce applies it again. */
-  prefill?: { text: string; nonce: number } | null;
+  /** Text and files to drop into the box; a new nonce applies it again. */
+  prefill?: ComposerPrefill | null;
 }
+
+/** What a suggestion card or the Library drops into the composer; text is left alone when undefined. */
+export interface ComposerPrefill { text?: string; attachments?: Attachment[]; files?: File[]; nonce: number }
 
 export function Composer({
   disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, webSearch, onWebSearchChange, effort, onEffortChange,
@@ -45,16 +48,20 @@ export function Composer({
   const [text, setText] = useState('');
   const ref = useRef<HTMLTextAreaElement>(null);
 
+  const draft = useAttachmentDraft();
+
   useEffect(() => {
     if (!prefill) return;
-    setText(prefill.text);
+    if (prefill.attachments?.length) draft.restore(prefill.attachments);
+    if (prefill.files?.length) draft.add(prefill.files);
+    const text = prefill.text;
+    if (text !== undefined) setText(text);
     const el = ref.current;
     if (el) {
       el.focus();
-      requestAnimationFrame(() => el.setSelectionRange(prefill.text.length, prefill.text.length));
+      if (text !== undefined) requestAnimationFrame(() => el.setSelectionRange(text.length, text.length));
     }
   }, [prefill?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
-  const draft = useAttachmentDraft();
   const drop = useFileDrop(draft.add);
   const blockReason = sendBlockReason(draft.kinds, replyModels);
   const notice = blockReason ?? skippedImagesNotice(path, replyModels);
