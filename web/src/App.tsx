@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatSummary, LibraryModel, SettingsView, ThreadKind } from '../../shared/types';
 import { api } from './api';
 import { navigate, useRoute } from './lib/route';
@@ -8,6 +8,7 @@ import { ImageThread } from './pages/ImageThread';
 import { VideoThread } from './pages/VideoThread';
 import { DiscussionPage } from './pages/DiscussionPage';
 import { systemNotify } from './lib/notify';
+import { loadLibrarySort, saveLibrarySort, sortLibrary, type LibrarySort } from './lib/models';
 import { ModelLibrary } from './pages/ModelLibrary';
 import { Settings } from './pages/Settings';
 import { Stats } from './pages/Stats';
@@ -15,7 +16,11 @@ import { Stats } from './pages/Stats';
 export function App() {
   const route = useRoute();
   const [chats, setChats] = useState<ChatSummary[]>([]);
-  const [models, setModels] = useState<LibraryModel[]>([]);
+  const [libraryModels, setModels] = useState<LibraryModel[]>([]);
+  // Every model picker follows the order chosen in the Model Library.
+  const [librarySort, setLibrarySort] = useState<LibrarySort>(loadLibrarySort);
+  const models = useMemo(() => sortLibrary(libraryModels, librarySort), [libraryModels, librarySort]);
+  const changeLibrarySort = (sort: LibrarySort) => { setLibrarySort(sort); saveLibrarySort(sort); };
   const [settings, setSettings] = useState<SettingsView | null>(null);
   const [chatReload, setChatReload] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -99,7 +104,7 @@ export function App() {
           <DiscussionPage key={route.discussionId ?? 'new'} discussionId={route.discussionId} models={models} settings={settings}
             onDiscussionsChanged={refreshChats} />
         )}
-        {route.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} />}
+        {route.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} sort={librarySort} onSort={changeLibrarySort} />}
         {route.page === 'stats' && <Stats />}
         {route.page === 'settings' && (
           <Settings models={models} tab={route.tab} section={route.section} onChanged={refreshSettings}

@@ -11,10 +11,14 @@ import {
   countLabel, filterCatalog, isFiltering, latestOnly, NO_FILTER, popularFor, sortCatalog, topProviders, type CatalogFilter,
   type SortKey,
 } from '../lib/catalog';
+import { LIBRARY_SORTS, type LibrarySort } from '../lib/models';
 
 export interface ModelLibraryProps {
+  /** Already in the user's chosen order. */
   models: LibraryModel[];
   onChanged(): void;
+  sort: LibrarySort;
+  onSort(sort: LibrarySort): void;
 }
 
 const KINDS: { id: 'chat' | 'image' | 'video'; label: string }[] = [
@@ -23,7 +27,7 @@ const KINDS: { id: 'chat' | 'image' | 'video'; label: string }[] = [
 const PAGE_SIZE = 60;
 const TOP_PROVIDERS = 8;
 
-export function ModelLibrary({ models, onChanged }: ModelLibraryProps) {
+export function ModelLibrary({ models, onChanged, sort: librarySort, onSort: onLibrarySort }: ModelLibraryProps) {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -93,7 +97,17 @@ export function ModelLibrary({ models, onChanged }: ModelLibraryProps) {
         <div className="stats-head"><h1>Model Library</h1>{switcher}</div>
         {actionError && <p className="error-text">{actionError}</p>}
 
-        <h2>My models</h2>
+        <div className="section-head">
+          <h2>My models</h2>
+          {models.length > 1 && (
+            <label className="muted small">
+              Sort by{' '}
+              <select value={librarySort} onChange={(e) => onLibrarySort(e.target.value as LibrarySort)} aria-label="Sort my models">
+                {LIBRARY_SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
         {models.length === 0 ? (
           <p className="muted">No models yet. Add some from the catalog below.</p>
         ) : (
