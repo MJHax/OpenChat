@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Clapperboard, PanelLeftClose, Pencil, Plus, Search, Trash2 } from 'lucide-react';
-import type { ChatSummary, SearchHit, ThreadKind } from '../../../../shared/types';
+import type { ChatSummary, ThreadKind } from '../../../../shared/types';
 import { api, attachmentUrl } from '../../api';
-import { groupByDate, splitSnippet } from '../../lib/format';
+import { groupByDate } from '../../lib/format';
 import { navigate, threadHome, threadHref } from '../../lib/route';
 import { forgetChatPrefs } from '../../lib/chatPrefs';
 import { UsageCard } from './UsageCard';
@@ -23,28 +23,8 @@ const NEW_LABEL: Record<ThreadKind, string> = { chat: 'New chat', image: 'New im
 
 /** The list of threads for the current mode, beside the rail. */
 export function ThreadPanel({ mode, chats, activeChatId, onChatsChanged, onOpenChat, onCollapse, onOpenPalette }: ThreadPanelProps) {
-  const [query, setQuery] = useState('');
-  const [hits, setHits] = useState<SearchHit[]>([]);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
-
-  useEffect(() => {
-    const q = query.trim();
-    if (!q) {
-      setHits([]);
-      return;
-    }
-    const timer = setTimeout(() => {
-      api.search(q).then(setHits).catch(() => setHits([]));
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  async function openHit(hit: SearchHit) {
-    await api.selectMessage(hit.chatId, hit.messageId).catch(() => {});
-    setQuery('');
-    onOpenChat(hit.chatId, hit.chatKind);
-  }
 
   async function commitRename(chat: ChatSummary) {
     if (renaming !== chat.id) return; // Enter and blur can both fire
@@ -72,29 +52,14 @@ export function ThreadPanel({ mode, chats, activeChatId, onChatsChanged, onOpenC
         <button className="icon-btn" onClick={() => navigate(threadHome(mode))} aria-label={newLabel} title={newLabel}><Plus size={16} /></button>
         <button className="icon-btn" onClick={onCollapse} aria-label="Collapse panel" title="Collapse panel (Ctrl+B)"><PanelLeftClose size={16} /></button>
       </div>
-      <label className="thread-search">
+      <button className="thread-search" onClick={onOpenPalette}>
         <Search size={14} />
-        <input type="search" placeholder="Search or jump to…" value={query} onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'k' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); onOpenPalette(); } }} />
+        <span>Search or jump to…</span>
         <kbd>Ctrl K</kbd>
-      </label>
+      </button>
 
       <nav className="thread-list">
-        {query.trim() ? (
-          hits.length ? (
-            hits.map((hit) => (
-              <button key={hit.messageId} className="hit" onClick={() => openHit(hit)}>
-                <div className="hit-title">{hit.chatTitle}</div>
-                <div className="hit-snippet">
-                  {splitSnippet(hit.snippet).map((part, i) => (part.hit ? <mark key={i}>{part.text}</mark> : <span key={i}>{part.text}</span>))}
-                </div>
-              </button>
-            ))
-          ) : (
-            <div className="muted pad">No matches</div>
-          )
-        ) : (
-          groupByDate(chats).map((group) => (
+        {groupByDate(chats).map((group) => (
             <div key={group.label}>
               <div className="group-label">{group.label}</div>
               {group.items.map((chat) =>
@@ -130,8 +95,7 @@ export function ThreadPanel({ mode, chats, activeChatId, onChatsChanged, onOpenC
                 ),
               )}
             </div>
-          ))
-        )}
+          ))}
       </nav>
 
       <UsageCard refreshKey={chats} />

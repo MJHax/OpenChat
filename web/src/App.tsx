@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChatSummary, LibraryModel, SettingsView, ThreadKind } from '../../shared/types';
+import type { Accent, ChatSummary, ColorStyle, LibraryModel, SettingsView, ThreadKind } from '../../shared/types';
 import { api } from './api';
 import { navigate, routeHash, settingsBackdrop, threadHref, useRoute, type Route } from './lib/route';
 import { IconRail, type RailItem } from './components/shell/IconRail';
 import { ThreadPanel } from './components/shell/ThreadPanel';
+import { CommandPalette } from './components/shell/CommandPalette';
 import { nextTheme, resolvedTheme } from './lib/appearance';
 import { ChatView } from './components/ChatView';
 import { ImageThread } from './pages/ImageThread';
@@ -124,6 +125,29 @@ export function App() {
   // In a narrow window the panel floats over the page, so following a link closes it.
   useEffect(() => { if (narrow) setPanelOpen(false); }, [narrow, route]);
 
+  // Command palette: Ctrl/Cmd+K anywhere.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const runCommand = (id: string) => {
+    const go: Record<string, string> = {
+      'new-chat': '#/', 'new-image': '#/images', 'new-video': '#/video', 'new-discussion': '#/discussions', 'go-models': '#/models', 'go-stats': '#/stats',
+    };
+    if (go[id]) return navigate(go[id]);
+    if (id.startsWith('go-settings-')) return navigate(`#/settings/${id.slice('go-settings-'.length)}`);
+    if (id === 'toggle-theme') return void setAppearance({ theme: nextTheme(appearance.theme, systemDark) });
+    if (id.startsWith('accent-')) return void setAppearance({ accent: id.slice('accent-'.length) as Accent });
+    if (id.startsWith('style-')) return void setAppearance({ colorStyle: id.slice('style-'.length) as ColorStyle });
+  };
+
   const railActive: RailItem = route.page === 'settings' ? 'settings' : page.page === 'models' ? 'models' : page.page === 'stats' ? 'stats' : mode;
   const shownTheme = resolvedTheme(appearance.theme, systemDark);
 
@@ -133,7 +157,7 @@ export function App() {
         onToggleTheme={() => void setAppearance({ theme: nextTheme(appearance.theme, systemDark) })} />
       <div className="threads-slot" aria-hidden={!panelOpen} inert={!panelOpen}>
         <ThreadPanel mode={mode} chats={chats} activeChatId={activeChatId} onChatsChanged={refreshChats} onOpenChat={openChat}
-          onCollapse={() => setPanelOpen(false)} onOpenPalette={() => {}} />
+          onCollapse={() => setPanelOpen(false)} onOpenPalette={() => setPaletteOpen(true)} />
       </div>
       {narrow && panelOpen && <div className="threads-scrim" onClick={() => setPanelOpen(false)} />}
       <main className="main">
@@ -159,6 +183,7 @@ export function App() {
             onDataChanged={() => { refreshChats(); refreshModels(); }} />
         )}
       </main>
+      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} onCommand={runCommand} onOpenChat={openChat} />}
       {toasts.length > 0 && (
         <div className="toasts" role="status">
           {toasts.map((t) => (
