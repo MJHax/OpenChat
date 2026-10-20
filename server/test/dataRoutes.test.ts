@@ -125,11 +125,12 @@ describe('deletes', () => {
     const { call, db, deps } = await seed();
     db.prepare("INSERT INTO models (id, display_name, added_at) VALUES ('m/a', 'A', 1)").run();
     db.prepare("INSERT INTO media_models (id, kind, display_name, added_at) VALUES ('i/a', 'image', 'I', 1)").run();
+    db.prepare("INSERT INTO saved_prompts (title, content, created_at, updated_at) VALUES ('', 'x', 1, 1)").run();
     setSetting(db, 'theme', 'dark');
     const res = await del(call, 'all');
     expect(res.status).toBe(200);
     for (const table of ['chats', 'messages', 'attachments', 'memories', 'models', 'media_models', 'usage_events', 'media_events',
-      'video_jobs', 'media_generations', 'model_catalog_cache', 'media_catalog_cache']) {
+      'video_jobs', 'media_generations', 'model_catalog_cache', 'media_catalog_cache', 'saved_prompts']) {
       expect(count(db, `SELECT count(*) AS n FROM ${table}`), table).toBe(0);
     }
     // Only the marker that stops the old-usage backfill from running again is kept.

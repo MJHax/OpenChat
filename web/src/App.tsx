@@ -16,6 +16,7 @@ import { ModelLibrary } from './pages/ModelLibrary';
 import { Settings } from './pages/Settings';
 import { Stats } from './pages/Stats';
 import { Library } from './pages/Library';
+import { PromptsWindow } from './components/PromptsWindow';
 import type { ReuseDraft } from './lib/reuse';
 import { useAppearance } from './components/useAppearance';
 import { Clapperboard, X } from 'lucide-react';
@@ -58,6 +59,12 @@ export function App() {
     setStartDraft((s) => ({ ...d, nonce: (s?.nonce ?? 0) + 1 }));
     navigate('#/');
   };
+  /** A saved prompt on its way into the chat's message box; ChatView takes it and clears this. */
+  const [insertReq, setInsertReq] = useState<{ text: string; nonce: number } | null>(null);
+  const insertNonce = useRef(0);
+  const insertPrompt = (text: string) => setInsertReq({ text, nonce: ++insertNonce.current });
+  const [promptsOpen, setPromptsOpen] = useState(false);
+  const openPrompts = useCallback(() => setPromptsOpen(true), []);
   const [loadError, setLoadError] = useState<string | null>(null);
   // The sidebar keeps showing the last mode while on Model Library, Stats or Settings.
   const [lastMode, setLastMode] = useState<ThreadKind>('chat');
@@ -160,6 +167,7 @@ export function App() {
       'new-chat': '#/', 'new-image': '#/images', 'new-video': '#/video', 'new-discussion': '#/discussions', 'go-models': '#/models', 'go-stats': '#/stats', 'go-library': '#/library',
     };
     if (go[id]) return navigate(go[id]);
+    if (id === 'open-prompts') return setPromptsOpen(true);
     if (id.startsWith('go-settings-')) {
       const hash = `#/settings/${id.slice('go-settings-'.length)}`;
       return route.page === 'settings' ? replaceHash(hash) : navigate(hash); // one history entry for Settings, however many tabs
@@ -169,7 +177,7 @@ export function App() {
     if (id.startsWith('style-')) return void setAppearance({ colorStyle: id.slice('style-'.length) as ColorStyle });
   };
 
-  const overlayOpen = route.page === 'settings' || paletteOpen;
+  const overlayOpen = route.page === 'settings' || paletteOpen || promptsOpen;
   // Remember the last thing focused outside an overlay, and put focus back there when the overlay closes.
   // (Making the background inert blurs it before the overlay mounts, so the overlay can't record it itself.)
   const lastFocus = useRef<HTMLElement | null>(null);
@@ -185,7 +193,7 @@ export function App() {
     if (wasOpen.current && !overlayOpen) requestAnimationFrame(() => { if (lastFocus.current?.isConnected) lastFocus.current.focus(); });
     wasOpen.current = overlayOpen;
   }, [overlayOpen]);
-  const railActive: RailItem = route.page === 'settings' ? 'settings' : page.page === 'models' ? 'models' : page.page === 'stats' ? 'stats'
+  const railActive: RailItem = promptsOpen ? 'prompts' : route.page === 'settings' ? 'settings' : page.page === 'models' ? 'models' : page.page === 'stats' ? 'stats'
     : page.page === 'library' ? 'library' : mode;
   const shownTheme = resolvedTheme(appearance.theme, systemDark);
 
@@ -193,7 +201,7 @@ export function App() {
     <div className={`app${panelOpen ? '' : ' panel-closed'}${narrow ? ' narrow' : ''}`}>
       {/* While Settings or the palette is open, everything behind it is inert, so focus and screen readers stay in the dialog. */}
       <div className="rail-slot" inert={overlayOpen}>
-      <IconRail active={railActive} mode={mode} resolvedTheme={shownTheme} onTogglePanel={togglePanel} settingsHref="#/settings"
+      <IconRail active={railActive} mode={mode} resolvedTheme={shownTheme} onTogglePanel={togglePanel} settingsHref="#/settings" onOpenPrompts={openPrompts}
         onToggleTheme={() => void setAppearance({ theme: nextTheme(appearance.theme, systemDark) })} />
       </div>
       <div className="threads-slot" aria-hidden={!panelOpen} inert={!panelOpen || overlayOpen}>
@@ -207,7 +215,8 @@ export function App() {
         {loadError && <div className="banner error">Can't reach the OpenChat server: {loadError}</div>}
         {page.page === 'chat' && (
           <ChatView chatId={page.chatId} title={title} reloadToken={chatReload} models={models} settings={settings} onChatsChanged={refreshChats}
-            startDraft={page.chatId ? null : startDraft} onStartDraftUsed={() => setStartDraft(null)} />
+            startDraft={page.chatId ? null : startDraft} onStartDraftUsed={() => setStartDraft(null)}
+            insert={insertReq} onInsertUsed={() => setInsertReq(null)} onOpenPrompts={openPrompts} />
         )}
         {page.page === 'images' && (
           <ImageThread threadId={page.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />
@@ -229,6 +238,11 @@ export function App() {
             onDataChanged={() => { refreshChats(); refreshModels(); }} />
         )}
       </main>
+      {promptsOpen && (
+        <PromptsWindow canInsert={page.page === 'chat' && route.page !== 'settings'} onClose={() => setPromptsOpen(false)}
+          onInsert={(text) => { setPromptsOpen(false); insertPrompt(text); }}
+          onStartChat={(text) => { setPromptsOpen(false); navigate('#/'); insertPrompt(text); }} />
+      )}
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} onCommand={runCommand} onOpenChat={openChat} />}
       {toasts.length > 0 && (
         <div className="toasts" role="status">

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { EFFORTS, type Attachment, type Effort, type LibraryModel } from '../../../shared/types';
 import { sendBlockReason, skippedImagesNotice } from '../lib/attachments';
 import type { CompareState } from '../lib/compare';
-import { ArrowUp, Brain, Check, ChevronDown, Columns2, Globe, Square } from 'lucide-react';
+import { ArrowUp, Bookmark, Brain, Check, ChevronDown, Columns2, Globe, Square } from 'lucide-react';
+import { insertOnOwnLine } from '../lib/prompts';
 import { ModelPicker } from './ModelPicker';
 import { ChipPopover } from './ChipPopover';
 import { SEARCH_TOOLTIP } from '../lib/search';
@@ -36,6 +37,12 @@ interface Props {
   showCompareToggle: boolean;
   /** Text and files to drop into the box; a new nonce applies it again. */
   prefill?: ComposerPrefill | null;
+  /** A saved prompt to add at the caret on its own line; a new nonce adds it again. */
+  insert?: { text: string; nonce: number } | null;
+  /** Called once `insert` is in the box, so a remounted composer doesn't add it again. */
+  onInsertUsed?(): void;
+  /** Opens the Saved prompts window; the button is hidden without it. */
+  onOpenPrompts?(): void;
 }
 
 /** What a suggestion card or the Library drops into the composer; text is left alone when undefined. */
@@ -44,10 +51,13 @@ export interface ComposerPrefill { text?: string; attachments?: Attachment[]; fi
 export function Composer({
   disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, webSearch, onWebSearchChange, effort, onEffortChange,
   replyModels, path,
-  onSend, onStop, showCompareToggle, prefill,
+  onSend, onStop, showCompareToggle, prefill, insert, onInsertUsed, onOpenPrompts,
 }: Props) {
   const [text, setText] = useState('');
   const ref = useRef<HTMLTextAreaElement>(null);
+  /** Where the caret was when the box last had focus; null until it has had it. */
+  const caretRef = useRef<number | null>(null);
+  const rememberCaret = () => { if (ref.current) caretRef.current = ref.current.selectionEnd; };
 
   const draft = useAttachmentDraft();
 
@@ -63,6 +73,23 @@ export function Composer({
       if (text !== undefined) requestAnimationFrame(() => el.setSelectionRange(text.length, text.length));
     }
   }, [prefill?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!insert) return;
+    const next = insertOnOwnLine(text, caretRef.current ?? text.length, insert.text);
+    setText(next.value);
+    caretRef.current = next.caret;
+    placeCaret.current = next.caret;
+    onInsertUsed?.();
+    ref.current?.focus();
+  }, [insert?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Once the inserted text is rendered (rendering it moves the caret to the end), put the caret right after the prompt.
+  const placeCaret = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (placeCaret.current === null) return;
+    ref.current?.setSelectionRange(placeCaret.current, placeCaret.current);
+    placeCaret.current = null;
+  }, [text]);
   const drop = useFileDrop(draft.add);
   const blockReason = sendBlockReason(draft.kinds, replyModels);
   const notice = blockReason ?? skippedImagesNotice(path, replyModels);
@@ -96,6 +123,8 @@ export function Composer({
           value={text}
           placeholder={compare.enabled ? 'Message several models…' : `Message ${models.find((m) => m.id === modelId)?.displayName ?? ''}…`.replace(' …', '…')}
           onChange={(e) => setText(e.target.value)}
+          onSelect={rememberCaret}
+          onBlur={rememberCaret}
           onPaste={drop.onPaste}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -111,6 +140,11 @@ export function Composer({
               onClick={() => onWebSearchChange(!webSearch)}>
               <Globe size={15} />
             </button>
+            {onOpenPrompts && (
+              <button className="icon-btn" aria-label="Saved prompts" title="Saved prompts" onClick={onOpenPrompts}>
+                <Bookmark size={15} />
+              </button>
+            )}
             {showCompareToggle && (
               <button className="icon-btn" aria-pressed={compare.enabled} aria-label="Compare models" disabled={models.length < 2 && !compare.enabled}
                 title="Compare: send each message to several models and pick a reply" onClick={() => onCompareChange({ ...compare, enabled: !compare.enabled })}>

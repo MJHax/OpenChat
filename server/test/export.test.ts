@@ -37,6 +37,7 @@ async function seed() {
   setSetting(db, 'api_key', 'sk-or-secret-abcdef123456');
   setSetting(db, 'about_me', 'I like tea');
   await call('POST', '/api/memories', { content: 'Lives by the sea' });
+  await call('POST', '/api/prompts', { title: '', content: 'Bullets only' });
   return { ...ctx, chatA, chatB, upload, png, vr, r1 };
 }
 
@@ -63,6 +64,7 @@ describe('GET /api/data/export', () => {
     expect(data.chats).toHaveLength(4);
     expect(data.messages).toHaveLength(7);
     expect(data.memories[0].content).toBe('Lives by the sea');
+    expect(data.prompts[0].content).toBe('Bullets only');
     expect(data.settings.about_me).toBe('I like tea');
     expect(data.settings.api_key).toBeUndefined();
 

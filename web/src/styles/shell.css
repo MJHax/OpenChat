@@ -119,6 +119,33 @@ button.danger-button:not(:disabled):hover { background: var(--danger); color: #f
   .settings-tabs a { white-space: nowrap; }
 }
 
+/* Saved prompts: the Settings sheet with a list of prompts on the left. */
+.prompts-sheet { grid-template-columns: 240px minmax(0, 1fr); }
+.prompts-list { border-right: 1px solid var(--border); padding: 16px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-width: 0; }
+.prompts-list-head { display: flex; align-items: center; justify-content: space-between; margin: 0 2px 10px 8px; }
+.prompts-list-head h2 { margin: 0; font-size: 15px; }
+.prompts-search { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); }
+.prompts-search input { border: none; background: none; padding: 6px 0; min-width: 0; flex: 1; outline: none; }
+.prompts-item > span { min-width: 0; }
+.prompts-item > span, .prompts-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prompts-none { margin: 8px; }
+.prompts-head-actions { display: flex; align-items: center; gap: 4px; }
+.prompts-detail, .prompts-editor { display: flex; flex-direction: column; gap: 12px; }
+.prompts-text { margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2);
+  white-space: pre-wrap; word-break: break-word; font: inherit; max-height: 320px; overflow-y: auto; }
+.prompts-slot { display: flex; align-items: center; gap: 10px; }
+.prompts-slot span { min-width: 72px; color: var(--muted); font-size: 13px; }
+.prompts-slot input { flex: 1; min-width: 0; }
+.prompts-editor textarea { min-height: 220px; }
+.prompts-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.prompts-actions .prompts-copy { margin-right: auto; display: inline-flex; align-items: center; gap: 5px; }
+.prompts-actions button { display: inline-flex; align-items: center; gap: 5px; }
+.prompts-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+@media (max-width: 700px) {
+  .prompts-sheet { grid-template-columns: 1fr; grid-template-rows: minmax(0, 40%) minmax(0, 1fr); }
+  .prompts-list { border-right: none; border-bottom: 1px solid var(--border); }
+}
+
 /* Appearance tab */
 .appearance section { margin-bottom: 26px; }
 .appearance h3 { margin: 0 0 4px; font-size: 14px; }

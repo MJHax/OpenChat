@@ -1,9 +1,9 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { BarChart3, Box, Image, Library as LibraryIcon, MessageSquare, Moon, Settings, Sun, Users, Video } from 'lucide-react';
+import { BarChart3, Bookmark, Box, Image, Library as LibraryIcon, MessageSquare, Moon, Settings, Sun, Users, Video } from 'lucide-react';
 import type { ThreadKind } from '../../../../shared/types';
 import { navigate, threadHome } from '../../lib/route';
 
-export type RailItem = ThreadKind | 'models' | 'stats' | 'library' | 'settings';
+export type RailItem = ThreadKind | 'models' | 'stats' | 'library' | 'prompts' | 'settings';
 
 export interface IconRailProps {
   active: RailItem;
@@ -12,6 +12,7 @@ export interface IconRailProps {
   resolvedTheme: 'light' | 'dark';
   onToggleTheme(): void;
   onTogglePanel(): void;
+  onOpenPrompts(): void;
   settingsHref: string;
 }
 
@@ -23,7 +24,7 @@ const MODES: { id: ThreadKind; label: string; Icon: typeof MessageSquare }[] = [
 ];
 
 /** The thin column of icons on the far left: modes, library, stats, theme and settings. */
-export function IconRail({ active, mode, resolvedTheme, onToggleTheme, onTogglePanel, settingsHref }: IconRailProps) {
+export function IconRail({ active, mode, resolvedTheme, onToggleTheme, onTogglePanel, onOpenPrompts, settingsHref }: IconRailProps) {
   const rail = useRef<HTMLElement>(null);
   const [top, setTop] = useState<number | null>(null);
 
@@ -50,6 +51,7 @@ export function IconRail({ active, mode, resolvedTheme, onToggleTheme, onToggleP
       {item('models', 'Model Library', Box, () => navigate('#/models'))}
       {item('stats', 'Stats', BarChart3, () => navigate('#/stats'))}
       {item('library', 'Library', LibraryIcon, () => navigate('#/library'))}
+      {item('prompts', 'Saved prompts', Bookmark, onOpenPrompts)}
       <span className="rail-spacer" />
       <button className="rail-btn" aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} onClick={onToggleTheme}>
         {resolvedTheme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}

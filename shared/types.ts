@@ -278,6 +278,16 @@ export interface Memory {
   createdAt: number;
 }
 
+/** A reusable piece of prompt; `{{name}}` in its content is a slot filled in when it's used. */
+export interface SavedPrompt {
+  id: number;
+  /** May be empty; the list then shows the start of the content. */
+  title: string;
+  content: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** Bytes on disk, for Settings > Data. `total` is the sum of the parts. */
 export interface StorageUsage {
   total: number;
