@@ -10,7 +10,12 @@ export function promptSlots(content: string): string[] {
 
 /** The prompt with its slots filled in; a slot with no value stays as written, so it's easy to spot. */
 export function fillSlots(content: string, values: Record<string, string>): string {
-  return content.replace(SLOT, (whole, name: string) => values[name.trim()] || whole);
+  return content.replace(SLOT, (whole, name: string) => slotValue(values, name.trim()) || whole);
+}
+
+/** A slot's value; only the user's own entries count, never inherited keys like `constructor`. */
+export function slotValue(values: Record<string, string>, name: string): string {
+  return Object.hasOwn(values, name) ? values[name] : '';
 }
 
 /** Puts `text` into `value` at the caret on a line of its own; the returned caret sits right after it. */

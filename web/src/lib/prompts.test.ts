@@ -18,6 +18,11 @@ describe('fillSlots', () => {
   it('fills every use of a slot and keeps empty ones as written', () => {
     expect(fillSlots('Review {{file}} and {{ file }} at {{line}}', { file: 'a.ts', line: '' })).toBe('Review a.ts and a.ts at {{line}}');
   });
+
+  it('treats slot names like constructor as plain names', () => {
+    expect(fillSlots('Add a {{constructor}} and {{toString}}', {})).toBe('Add a {{constructor}} and {{toString}}');
+    expect(fillSlots('Add a {{constructor}}', { constructor: 'ctor' })).toBe('Add a ctor');
+  });
 });
 
 describe('insertOnOwnLine', () => {

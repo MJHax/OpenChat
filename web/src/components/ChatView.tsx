@@ -98,7 +98,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   const [prefill, setPrefill] = useState<ComposerPrefill | null>(null);
   useEffect(() => {
     if (!startDraft) return;
-    setPrefill((p) => ({ nonce: (p?.nonce ?? 0) + 1, attachments: startDraft.attachments, files: startDraft.files, text: startDraft.text }));
+    setPrefill((p) => ({ nonce: (p?.nonce ?? 0) + 1, attachments: startDraft.attachments, files: startDraft.files }));
     onStartDraftUsed?.();
   }, [startDraft?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Chats whose context warning was dismissed (until reload). */

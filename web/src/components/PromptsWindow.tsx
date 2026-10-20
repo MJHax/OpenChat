@@ -3,7 +3,7 @@ import { Copy, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import type { SavedPrompt } from '../../../shared/types';
 import { api } from '../api';
 import { closesOverlay } from '../lib/escape';
-import { fillSlots, matchesPrompt, promptLabel, promptSlots } from '../lib/prompts';
+import { fillSlots, matchesPrompt, promptLabel, promptSlots, slotValue } from '../lib/prompts';
 import { ErrorText } from './ErrorText';
 
 export interface PromptsWindowProps {
@@ -48,12 +48,11 @@ export function PromptsWindow({ canInsert, onInsert, onStartChat, onClose }: Pro
   const closeRef = useRef(close);
   closeRef.current = close;
 
-  // Focus moves into the sheet (App puts it back on close); Escape closes.
+  // Focus moves into the sheet (App puts it back on close); Escape closes, even from a text field: unsaved edits are asked about first.
   useEffect(() => {
     sheet.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (closesOverlay({ key: e.key, isComposing: e.isComposing, defaultPrevented: e.defaultPrevented, targetTag: target?.tagName ?? '', nestedModalOpen: false })) closeRef.current();
+      if (closesOverlay({ key: e.key, isComposing: e.isComposing, defaultPrevented: e.defaultPrevented, targetTag: '', nestedModalOpen: false })) closeRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -164,7 +163,7 @@ export function PromptsWindow({ canInsert, onInsert, onStartChat, onClose }: Pro
               {slots.map((name) => (
                 <label key={name} className="prompts-slot">
                   <span>{name}</span>
-                  <input value={values[name] ?? ''} onChange={(e) => setValues((v) => ({ ...v, [name]: e.target.value }))} placeholder={`{{${name}}}`} />
+                  <input value={slotValue(values, name)} onChange={(e) => setValues((v) => ({ ...v, [name]: e.target.value }))} placeholder={`{{${name}}}`} />
                 </label>
               ))}
               <div className="prompts-actions">

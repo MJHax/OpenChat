@@ -80,7 +80,7 @@ function ConfirmDelete({ target, view, onClose, onDone }: {
             <p>This puts OpenChat back to a fresh install. It deletes:</p>
             <ul className="small">
               <li>every chat, image and video, with all their files</li>
-              <li>memories, About me and custom instructions</li>
+              <li>memories, saved prompts, About me and custom instructions</li>
               <li>the API key saved in Settings</li>
               <li>your model libraries and model choices, the theme and spending limits</li>
               <li><strong>stats and cost history</strong></li>
@@ -164,7 +164,7 @@ export function DataTab({ view, onDeleted }: DataTabProps) {
       <h2>Export</h2>
       <div className="card">
         <div className="muted small">
-          One .zip with each chat, image and video thread as a Markdown file, a JSON file with all chats, messages, memories,
+          One .zip with each chat, image and video thread as a Markdown file, a JSON file with all chats, messages, memories, saved prompts,
           personalization and settings (but not your API key), and every attachment, image and video.
         </div>
         <div className="row" style={{ justifyContent: 'flex-start' }}>

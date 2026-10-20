@@ -17,9 +17,10 @@ function requirePrompt(db: DB, id: number): PromptRow {
 
 const cleanTitle = (title: unknown): string => (typeof title === 'string' ? title.trim() : '');
 
+/** Blank lines around the prompt go, but its indentation stays: a saved snippet of code needs it. */
 function cleanContent(content: unknown): string {
-  const text = typeof content === 'string' ? content.trim() : '';
-  if (!text) throw new HttpError(400, 'Prompt cannot be empty.');
+  const text = typeof content === 'string' ? content.replace(/^(?:[ \t]*\r?\n)+/, '').trimEnd() : '';
+  if (!text.trim()) throw new HttpError(400, 'Prompt cannot be empty.');
   return text;
 }
 

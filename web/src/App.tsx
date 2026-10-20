@@ -241,7 +241,7 @@ export function App() {
       {promptsOpen && (
         <PromptsWindow canInsert={page.page === 'chat' && route.page !== 'settings'} onClose={() => setPromptsOpen(false)}
           onInsert={(text) => { setPromptsOpen(false); insertPrompt(text); }}
-          onStartChat={(text) => { setPromptsOpen(false); startChatWith({ attachments: [], files: [], text }); }} />
+          onStartChat={(text) => { setPromptsOpen(false); navigate('#/'); insertPrompt(text); }} />
       )}
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} onCommand={runCommand} onOpenChat={openChat} />}
       {toasts.length > 0 && (
