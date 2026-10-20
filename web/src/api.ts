@@ -4,7 +4,7 @@ import type {
   Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle, StatsRange, StatsResponse, ChatStats, ContextUsage,
   GeneratedItems, MediaCatalog, MediaKind, MediaLibraryModel, MediaStatsResponse, MediaThreadStats, ThreadKind, StorageUsage, DeleteTarget, LimitStatus,
   DiscussionDetail, DiscussionState, DiscussionSummary, DiscussionTurnDone, DiscussionTurnError, DiscussionTurnStart, NewDiscussion,
-  LibraryResponse, LibrarySource,
+  LibraryResponse, LibrarySource, SavedPrompt,
 } from '../../shared/types';
 import type { ImageSettings } from '../../shared/imageModels';
 import type { VideoSettings } from '../../shared/videoModels';
@@ -91,6 +91,11 @@ export const api = {
   updateMemory: (id: number, patch: { content?: string; enabled?: boolean }) => json<Memory>('PATCH', `/api/memories/${id}`, patch),
   deleteMemory: (id: number) => json<{ ok: true }>('DELETE', `/api/memories/${id}`),
   suggestMemory: (text: string) => json<{ suggestion: string }>('POST', '/api/memories/suggest', { text }).then((r) => r.suggestion),
+
+  listPrompts: () => json<SavedPrompt[]>('GET', '/api/prompts'),
+  addPrompt: (p: { title: string; content: string }) => json<SavedPrompt>('POST', '/api/prompts', p),
+  updatePrompt: (id: number, patch: { title?: string; content?: string }) => json<SavedPrompt>('PATCH', `/api/prompts/${id}`, patch),
+  deletePrompt: (id: number) => json<{ ok: true }>('DELETE', `/api/prompts/${id}`),
 };
 
 /** Uploads one file, reporting progress from 0 to 1. Rejects with the server's error message. */

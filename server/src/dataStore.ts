@@ -62,7 +62,7 @@ function refuseWhileRendering(db: DB): void {
 }
 
 // Every table that holds the user's data; "Delete all my data" empties them all (settings is handled on its own).
-const ALL_TABLES = ['chats', 'attachments', 'memories', 'models', 'media_models', 'usage_events', 'media_events', 'video_jobs',
+const ALL_TABLES = ['chats', 'attachments', 'memories', 'saved_prompts', 'models', 'media_models', 'usage_events', 'media_events', 'video_jobs',
   'model_catalog_cache', 'media_catalog_cache', 'sqlite_sequence'];
 
 /** Deletes one kind of thread, or everything ('all'). Returns the ids of the deleted threads. */
