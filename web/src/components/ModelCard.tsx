@@ -61,7 +61,7 @@ export function ModelCard({ model: m, added, busy, onAdd, onRemove, compact = fa
           {added ? 'Added' : 'Add'}
         </button>
         {added && (
-          <button className="link danger" disabled={busy} onClick={onRemove}>
+          <button className="link accent" disabled={busy} onClick={onRemove}>
             Remove
           </button>
         )}

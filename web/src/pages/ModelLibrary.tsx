@@ -125,7 +125,7 @@ export function ModelLibrary({ models, onChanged, sort: librarySort, onSort: onL
                       Make default
                     </button>
                   )}
-                  <button className="link danger" disabled={busy === m.id} onClick={() => act(m.id, () => api.removeModel(m.id))}>
+                  <button className="link accent" disabled={busy === m.id} onClick={() => act(m.id, () => api.removeModel(m.id))}>
                     Remove
                   </button>
                 </div>
