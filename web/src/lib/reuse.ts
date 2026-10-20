@@ -3,7 +3,8 @@ import { api, librarySrc, uploadAttachment } from '../api';
 import { needsShrinking } from './generated';
 import { shrinkImage } from './shrinkImage';
 
-export interface ReuseDraft { attachments: Attachment[]; files: File[] }
+/** What a new chat starts with; `text` (from a saved prompt) goes in the message box. */
+export interface ReuseDraft { attachments: Attachment[]; files: File[]; text?: string }
 
 /**
  * A Library file ready to drop into a new chat's composer, as a pending copy on the server. An image too big to

@@ -58,6 +58,10 @@ export function App() {
     setStartDraft((s) => ({ ...d, nonce: (s?.nonce ?? 0) + 1 }));
     navigate('#/');
   };
+  /** A saved prompt on its way into the chat's message box; ChatView takes it and clears this. */
+  const [insertReq, setInsertReq] = useState<{ text: string; nonce: number } | null>(null);
+  const insertNonce = useRef(0);
+  const insertPrompt = (text: string) => setInsertReq({ text, nonce: ++insertNonce.current });
   const [loadError, setLoadError] = useState<string | null>(null);
   // The sidebar keeps showing the last mode while on Model Library, Stats or Settings.
   const [lastMode, setLastMode] = useState<ThreadKind>('chat');
@@ -207,7 +211,8 @@ export function App() {
         {loadError && <div className="banner error">Can't reach the OpenChat server: {loadError}</div>}
         {page.page === 'chat' && (
           <ChatView chatId={page.chatId} title={title} reloadToken={chatReload} models={models} settings={settings} onChatsChanged={refreshChats}
-            startDraft={page.chatId ? null : startDraft} onStartDraftUsed={() => setStartDraft(null)} />
+            startDraft={page.chatId ? null : startDraft} onStartDraftUsed={() => setStartDraft(null)}
+            insert={insertReq} onInsertUsed={() => setInsertReq(null)} />
         )}
         {page.page === 'images' && (
           <ImageThread threadId={page.threadId} title={title} reloadToken={chatReload} settings={settings} onThreadsChanged={refreshChats} />

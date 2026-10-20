@@ -41,6 +41,10 @@ export interface ChatViewProps {
   /** Files to start a new chat with (from the Library); a new nonce applies them, then onStartDraftUsed clears them. */
   startDraft?: (ReuseDraft & { nonce: number }) | null;
   onStartDraftUsed?(): void;
+  /** A saved prompt to add to the message box at the caret. */
+  insert?: { text: string; nonce: number } | null;
+  onInsertUsed?(): void;
+  onOpenPrompts?(): void;
 }
 
 interface SlotState {
@@ -75,7 +79,7 @@ type RunOptions =
 /** The model that summarized each chat continued in this session, so the new chat starts on it. */
 const continuedModels = new Map<string, string>();
 
-export function ChatView({ chatId, title, reloadToken, models, settings, onChatsChanged, startDraft, onStartDraftUsed }: ChatViewProps) {
+export function ChatView({ chatId, title, reloadToken, models, settings, onChatsChanged, startDraft, onStartDraftUsed, insert, onInsertUsed, onOpenPrompts }: ChatViewProps) {
   const [detail, setDetail] = useState<ChatDetail | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +98,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   const [prefill, setPrefill] = useState<ComposerPrefill | null>(null);
   useEffect(() => {
     if (!startDraft) return;
-    setPrefill((p) => ({ nonce: (p?.nonce ?? 0) + 1, attachments: startDraft.attachments, files: startDraft.files }));
+    setPrefill((p) => ({ nonce: (p?.nonce ?? 0) + 1, attachments: startDraft.attachments, files: startDraft.files, text: startDraft.text }));
     onStartDraftUsed?.();
   }, [startDraft?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Chats whose context warning was dismissed (until reload). */
@@ -553,6 +557,9 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
           onStop={() => abortRef.current?.abort()}
           showCompareToggle={!chatId}
           prefill={prefill}
+          insert={insert}
+          onInsertUsed={onInsertUsed}
+          onOpenPrompts={onOpenPrompts}
         />
         {home && <SuggestionCards onPrefill={(text) => setPrefill((p) => ({ text, nonce: (p?.nonce ?? 0) + 1 }))} />}
 
