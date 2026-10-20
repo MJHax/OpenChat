@@ -1,6 +1,6 @@
 import type { DB } from './db';
 import type { UsageRow } from './usage';
-import { bucketKeys, dayKey, heatmapDays, hourKey, monthKey, rangeWindow } from './statsTime';
+import { bucketKeys, dayKey, heatKey, heatmapKeys, hourKey, monthKey, rangeWindow } from './statsTime';
 import type { ImageSettings } from '../../shared/imageModels';
 import type { ImageGeneration, MediaKind, MediaStatsResponse, MediaThreadStats, StatsRange } from '../../shared/types';
 
@@ -101,9 +101,10 @@ export function computeMediaStats({ events, titleRows, range, now, tz, modelName
     return { key, label, count: list.filter(done).length, cost: sum(list, (e) => e.cost) };
   });
 
-  const byDay = groupBy(mine.filter((e) => e.createdAt >= now - 372 * 86_400_000), (e) => dayKey(e.createdAt, tz));
-  const heatmap = heatmapDays(now, tz).map((day) => {
-    const list = byDay.get(day) ?? [];
+  const cellOf = heatKey(range);
+  const byCell = groupBy(inRange, (e) => cellOf(e.createdAt, tz));
+  const heatmap = heatmapKeys(range, now, tz, first).map((day) => {
+    const list = byCell.get(day) ?? [];
     return { day, replies: list.filter(done).length, cost: sum(list, (e) => e.cost) };
   });
 

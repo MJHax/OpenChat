@@ -52,11 +52,17 @@ export function heatLevel(replies: number, max: number): 0 | 1 | 2 | 3 | 4 {
   return Math.min(4, Math.ceil((4 * replies) / max)) as 1 | 2 | 3 | 4;
 }
 
-/** Weeks of seven days (Sunday first). The server starts the list on a Sunday; the last week is padded with null. */
+/**
+ * Day cells as weeks of seven (Sunday first), padded with null before the first day and after the last, so each row is
+ * one weekday. A week or less (Today's hours, the Week range) is one row: a column per cell.
+ */
 export function heatColumns(days: HeatDay[]): (HeatDay | null)[][] {
+  if (days.length <= 7 || days[0].day.includes('T')) return days.map((d) => [d]);
+  const lead = days.length ? new Date(`${days[0].day}T00:00:00Z`).getUTCDay() : 0;
+  const cells: (HeatDay | null)[] = [...Array<null>(lead).fill(null), ...days];
   const cols: (HeatDay | null)[][] = [];
-  for (let i = 0; i < days.length; i += 7) {
-    const week: (HeatDay | null)[] = days.slice(i, i + 7);
+  for (let i = 0; i < cells.length; i += 7) {
+    const week = cells.slice(i, i + 7);
     while (week.length < 7) week.push(null);
     cols.push(week);
   }

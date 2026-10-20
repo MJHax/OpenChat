@@ -1,7 +1,7 @@
 import type { DB } from './db';
 import { cachedCatalogNames } from './catalog';
 import type { UsageRow } from './usage';
-import { bucketKeys, dayKey, heatmapDays, hourKey, monthKey, rangeWindow, streaks } from './statsTime';
+import { bucketKeys, dayKey, heatKey, heatmapKeys, hourKey, monthKey, rangeWindow, streaks } from './statsTime';
 import type { BigChat, ChatStats, FeatureStats, ModelStats, StatsRange, StatsResponse, UsageBucket } from '../../shared/types';
 
 export interface StatsInput {
@@ -132,10 +132,11 @@ export function computeStats({ rows, range, now, tz, chatTitles, modelNames }: S
     };
   });
 
-  const days = heatmapDays(now, tz);
-  const byDay = groupBy(rows.filter((r) => r.createdAt >= now - 372 * 86_400_000), (r) => dayKey(r.createdAt, tz));
-  const heatmap = days.map((day) => {
-    const list = byDay.get(day) ?? [];
+  // The heat map covers the selected range only, so its shading is scaled to that range's busiest cell.
+  const cellOf = heatKey(range);
+  const byCell = groupBy(inRange, (r) => cellOf(r.createdAt, tz));
+  const heatmap = heatmapKeys(range, now, tz, earliest(rows)).map((day) => {
+    const list = byCell.get(day) ?? [];
     return { day, replies: list.filter(counted).length, cost: sum(list, (r) => r.cost) };
   });
 

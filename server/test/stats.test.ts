@@ -124,10 +124,22 @@ describe('models', () => {
 });
 
 describe('heatmap and buckets', () => {
-  it('always covers a year and counts replies per day', () => {
-    const s = stats([row({ createdAt: NOW - DAY })], 'today');
-    expect(s.heatmap.length).toBeGreaterThanOrEqual(365);
-    expect(s.heatmap.find((d) => d.day === '2026-10-15')).toEqual({ day: '2026-10-15', replies: 1, cost: 0.01 });
+  it('covers only the selected range, so activity outside it does not set the scale', () => {
+    const rows = [row({ createdAt: NOW - DAY }), row({ createdAt: NOW - 20 * DAY }), row({ createdAt: NOW - 20 * DAY })];
+    const week = stats(rows, 'week');
+    expect(week.heatmap.map((d) => d.day)).toEqual(['2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16']);
+    expect(week.heatmap.find((d) => d.day === '2026-10-15')).toEqual({ day: '2026-10-15', replies: 1, cost: 0.01 });
+    expect(stats(rows, 'month').heatmap).toHaveLength(30);
+    expect(stats(rows, 'month').heatmap.find((d) => d.day === '2026-09-26')?.replies).toBe(2);
+    expect(stats(rows, 'year').heatmap).toHaveLength(365);
+    expect(stats(rows, 'all').heatmap[0].day).toBe('2026-09-26');
+  });
+
+  it('is hourly for Today', () => {
+    const s = stats([row(), row({ createdAt: NOW - DAY })], 'today');
+    expect(s.heatmap).toHaveLength(24);
+    expect(s.heatmap.find((d) => d.day === '2026-10-16T17')).toEqual({ day: '2026-10-16T17', replies: 1, cost: 0.01 });
+    expect(s.heatmap.reduce((n, d) => n + d.replies, 0)).toBe(1);
   });
 
   it('splits each bucket into replies and background calls', () => {

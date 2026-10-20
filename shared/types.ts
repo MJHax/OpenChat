@@ -416,6 +416,7 @@ export interface StatsTiles {
   topModel: { id: string; name: string; share: number } | null;
 }
 
+/** One heat map cell: `day` is a local day ('YYYY-MM-DD'), or a local hour ('YYYY-MM-DDTHH') for Today. */
 export interface HeatDay { day: string; replies: number; cost: number }
 
 export interface UsageBucket {

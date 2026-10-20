@@ -35,7 +35,7 @@ export function MediaStats({ stats: s, noun }: { stats: MediaStatsResponse; noun
           sub={t.tokenModels ? `${compactNumber(t.promptTokens)} in · ${compactNumber(t.completionTokens)} out · from models that report tokens` : 'none of these models report tokens'} />
         {t.seconds !== undefined && <Tile label="Seconds" value={String(t.seconds)} sub={t.avgCostPerSecond != null ? `${usd(t.avgCostPerSecond)} / s` : null} />}
       </div>
-      <Heatmap days={s.heatmap} />
+      <Heatmap days={s.heatmap} range={s.range} noun={noun} />
       <div className="panel">
         <div className="panel-head">
           <h3>{metric === 'count' ? plural[0].toUpperCase() + plural.slice(1) : 'Spend'} over time</h3>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bucketKeys, dayKey, heatmapDays, hourKey, isValidZone, monthKey, rangeWindow, startOfLocalDay, streaks } from '../src/statsTime';
+import { bucketKeys, dayKey, heatmapKeys, hourKey, isValidZone, monthKey, rangeWindow, startOfLocalDay, streaks } from '../src/statsTime';
 
 const NY = 'America/New_York';
 const DAY = 86_400_000;
@@ -92,15 +92,29 @@ describe('bucketKeys', () => {
   });
 });
 
-describe('heatmapDays', () => {
-  it('covers a year of local days, starting on a Sunday and ending today', () => {
-    const now = Date.UTC(2026, 9, 16, 18, 0);
-    const days = heatmapDays(now, NY);
-    expect(days.length).toBeGreaterThanOrEqual(365);
-    expect(days.length).toBeLessThanOrEqual(371);
-    expect(new Date(`${days[0]}T12:00:00Z`).getUTCDay()).toBe(0);
-    expect(days.at(-1)).toBe('2026-10-16');
-    expect(new Set(days).size).toBe(days.length);
+describe('heatmapKeys', () => {
+  const now = Date.UTC(2026, 9, 16, 18, 0); // 14:00 on Oct 16 in New York
+
+  it('is the hours of today for Today', () => {
+    const keys = heatmapKeys('today', now, NY, null);
+    expect(keys).toHaveLength(24);
+    expect(keys[0]).toBe('2026-10-16T00');
+    expect(keys.at(-1)).toBe('2026-10-16T23');
+  });
+
+  it('is the local days of the window for Week, Month and Year, ending today', () => {
+    for (const [range, n] of [['week', 7], ['month', 30], ['year', 365]] as const) {
+      const keys = heatmapKeys(range, now, NY, null);
+      expect(keys).toHaveLength(n);
+      expect(keys[0]).toBe(dayKey(rangeWindow(range, now, NY).start!, NY));
+      expect(keys.at(-1)).toBe('2026-10-16');
+      expect(new Set(keys).size).toBe(n);
+    }
+  });
+
+  it('runs from the first local day with activity for All time, and is empty with none', () => {
+    expect(heatmapKeys('all', now, NY, Date.UTC(2026, 9, 12, 2, 0))).toEqual(['2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16']);
+    expect(heatmapKeys('all', now, NY, null)).toEqual([]);
   });
 });
 

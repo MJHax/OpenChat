@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { computeMediaStats, computeMediaThreadStats, type MediaEventRow } from '../src/mediaStats';
 import { makeApp } from './appHelpers';
 import type { UsageRow } from '../src/usage';
-import type { MediaStatsResponse, MediaThreadStats, StatsResponse } from '../../shared/types';
+import type { MediaStatsResponse, MediaThreadStats, StatsRange, StatsResponse } from '../../shared/types';
 
 const NOW = Date.UTC(2026, 9, 17, 12);
 const HOUR = 3_600_000;
@@ -19,10 +19,20 @@ const titleRow = (cost: number, threadKind: UsageRow['threadKind']): UsageRow =>
   webSearch: false, webSearches: null, attachments: 0, firstTokenMs: null, durationMs: null, status: 'complete', backfilled: false, threadKind,
 });
 
-const stats = (events: MediaEventRow[], titleRows: UsageRow[] = [], range: 'all' | 'today' = 'all') =>
+const stats = (events: MediaEventRow[], titleRows: UsageRow[] = [], range: StatsRange = 'all') =>
   computeMediaStats({ events, titleRows, range, now: NOW, tz: 'UTC', modelNames: new Map([['g/banana', 'Banana']]), kind: 'image' });
 
 describe('computeMediaStats', () => {
+  it('fits the heatmap to the range: hours for Today, the window days otherwise', () => {
+    const events = [ev(), ev({ createdAt: NOW - 10 * 24 * HOUR })];
+    expect(stats(events, [], 'today').heatmap).toHaveLength(24);
+    expect(stats(events, [], 'today').heatmap.reduce((n, d) => n + d.replies, 0)).toBe(1);
+    const week = stats(events, [], 'week').heatmap;
+    expect(week).toHaveLength(7);
+    expect(week.reduce((n, d) => n + d.replies, 0)).toBe(1);
+    expect(stats(events, [], 'month').heatmap.reduce((n, d) => n + d.replies, 0)).toBe(2);
+  });
+
   it('fills the tiles', () => {
     const s = stats([ev({ cost: 0.04, durationMs: 10_000 }), ev({ cost: 0.06, durationMs: 20_000 }), ev({ cost: 0, status: 'error', durationMs: 3_000 })]);
     expect(s.tiles).toMatchObject({ count: 2, spend: 0.1, failures: 1, avgDurationMs: 15_000 });

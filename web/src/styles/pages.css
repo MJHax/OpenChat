@@ -72,8 +72,10 @@ button.chip.more { border-style: dashed; color: var(--muted); }
 .panel-head h3 { margin: 0; font-size: 14px; }
 .heatmap { display: flex; gap: 3px; overflow-x: auto; padding-bottom: 2px; }
 .heat-week { display: flex; flex-direction: column; gap: 3px; }
-.heat-cell { width: 11px; height: 11px; border-radius: 2px; background: var(--surface-2); }
+.heat-cell { flex: none; width: var(--heat-cell, 11px); height: var(--heat-cell, 11px); border-radius: 2px; background: var(--surface-2); }
 .heat-cell.pad { background: none; }
+.heatmap.row .heat-week { flex: 1 1 0; min-width: 0; max-width: 24px; }
+.heatmap.row .heat-cell { width: 100%; height: auto; aspect-ratio: 1; }
 .heat-cell.l1 { background: color-mix(in srgb, var(--accent) 25%, var(--surface-2)); }
 .heat-cell.l2 { background: color-mix(in srgb, var(--accent) 50%, var(--surface-2)); }
 .heat-cell.l3 { background: color-mix(in srgb, var(--accent) 75%, var(--surface-2)); }

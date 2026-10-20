@@ -40,6 +40,22 @@ describe('heatmap layout', () => {
     expect(cols[1][0]?.day).toBe('2026-10-11');
     expect(cols[1].slice(1)).toEqual([null, null, null, null, null, null]);
   });
+
+  it('pads before the first day so each row stays one weekday', () => {
+    // 2026-10-07 is a Wednesday
+    const days: HeatDay[] = Array.from({ length: 10 }, (_, i) => ({ day: `2026-10-${String(7 + i).padStart(2, '0')}`, replies: 1, cost: 0 }));
+    const cols = heatColumns(days);
+    expect(cols).toHaveLength(2);
+    expect(cols[0].map((d) => d?.day ?? null)).toEqual([null, null, null, '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10']);
+    expect(cols[1].map((d) => d?.day ?? null)).toEqual(['2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', null]);
+  });
+
+  it('lays hours, and a week or less of days, out in one row', () => {
+    const hours: HeatDay[] = Array.from({ length: 24 }, (_, h) => ({ day: `2026-10-16T${String(h).padStart(2, '0')}`, replies: 0, cost: 0 }));
+    expect(heatColumns(hours)).toEqual(hours.map((h) => [h]));
+    const week: HeatDay[] = Array.from({ length: 7 }, (_, i) => ({ day: `2026-10-${String(7 + i).padStart(2, '0')}`, replies: 0, cost: 0 }));
+    expect(heatColumns(week)).toEqual(week.map((d) => [d]));
+  });
 });
 
 describe('range memory', () => {

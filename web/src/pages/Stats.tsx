@@ -56,7 +56,7 @@ export function Stats() {
         ) : view === 'chats' && stats ? (
           <>
             <StatTiles tiles={stats.tiles} range={stats.range} />
-            <Heatmap days={stats.heatmap} />
+            <Heatmap days={stats.heatmap} range={stats.range} />
             <UsageChart buckets={stats.buckets} />
             <ModelRows models={stats.models} />
             <FeaturePanels features={stats.features} byCost={stats.biggestByCost} byLength={stats.biggestByLength} />

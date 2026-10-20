@@ -116,15 +116,19 @@ export function bucketKeys(range: StatsRange, now: number, tz: string, firstEven
   });
 }
 
-/** Local days from the Sunday on or before a year ago, through today. */
-export function heatmapDays(now: number, tz: string): string[] {
+/** Heat map cells for a range: hours for Today, else every local day of the window (All time: from the first event). */
+export function heatmapKeys(range: StatsRange, now: number, tz: string, firstEventAt: number | null): string[] {
+  if (range === 'today' || range === 'week' || range === 'month') return bucketKeys(range, now, tz, firstEventAt).map((b) => b.key);
+  const start = range === 'year' ? rangeWindow('year', now, tz).start! : firstEventAt;
+  if (start === null) return [];
   const today = dayKey(now, tz);
-  const yearAgo = addDays(today, -364);
-  let day = addDays(yearAgo, -keyDate(yearAgo).getUTCDay());
   const out: string[] = [];
-  for (; day <= today; day = addDays(day, 1)) out.push(day);
+  for (let day = dayKey(start, tz); day <= today; day = addDays(day, 1)) out.push(day);
   return out;
 }
+
+/** The heat map cell a call falls in: its local hour for Today, else its local day. */
+export const heatKey = (range: StatsRange) => (range === 'today' ? hourKey : dayKey);
 
 /** Consecutive active local days: the run ending today (or yesterday, if nothing yet today) and the longest run. */
 export function streaks(activeDays: Set<string>, now: number, tz: string): { current: number; longest: number } {
