@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { EFFORTS, type Attachment, type Effort, type LibraryModel } from '../../../shared/types';
 import { sendBlockReason, skippedImagesNotice } from '../lib/attachments';
 import type { CompareState } from '../lib/compare';
@@ -79,13 +79,17 @@ export function Composer({
     const next = insertOnOwnLine(text, caretRef.current ?? text.length, insert.text);
     setText(next.value);
     caretRef.current = next.caret;
+    placeCaret.current = next.caret;
     onInsertUsed?.();
-    const el = ref.current;
-    if (el) {
-      el.focus();
-      requestAnimationFrame(() => el.setSelectionRange(next.caret, next.caret));
-    }
+    ref.current?.focus();
   }, [insert?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Once the inserted text is rendered (rendering it moves the caret to the end), put the caret right after the prompt.
+  const placeCaret = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (placeCaret.current === null) return;
+    ref.current?.setSelectionRange(placeCaret.current, placeCaret.current);
+    placeCaret.current = null;
+  }, [text]);
   const drop = useFileDrop(draft.add);
   const blockReason = sendBlockReason(draft.kinds, replyModels);
   const notice = blockReason ?? skippedImagesNotice(path, replyModels);
