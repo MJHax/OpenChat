@@ -19,6 +19,7 @@ export const PALETTE_COMMANDS: PaletteCommand[] = [
   { id: 'go-models', group: 'Go to', label: 'Model Library', keywords: 'models add catalog' },
   { id: 'go-stats', group: 'Go to', label: 'Stats', keywords: 'usage cost spend' },
   { id: 'go-library', group: 'Go to', label: 'Library', keywords: 'files uploads downloads generated images videos' },
+  { id: 'open-prompts', group: 'Go to', label: 'Saved prompts', keywords: 'snippets templates bookmarks' },
   { id: 'go-settings-general', group: 'Go to', label: 'Settings: General', keywords: 'api key default model' },
   { id: 'go-settings-appearance', group: 'Go to', label: 'Settings: Appearance', keywords: 'theme accent color motion' },
   { id: 'go-settings-memory', group: 'Go to', label: 'Settings: Memory', keywords: 'remember' },
