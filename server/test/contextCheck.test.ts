@@ -6,6 +6,8 @@ import { addLocalModel, addModel, setContextWindow } from '../src/library';
 import { insertMessage } from '../src/messages';
 import { setActiveLeaf } from '../src/chats';
 import { pdfWithPages } from '../../test/helpers';
+import { startFakeSearchServer, type FakeSearch } from '../../test/fakeSearchServer'
+import { setSetting } from '../src/settings';
 import { localModelId } from '../../shared/localModels';
 import { withCatalogDefaults, type ChatDetail, type ChatSummary, type Message } from '../../shared/types';
 
@@ -230,5 +232,37 @@ describe('GET /api/context', () => {
     await readEvents(await send(s, { modelId: s.ids.cloud, attachmentIds: [pdf.id] }));
     const res = await s.call('GET', `/api/context?model=${encodeURIComponent(s.ids.small)}&chat=${s.chatId}`);
     expect(((await res.json()) as any).parts.attachments).toBeGreaterThan(3000);
+  });
+});
+
+describe('the reserve for web search results', () => {
+  let search: FakeSearch | undefined;
+  afterEach(async () => {
+    await search?.close();
+    search = undefined;
+  });
+  /** A 4,096-token window holding ~2,100 tokens: it fits with the margin, not with the reserve. */
+  async function nearlyFull(service: 'searxng' | 'none') {
+    search = await startFakeSearchServer();
+    const s = await setup();
+    setContextWindow(s.db, s.ids.small, 4096);
+    longChat(s, 'x'.repeat(8_400));
+    setSetting(s.db, 'web_search_service', service);
+    setSetting(s.db, 'searxng_url', search.url);
+    return s;
+  }
+  it('asks when a search will run and its results would not fit', async () => {
+    const s = await nearlyFull('searxng');
+    const res = await send(s, { modelId: s.ids.small, webSearch: true });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as any).overflow[0].modelId).toBe(s.ids.small);
+  });
+  it('does not ask without a search turned on', async () => {
+    const s = await nearlyFull('searxng');
+    expect((await send(s, { modelId: s.ids.small })).status).toBe(200);
+  });
+  it('does not ask when no search service is set up', async () => {
+    const s = await nearlyFull('none');
+    expect((await send(s, { modelId: s.ids.small, webSearch: true })).status).toBe(200);
   });
 });

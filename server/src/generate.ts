@@ -6,6 +6,7 @@ import { getChatRow, setActiveLeaf, touchChat } from './chats';
 import { getChatMessages, insertMessage } from './messages';
 import { type Usage, type WebSearchMode } from './openrouter';
 import { chatProvider } from './providers';
+import { webSearchService } from './webSearch';
 import { ProviderError } from './providers/types';
 import { isLocalModelId, statusMessage } from '../../shared/localModels';
 import { chatImageNames, getAttachmentData } from './attachments';
@@ -41,8 +42,10 @@ export function promptFor(deps: Deps, chatId: string, parentId: string, modelId:
   const path = activePath(getChatMessages(db, chatId), parentId);
   const inputModalities = modelModalities(db, modelId);
   const loadData = (id: string) => getAttachmentData(db, id) ?? Buffer.alloc(0);
-  // Local models never search yet (local web search arrives in stage 3), even when the message asked for it.
-  const webSearch = path.at(-1)?.webSearch && !isLocalModelId(modelId) ? (modelSupportsTools(db, modelId) ? 'tool' : 'plugin') : undefined;
+  // Local models search through the service chosen in Settings; with none set up the message is answered without searching.
+  const asked = path.at(-1)?.webSearch === true;
+  const searches = asked && (!isLocalModelId(modelId) || webSearchService(db, deps.env) !== null);
+  const webSearch: WebSearchMode | undefined = searches ? (modelSupportsTools(db, modelId) ? 'tool' : 'plugin') : undefined;
   const note = getChatRow(db, chatId)?.context_note;
   const messages = buildMessages(chatPersona(db, chatId), path, { inputModalities, loadData, pdfText: pdfTextFor(db, modelId) }, { imageNames: chatImageNames(db, chatId) }, note);
   return {

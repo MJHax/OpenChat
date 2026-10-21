@@ -16,6 +16,9 @@ import { activePath } from './tree';
 /** Room kept for the reply; erring toward asking. */
 export const OVERFLOW_MARGIN = 1_024;
 
+/** Room kept for web search results when a local model will search. */
+export const SEARCH_RESERVE_TOKENS = 3_000;
+
 /** How full `modelId`'s window is for `path` (a chat's active path, oldest first), as a reply would be sent. */
 export function estimatePath(db: DB, o: { modelId: string; chatId: string | null; path: Message[]; instructions?: string; windows?: Map<string, number> }): ContextUsage {
   // What the model is actually sent: older versions of a file are reduced to a stub.
@@ -46,6 +49,8 @@ export function contextOverflow(db: DB, o: {
   modelIds: string[];
   /** The windows LM Studio models are loaded with; they win over the chosen ones. */
   windows?: Map<string, number>;
+  /** A web search will run for the reply, so local models need room for its results. */
+  webSearch?: boolean;
 }): ContextOverflow[] {
   const path = activePath(getChatMessages(db, o.chatId), o.parentId);
   if (o.newMessage) {
@@ -60,7 +65,8 @@ export function contextOverflow(db: DB, o: {
     const window = o.windows?.get(modelId) ?? modelContextLength(db, modelId);
     if (window === null) continue;
     const { used } = estimatePath(db, { modelId, chatId: o.chatId, path, windows: o.windows });
-    if (used + OVERFLOW_MARGIN > window) out.push({ modelId, displayName: displayNameOf(db, modelId), window, estimate: used });
+    const reserve = o.webSearch ? SEARCH_RESERVE_TOKENS : 0;
+    if (used + reserve + OVERFLOW_MARGIN > window) out.push({ modelId, displayName: displayNameOf(db, modelId), window, estimate: used });
   }
   return out;
 }

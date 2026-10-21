@@ -2,6 +2,8 @@ import type { Deps } from '../app';
 import { HttpError } from '../http';
 import { getServer } from '../localServers';
 import { resolveApiKey } from '../settings';
+import { webSearchService } from '../webSearch';
+import { withLocalSearch } from './localSearch';
 import { createLmStudioClient } from './lmstudio';
 import { createOllamaClient } from './ollama';
 import { withLoadingStatus } from './loadingStatus';
@@ -46,8 +48,13 @@ export function chatProvider(deps: Deps, modelId: string): ChatProvider {
     // Helper calls (titles, summaries, suggestions) must not spend their small budget on thinking.
     const helperThink = supportsReasoning(deps, modelId) ? false : undefined;
     return {
-      streamChat: (o) =>
-        withLoadingStatus(client.streamChat({ ...o, model: local.name, contextWindow }), () => client.loadState(local.name, contextWindow)),
+      streamChat: (o) => {
+        const run = (req: typeof o) =>
+          withLoadingStatus(client.streamChat({ ...req, model: local.name, contextWindow }), () => client.loadState(local.name, contextWindow));
+        // A service removed since the prompt was built means no search.
+        const service = o.webSearch ? webSearchService(deps.db, deps.env) : null;
+        return o.webSearch && service ? withLocalSearch(run, { ...o, webSearch: o.webSearch }, service) : run(o);
+      },
       complete: (o) => client.complete({ ...o, model: local.name, contextWindow, think: o.think ?? helperThink }),
     };
   }

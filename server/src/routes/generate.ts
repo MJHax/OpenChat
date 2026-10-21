@@ -13,6 +13,7 @@ import { checkSpend, spendBlock } from '../limits';
 import { isLocalModelId } from '../../../shared/localModels';
 import { contextOverflow, overflowMessage } from '../contextCheck';
 import { loadedWindows } from '../providers';
+import { webSearchService } from '../webSearch';
 import { ensurePdfText, pathPdfIds } from '../pdfText';
 
 const requireText = (value: unknown, error: string): string => {
@@ -92,10 +93,10 @@ export function generationRoutes(deps: Deps): Hono {
    * unless the user chose to send anyway, in which case those models' replies are marked as having lost context.
    * On a refusal the chat is released again.
    */
-  async function checkOverflow(chatId: string, allowOverflow: unknown, o: Parameters<typeof contextOverflow>[1]): Promise<Set<string>> {
+  async function checkOverflow(chatId: string, allowOverflow: unknown, o: Omit<Parameters<typeof contextOverflow>[1], 'windows'>): Promise<Set<string>> {
     try {
       if (allowOverflow !== undefined && typeof allowOverflow !== 'boolean') throw new HttpError(400, 'allowOverflow must be true or false.');
-      const overflow = contextOverflow(db, { ...o, windows: await loadedWindows(deps, o.modelIds) });
+      const overflow = contextOverflow(db, { ...o, webSearch: o.webSearch === true && webSearchService(db, deps.env) !== null, windows: await loadedWindows(deps, o.modelIds) });
       if (overflow.length && allowOverflow !== true) throw new HttpError(409, overflowMessage(overflow), { overflow });
       return new Set(overflow.map((x) => x.modelId));
     } catch (err) {
@@ -146,7 +147,7 @@ export function generationRoutes(deps: Deps): Hono {
     await readPdfs(modelIds, chatId, chat.active_leaf_id, attachments);
     requireViewable(db, modelIds, attachments);
     const limitMessage = claim(chat, modelIds);
-    const droppedModelIds = await checkOverflow(chatId, body.allowOverflow, { chatId, parentId: chat.active_leaf_id, newMessage: { content, attachments }, modelIds });
+    const droppedModelIds = await checkOverflow(chatId, body.allowOverflow, { chatId, parentId: chat.active_leaf_id, newMessage: { content, attachments }, modelIds, webSearch });
     const user = saveUserMessage(chatId, chat.active_leaf_id, content, attachments, webSearch);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
@@ -163,7 +164,7 @@ export function generationRoutes(deps: Deps): Hono {
     const modelIds = requireModels(body);
     await readPdfs(modelIds, chatId, parent.id);
     const limitMessage = claim(chat, modelIds);
-    const droppedModelIds = await checkOverflow(chatId, body.allowOverflow, { chatId, parentId: parent.id, newMessage: null, modelIds });
+    const droppedModelIds = await checkOverflow(chatId, body.allowOverflow, { chatId, parentId: parent.id, newMessage: null, modelIds, webSearch: parent.webSearch });
     return reply(c, { chatId, parentId: parent.id, modelIds, userMessageId: null, kind: 'regenerate', attachments: 0, effort, thinking, droppedModelIds, limitMessage });
   });
 
@@ -184,7 +185,7 @@ export function generationRoutes(deps: Deps): Hono {
     await readPdfs(modelIds, chatId, original.parentId, attachments);
     requireViewable(db, modelIds, attachments.filter((a) => a.messageId === null));
     const limitMessage = claim(chat, modelIds);
-    const droppedModelIds = await checkOverflow(chatId, body.allowOverflow, { chatId, parentId: original.parentId, newMessage: { content, attachments }, modelIds });
+    const droppedModelIds = await checkOverflow(chatId, body.allowOverflow, { chatId, parentId: original.parentId, newMessage: { content, attachments }, modelIds, webSearch });
     const user = saveUserMessage(chatId, original.parentId, content, attachments, webSearch);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
