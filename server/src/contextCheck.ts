@@ -19,15 +19,21 @@ export const OVERFLOW_MARGIN = 1_024;
 export function estimatePath(db: DB, o: { modelId: string; chatId: string | null; path: Message[]; instructions?: string }): ContextUsage {
   // What the model is actually sent: older versions of a file are reduced to a stub.
   const sent = collapseSuperseded(o.path);
-  return estimateContext({
+  const input = {
     modelId: o.modelId,
     contextLength: modelContextLength(db, o.modelId),
     system: replySystemPrompt(chatPersona(db, o.chatId, o.instructions ?? ''), o.chatId ? chatImageNames(db, o.chatId) : []),
     note: o.chatId ? getChatRow(db, o.chatId)?.context_note ?? null : null,
     path: o.path.map((m, i) => ({ ...m, content: sent[i] })),
     canViewImages: canViewImages(modelModalities(db, o.modelId)),
-    loadData: (id) => getAttachmentData(db, id) ?? Buffer.alloc(0),
-  });
+    loadData: (id: string) => getAttachmentData(db, id) ?? Buffer.alloc(0),
+  };
+  const anchored = estimateContext(input);
+  if (!isLocalModelId(o.modelId)) return anchored;
+  // A local server that overflows drops the oldest messages and then reports only what it kept, so a saved prompt
+  // count can be far too small. Never trust it below what counting the characters says.
+  const counted = estimateContext({ ...input, path: input.path.map((m) => ({ ...m, promptTokens: null })) });
+  return counted.used > anchored.used ? counted : anchored;
 }
 
 /** The local models among `modelIds` whose window can't hold the chat up to `parentId` plus the message about to be sent. */

@@ -136,6 +136,19 @@ describe('the check before sending', () => {
     expect(done.contextDropped).toBe(true);
   });
 
+  it('keeps asking after a Send-anyway reply whose prompt count was truncated by the server', async () => {
+    const s = await setup();
+    const { a } = longChat(s);
+    // Ollama counts only what it kept, so the saved reply reports a small prompt for a chat far over the window.
+    const r = insertMessage(s.db, { chatId: s.chatId, parentId: a.id, role: 'assistant', content: 'ok', modelId: s.ids.small, promptTokens: 100, completionTokens: 5 });
+    setActiveLeaf(s.db, s.chatId, r.id);
+    const res = await send(s, { modelId: s.ids.small });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as any).overflow[0].estimate).toBeGreaterThan(2048);
+    const ctx = (await (await s.call('GET', `/api/context?model=${encodeURIComponent(s.ids.small)}&chat=${s.chatId}`)).json()) as any;
+    expect(ctx.used).toBeGreaterThan(2048);
+  });
+
   it('rejects a non-boolean allowOverflow', async () => {
     const s = await setup();
     const res = await send(s, { modelId: s.ids.small, allowOverflow: 'yes' });
