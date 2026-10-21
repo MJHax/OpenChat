@@ -19,7 +19,7 @@ const collect = async (gen: AsyncGenerator<StreamEvent>) => {
 const hello = [{ role: 'user' as const, content: 'hi' }];
 const chatBody = () => server!.requests.find((r) => r.path === '/v1/chat/completions')!.body;
 const loads = () => server!.requests.filter((r) => r.path === '/api/v1/models/load');
-const ZERO_COST = { cost: 0, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null };
+const ZERO_COST = { cost: 0, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null };
 const QWEN = 'lmstudio-community/Qwen3-8B-GGUF';
 
 const LM_MODELS: FakeModel[] = [
@@ -54,7 +54,7 @@ describe('LM Studio client', () => {
     const events = await collect(client.streamChat({ model: QWEN, messages: hello, contextWindow: 4096 }));
     expect(events.some((e) => e.type === 'delta')).toBe(true);
     expect(loads()).toHaveLength(0);
-  });
+  }, 15_000);
 
   it('lists models with capabilities', async () => {
     const client = await startLm();
@@ -98,7 +98,7 @@ describe('LM Studio client', () => {
     expect(events).toEqual([
       { type: 'delta', text: 'Hel' },
       { type: 'delta', text: 'lo' },
-      { type: 'usage', usage: { promptTokens: 7, completionTokens: 2, ...ZERO_COST } },
+      { type: 'usage', usage: { promptTokens: 7, completionTokens: 2, ...ZERO_COST, loadMs: expect.any(Number) } },
     ]);
     expect(chatBody().model).toBe(QWEN);
     expect(chatBody().stream).toBe(true);
@@ -222,5 +222,58 @@ describe('OpenAI-compatible client', () => {
     const client = createOpenAICompatClient({ name: 'My server', baseUrl: 'http://127.0.0.1:1' }, fetchImpl);
     const err = await collect(client.streamChat({ model: 'gpt-local', messages: hello })).catch((e) => e);
     expect(err.message).toBe("My server couldn't run this model: unknown error");
+  });
+});
+
+describe('LM Studio load timings', () => {
+  const startTimed = async (o: { listDelayMs?: number } = {}) => {
+    server = await startFakeLocalServer({
+      flavor: 'lmstudio',
+      listDelayMs: o.listDelayMs,
+      models: [
+        { name: 'cold', contextLength: 8192, loadMs: 200 },
+        { name: 'warm', contextLength: 8192, loaded: true },
+      ],
+    });
+    return createLmStudioClient({ name: 'LM Studio', baseUrl: server.url });
+  };
+  const usageOf = async (client: ReturnType<typeof createLmStudioClient>, model: string) =>
+    ((await collect(client.streamChat({ model, messages: hello, contextWindow: 4096 }))).find((e) => e.type === 'usage') as any).usage;
+
+  it('reports the load time when the pre-chat step loads the model, null otherwise', async () => {
+    const client = await startTimed();
+    const cold = await usageOf(client, 'cold');
+    expect(Math.abs(cold.loadMs - 200)).toBeLessThanOrEqual(50);
+    expect(cold.generationMs).toBeNull();
+    expect((await usageOf(client, 'warm')).loadMs).toBeNull();
+    expect((await usageOf(client, 'cold')).loadMs).toBeNull();
+  });
+
+  it('reports the loaded window in loadState', async () => {
+    const client = await startTimed();
+    expect(await client.loadState('cold')).toEqual({ loaded: false, contextWindow: null });
+    expect(await client.loadState('warm')).toEqual({ loaded: true, contextWindow: 8192 });
+    await usageOf(client, 'cold');
+    expect(await client.loadState('cold')).toEqual({ loaded: true, contextWindow: 4096 });
+  });
+
+  it('resolves loadState null when the listing fails', async () => {
+    const client = await startTimed();
+    await server!.close();
+    server = undefined;
+    expect(await client.loadState('cold')).toBeNull();
+  });
+
+  it('waits up to 10 s for a slow pre-chat listing before the load request', async () => {
+    const client = await startTimed({ listDelayMs: 2000 });
+    await usageOf(client, 'cold');
+    expect(loads()).toHaveLength(1);
+  }, 15_000);
+});
+
+describe('OpenAI-compatible load state', () => {
+  it('cannot say whether a model is loaded', async () => {
+    const client = await startOpenAI();
+    expect(await client.loadState('gpt-local')).toBeNull();
   });
 });

@@ -19,7 +19,7 @@ function toLocalMessages(messages: ChatMessage[]): object[] {
   });
 }
 
-function usageOf(raw: any): Usage {
+function usageOf(raw: any, loadMs: number | null = null): Usage {
   const reasoning = raw?.completion_tokens_details?.reasoning_tokens;
   return {
     promptTokens: typeof raw?.prompt_tokens === 'number' ? raw.prompt_tokens : null,
@@ -29,22 +29,24 @@ function usageOf(raw: any): Usage {
     cachedTokens: null,
     cacheWriteTokens: null,
     reasoningTokens: typeof reasoning === 'number' ? reasoning : null,
+    loadMs,
+    generationMs: null,
   };
 }
 
 /**
  * Chat over `/v1/chat/completions`, shared by LM Studio and generic OpenAI-compatible servers.
- * `prepare` runs before each request (LM Studio loads the model there).
+ * `prepare` runs before each request (LM Studio loads the model there) and returns the milliseconds the load took, if it loaded.
  */
 export function createOpenAIChat(
   server: Server,
   fetchImpl: typeof fetch,
-  prepare?: (o: { model: string; contextWindow?: number; signal?: AbortSignal }) => Promise<void>,
+  prepare?: (o: { model: string; contextWindow?: number; signal?: AbortSignal }) => Promise<number | null>,
 ): Pick<LocalClient, 'streamChat' | 'complete'> {
   const failure = (detail: string) => new LocalServerError(`${server.name} couldn't run this model: ${detail}`, 500);
 
   async function* stream(o: ChatRequest & { contextWindow?: number; maxTokens?: number }): AsyncGenerator<StreamEvent> {
-    await prepare?.(o);
+    const loadMs = (await prepare?.(o)) ?? null;
     const res = await localFetch(
       server,
       '/v1/chat/completions',
@@ -69,7 +71,7 @@ export function createOpenAIChat(
       (_status, message) => {
         throw failure(typeof message === 'string' && message ? message : 'unknown error');
       },
-      usageOf,
+      (raw) => usageOf(raw, loadMs),
     );
   }
 
@@ -103,6 +105,8 @@ export function createOpenAICompatClient(server: Server, fetchImpl: typeof fetch
         }),
       );
     },
+    // The OpenAI API has no way to ask whether a model is in memory.
+    loadState: async () => null,
     ...createOpenAIChat(server, fetchImpl),
   };
 }

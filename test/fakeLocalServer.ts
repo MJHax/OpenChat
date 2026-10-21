@@ -10,6 +10,8 @@ export interface FakeModel {
   vision?: boolean;
   thinking?: boolean;
   loaded?: boolean;
+  /** Pause before the first chunk the first time the model is used while unloaded; it is loaded afterwards. */
+  loadMs?: number;
 }
 export interface FakeReply {
   text?: string[];
@@ -18,6 +20,8 @@ export interface FakeReply {
   delayMs?: number;
   promptTokens?: number;
   completionTokens?: number;
+  /** Generation time the server reports, in ms (default 100). */
+  evalMs?: number;
 }
 export interface FakeServer {
   url: string;
@@ -33,10 +37,13 @@ type Flavor = 'ollama' | 'lmstudio' | 'openai';
 const DEFAULT_CONTEXT = 4096;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeModel[]; port?: number }): Promise<FakeServer> {
+export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeModel[]; port?: number; listDelayMs?: number }): Promise<FakeServer> {
   const { flavor } = o;
   let models = o.models.map((m) => ({ ...m }));
   const loadedWindow = new Map<string, number>();
+  // Ollama only: models in memory, with the num_ctx they were last run with.
+  const ollamaLoaded = new Map<string, number>();
+  for (const m of models) if (flavor === 'ollama' && m.loaded) ollamaLoaded.set(m.name, DEFAULT_CONTEXT);
   let replies: FakeReply[] = [];
   let replyIndex = 0;
   let failure: { status: number; error: string } | undefined;
@@ -54,6 +61,24 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
   const sendError = (res: ServerResponse, status: number, error: string) =>
     json(res, status, flavor === 'ollama' ? { error } : { error: { message: error, type: 'error' } });
 
+  /** Marks the model loaded and returns how long that took (0 when it already was). LM Studio's own load call does its sleeping itself. */
+  async function useModel(name: unknown, window?: number): Promise<number> {
+    const m = find(name);
+    if (!m || flavor === 'openai') return 0;
+    if (flavor === 'ollama') {
+      const win = window ?? ctx(m);
+      const warm = ollamaLoaded.get(m.name) === win;
+      ollamaLoaded.set(m.name, win);
+      if (warm) return 0;
+      if (m.loadMs) await sleep(m.loadMs);
+      return m.loadMs ?? 0;
+    }
+    if (loadedWindow.has(m.name) || m.loaded) return 0;
+    if (m.loadMs) await sleep(m.loadMs);
+    loadedWindow.set(m.name, ctx(m));
+    return m.loadMs ?? 0;
+  }
+
   const nextReply = (): FakeReply => {
     if (!replies.length) return { text: ['ok'] };
     const r = replies[replyIndex];
@@ -61,8 +86,8 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
     return r;
   };
 
-  async function chatOllama(res: ServerResponse, r: FakeReply, stream: boolean) {
-    if (!stream) return chatOllamaOnce(res, r);
+  async function chatOllama(res: ServerResponse, r: FakeReply, stream: boolean, loadMs: number) {
+    if (!stream) return chatOllamaOnce(res, r, loadMs);
     res.writeHead(200, { 'content-type': 'application/x-ndjson' });
     const line = (v: unknown) => res.write(JSON.stringify(v) + '\n');
     const created_at = new Date().toISOString();
@@ -88,16 +113,16 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
       done: true,
       done_reason: 'stop',
       total_duration: 2_000_000,
-      load_duration: 1_000_000,
+      load_duration: Math.max(loadMs, 1) * 1_000_000,
       prompt_eval_count: r.promptTokens ?? 1,
       eval_count: r.completionTokens ?? 1,
-      eval_duration: 1_000_000,
+      eval_duration: (r.evalMs ?? 100) * 1_000_000,
     });
     res.end();
   }
 
   /** Real Ollama answers `stream: false` with one object: the whole message plus the final line's fields. */
-  async function chatOllamaOnce(res: ServerResponse, r: FakeReply) {
+  async function chatOllamaOnce(res: ServerResponse, r: FakeReply, loadMs: number) {
     if (r.delayMs) await sleep(r.delayMs);
     const message: Record<string, unknown> = { role: 'assistant', content: (r.text ?? []).join('') };
     if (r.thinking?.length) message.thinking = r.thinking.join('');
@@ -111,10 +136,10 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
       done: true,
       done_reason: 'stop',
       total_duration: 2_000_000,
-      load_duration: 1_000_000,
+      load_duration: Math.max(loadMs, 1) * 1_000_000,
       prompt_eval_count: r.promptTokens ?? 1,
       eval_count: r.completionTokens ?? 1,
-      eval_duration: 1_000_000,
+      eval_duration: (r.evalMs ?? 100) * 1_000_000,
     });
   }
 
@@ -184,7 +209,8 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
         return sendError(res, f.status, f.error);
       }
       const r = nextReply();
-      return flavor === 'ollama' ? chatOllama(res, r, body?.stream !== false) : chatOpenAI(res, r);
+      const loadMs = await useModel(body?.model, body?.options?.num_ctx);
+      return flavor === 'ollama' ? chatOllama(res, r, body?.stream !== false, loadMs) : chatOpenAI(res, r);
     }
 
     if (flavor === 'ollama') {
@@ -197,6 +223,13 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
             size: m.sizeBytes ?? 1_000_000_000,
             details: { format: 'gguf', family: 'fake', parameter_size: '1B', quantization_level: 'Q4_K_M' },
           })),
+        });
+      }
+      if (method === 'GET' && path === '/api/ps') {
+        return json(res, 200, {
+          models: models
+            .filter((m) => ollamaLoaded.has(m.name))
+            .map((m) => ({ name: m.name, model: m.name, context_length: ollamaLoaded.get(m.name) })),
         });
       }
       if (method === 'POST' && path === '/api/show') {
@@ -222,6 +255,7 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
       }
       if (flavor === 'lmstudio') {
         if (method === 'GET' && path === '/api/v1/models') {
+          if (o.listDelayMs) await sleep(o.listDelayMs);
           return json(res, 200, {
             models: models.map((m) => {
               const win = loadedWindow.get(m.name) ?? (m.loaded ? ctx(m) : undefined);
@@ -240,8 +274,9 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
         if (method === 'POST' && path === '/api/v1/models/load') {
           const m = find(body?.model);
           if (!m) return sendError(res, 404, `model '${body?.model}' not found`);
+          if (m.loadMs) await sleep(m.loadMs);
           loadedWindow.set(m.name, body?.context_length ?? ctx(m));
-          return json(res, 200, { type: 'llm', instance_id: m.name, load_time_seconds: 0.1, status: 'loaded' });
+          return json(res, 200, { type: 'llm', instance_id: m.name, load_time_seconds: (m.loadMs ?? 100) / 1000, status: 'loaded' });
         }
       }
     }
@@ -298,12 +333,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   };
   const flavor = (arg('flavor') ?? 'ollama') as Flavor;
   const port = arg('port') ? Number(arg('port')) : undefined;
+  const loadMs = arg('load-ms') ? Number(arg('load-ms')) : undefined;
   const s = await startFakeLocalServer({
     flavor,
     port,
     models: [
-      { name: 'qwen3:1.7b', tools: true, thinking: true, contextLength: 40960 },
-      { name: 'gemma3:1b', contextLength: 32768 },
+      { name: 'qwen3:1.7b', tools: true, thinking: true, contextLength: 40960, loadMs },
+      { name: 'gemma3:1b', contextLength: 32768, loadMs },
     ],
   });
   s.reply({ text: ['This is ', 'a reply from ', 'the fake ', 'local server.'], delayMs: 50 });

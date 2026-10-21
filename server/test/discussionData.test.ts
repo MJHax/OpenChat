@@ -5,7 +5,7 @@ import { newDiscussion, seedModel } from './discussionHelpers';
 import type { OpenRouterClient, StreamEvent } from '../src/openrouter';
 import type { DiscussionDetail, StatsResponse, StorageUsage } from '../../shared/types';
 
-const USAGE = { promptTokens: 1, completionTokens: 2, cost: 0.002, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null };
+const USAGE = { promptTokens: 1, completionTokens: 2, cost: 0.002, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null };
 
 /** An app holding one chat with a reply and one discussion with one turn, a host line and a summary. */
 async function seeded() {

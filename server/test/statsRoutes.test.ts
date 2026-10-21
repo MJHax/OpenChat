@@ -6,10 +6,10 @@ import { withCatalogDefaults, type ChatStats, type ChatSummary, type StatsRespon
 
 const streamChat: OpenRouterClient['streamChat'] = async function* (): AsyncGenerator<StreamEvent> {
   yield { type: 'delta', text: 'Hello' };
-  yield { type: 'usage', usage: { promptTokens: 10, completionTokens: 5, cost: 0.004, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null } };
+  yield { type: 'usage', usage: { promptTokens: 10, completionTokens: 5, cost: 0.004, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null } };
 };
 const complete: OpenRouterClient['complete'] = async ({ onUsage }) => {
-  onUsage?.({ promptTokens: 20, completionTokens: 3, cost: 0.001, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null });
+  onUsage?.({ promptTokens: 20, completionTokens: 3, cost: 0.001, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null });
   return 'Greeting';
 };
 

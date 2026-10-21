@@ -102,7 +102,7 @@ describe('cleanFact', () => {
 describe('memory suggestion usage log', () => {
   it('logs the call with no chat', async () => {
     const complete: OpenRouterClient['complete'] = async ({ onUsage }) => {
-      onUsage?.({ promptTokens: 30, completionTokens: 8, cost: 0.0002, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null });
+      onUsage?.({ promptTokens: 30, completionTokens: 8, cost: 0.0002, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null });
       return 'User likes tea.';
     };
     const { call, db } = makeApp({ complete });

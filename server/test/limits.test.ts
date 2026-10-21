@@ -54,7 +54,7 @@ const LIMITS: SpendingLimits = {
 function spend(db: ReturnType<typeof makeApp>['db'], cost: number, createdAt: number) {
   recordUsage(db, {
     purpose: 'reply', chatId: null, messageId: null, runId: null, kind: 'send', compare: false, modelId: 'm/x',
-    usage: { promptTokens: 1, completionTokens: 1, cost, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null },
+    usage: { promptTokens: 1, completionTokens: 1, cost, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null },
     webSearch: false, webSearches: null, attachments: 0, firstTokenMs: null, durationMs: null, status: 'complete', createdAt,
   });
 }

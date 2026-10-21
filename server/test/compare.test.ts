@@ -25,7 +25,7 @@ function byModel(script: Record<string, Script>) {
       });
     }
     if (s.failWith) throw s.failWith;
-    yield { type: 'usage', usage: { promptTokens: 1, completionTokens: 2, cost: 0.001, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null } };
+    yield { type: 'usage', usage: { promptTokens: 1, completionTokens: 2, cost: 0.001, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null } };
   };
   return { streamChat, calls };
 }

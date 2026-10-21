@@ -16,7 +16,7 @@ const veo: VideoModel = {
   id: 'g/veo', name: 'Veo', description: '', created: null, durations: [4, 6, 8], resolutions: ['720p'], aspects: ['16:9', '9:16'], sizes: [],
   frames: { first: true, last: true }, sound: true, skus: { duration_seconds_without_audio_720p: '0.03', duration_seconds_with_audio_720p: '0.05' },
 };
-const usage = (cost: number): Usage => ({ promptTokens: null, completionTokens: null, cost, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null });
+const usage = (cost: number): Usage => ({ promptTokens: null, completionTokens: null, cost, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null });
 const MIN = 60_000;
 
 /** An app with Veo in the video list and a scripted job; `job.status` etc. can be changed between ticks. */

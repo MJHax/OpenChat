@@ -61,6 +61,8 @@ function parseUsage(raw: any): Usage {
     cachedTokens: toTokens(raw.prompt_tokens_details?.cached_tokens),
     cacheWriteTokens: toTokens(raw.prompt_tokens_details?.cache_write_tokens),
     reasoningTokens: toTokens(raw.completion_tokens_details?.reasoning_tokens),
+    loadMs: null,
+    generationMs: null,
   };
 }
 
@@ -79,6 +81,10 @@ export interface Usage {
   cacheWriteTokens: number | null;
   /** Reasoning share of the completion tokens; null when not reported. */
   reasoningTokens: number | null;
+  /** Local models only: milliseconds the server spent loading the model for this reply; null when not reported or not loaded. */
+  loadMs: number | null;
+  /** Local models only: milliseconds the server spent generating; null when not reported. */
+  generationMs: number | null;
 }
 
 /** 'tool': the model decides when to search (needs tool support). 'plugin': one search per reply, any model. */

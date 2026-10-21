@@ -67,7 +67,7 @@ describe('ollama client', () => {
       { type: 'reasoning', text: 'hm' },
       { type: 'delta', text: 'Hel' },
       { type: 'delta', text: 'lo' },
-      { type: 'usage', usage: { promptTokens: 7, completionTokens: 2, cost: 0, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null } },
+      { type: 'usage', usage: { promptTokens: 7, completionTokens: 2, cost: 0, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: 1, generationMs: 100 } },
     ]);
     const body = chatBody();
     expect(body.stream).toBe(true);
@@ -165,5 +165,28 @@ describe('ollama client', () => {
     expect(e).toBeInstanceOf(ProviderError);
     expect(e.name).toBe('OpenRouterError');
     expect(e.status).toBe(401);
+  });
+});
+
+describe('ollama client load timings', () => {
+  it('reports load and generation time from the final line, and loadState from /api/ps', async () => {
+    server = await startFakeLocalServer({ flavor: 'ollama', models: [{ name: 'qwen3:1.7b', loadMs: 300 }] });
+    const client = createOllamaClient({ name: 'Ollama', baseUrl: server.url });
+    expect(await client.loadState('qwen3:1.7b', 16384)).toEqual({ loaded: false, contextWindow: null });
+    server.reply({ text: ['hi'], evalMs: 250 });
+    const usageOf = async () => (await collect(client.streamChat({ model: 'qwen3:1.7b', messages: hello, contextWindow: 16384 }))).find((e) => e.type === 'usage') as any;
+    const first = await usageOf();
+    expect(first.usage.loadMs).toBeGreaterThanOrEqual(300);
+    expect(first.usage.generationMs).toBe(250);
+    expect((await usageOf()).usage.loadMs).toBeLessThan(50);
+    expect(await client.loadState('qwen3:1.7b', 16384)).toEqual({ loaded: true, contextWindow: 16384 });
+    expect(await client.loadState('qwen3:1.7b', 8192)).toMatchObject({ loaded: false });
+  });
+
+  it('resolves loadState null when the server is closed', async () => {
+    const client = await start();
+    await server!.close();
+    server = undefined;
+    expect(await client.loadState('qwen3:1.7b', 4096)).toBeNull();
   });
 });

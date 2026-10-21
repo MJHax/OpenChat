@@ -9,7 +9,7 @@ import type { ChatMessage } from '../src/prompt';
 import type { ChatDetail, ChatSummary } from '../../shared/types';
 
 const f = (name: string, body: string) => `<file name="${name}">\n${body}\n</file>`;
-const USAGE = { promptTokens: 900, completionTokens: 80, cost: 0.002, webSearches: null, cachedTokens: 800, cacheWriteTokens: 0, reasoningTokens: null };
+const USAGE = { promptTokens: 900, completionTokens: 80, cost: 0.002, webSearches: null, cachedTokens: 800, cacheWriteTokens: 0, reasoningTokens: null, loadMs: null, generationMs: null };
 
 /** A chat with two versions of a.html, one b.csv, and an unfinished c.txt. */
 async function seededChat(ctx: ReturnType<typeof makeApp>, files = true) {

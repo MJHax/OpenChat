@@ -84,7 +84,7 @@ describe('pdfPages', () => {
 describe('GET /api/context', () => {
   const streamChat: OpenRouterClient['streamChat'] = async function* (): AsyncGenerator<StreamEvent> {
     yield { type: 'delta', text: 'Hello' };
-    yield { type: 'usage', usage: { promptTokens: 40, completionTokens: 5, cost: 0.001, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null } };
+    yield { type: 'usage', usage: { promptTokens: 40, completionTokens: 5, cost: 0.001, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null } };
   };
 
   it("reports the chat's usage against the model's window", async () => {

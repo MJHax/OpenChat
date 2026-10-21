@@ -38,6 +38,8 @@ function usageOf(line: any): Usage {
     cachedTokens: null,
     cacheWriteTokens: null,
     reasoningTokens: null,
+    loadMs: typeof line.load_duration === 'number' ? Math.round(line.load_duration / 1e6) : null,
+    generationMs: typeof line.eval_duration === 'number' ? Math.round(line.eval_duration / 1e6) : null,
   };
 }
 
@@ -109,6 +111,19 @@ export function createOllamaClient(server: { name: string; baseUrl: string }, fe
       };
       await Promise.all(Array.from({ length: Math.min(SHOW_CONCURRENCY, entries.length) }, worker));
       return out;
+    },
+
+    async loadState(model, contextWindow) {
+      try {
+        const ps: any = await readListing(await localFetch(server, '/api/ps', { timeoutMs: LIST_TIMEOUT_MS }, fetchImpl), server);
+        const entry = (ps.models ?? []).find((m: any) => m.name === model || m.model === model);
+        if (!entry) return { loaded: false, contextWindow: null };
+        const ctx = typeof entry.context_length === 'number' ? entry.context_length : null;
+        // Ollama reloads a model asked to run with a different window.
+        return { loaded: ctx === null || contextWindow === undefined || ctx === contextWindow, contextWindow: ctx };
+      } catch {
+        return null;
+      }
     },
 
     async *streamChat(o) {

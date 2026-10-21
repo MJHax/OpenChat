@@ -95,3 +95,34 @@ describe('fake local server: openai', () => {
     expect((await res.json()).error.message).toBe('bad key');
   });
 });
+
+describe('fake local server: load timings', () => {
+  it('ollama pauses on the first use of an unloaded model, reports it and lists it in /api/ps', async () => {
+    server = await startFakeLocalServer({ flavor: 'ollama', models: [{ name: 'a', loadMs: 150 }] });
+    expect((await (await fetch(`${server.url}/api/ps`)).json()).models).toEqual([]);
+    server.reply({ text: ['x'], evalMs: 42 });
+    const chat = async () => {
+      const started = Date.now();
+      const text = await (await post(`${server!.url}/api/chat`, { model: 'a', options: { num_ctx: 2048 } })).text();
+      const lines = text.trim().split('\n').map((l) => JSON.parse(l));
+      return { took: Date.now() - started, last: lines[lines.length - 1] };
+    };
+    const first = await chat();
+    expect(first.took).toBeGreaterThanOrEqual(140);
+    expect(first.last.load_duration).toBe(150_000_000);
+    expect(first.last.eval_duration).toBe(42_000_000);
+    expect((await chat()).took).toBeLessThan(100);
+    expect((await (await fetch(`${server.url}/api/ps`)).json()).models).toEqual([{ name: 'a', model: 'a', context_length: 2048 }]);
+  });
+
+  it('lm studio sleeps loadMs in its load call and reports it; listDelayMs delays the listing', async () => {
+    server = await startFakeLocalServer({ flavor: 'lmstudio', models: [{ name: 'a', loadMs: 120 }], listDelayMs: 100 });
+    let started = Date.now();
+    await fetch(`${server.url}/api/v1/models`);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(90);
+    started = Date.now();
+    const load = await (await post(`${server.url}/api/v1/models/load`, { model: 'a' })).json();
+    expect(Date.now() - started).toBeGreaterThanOrEqual(110);
+    expect(load.load_time_seconds).toBe(0.12);
+  });
+});

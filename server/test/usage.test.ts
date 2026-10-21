@@ -9,7 +9,7 @@ import { cacheSavings, loadUsageRows, recordUsage, type UsageEventInput } from '
 
 const event = (over: Partial<UsageEventInput> = {}): UsageEventInput => ({
   purpose: 'reply', chatId: null, messageId: null, runId: 'run-1', kind: 'send', compare: false, modelId: 'a/b',
-  usage: { promptTokens: 100, completionTokens: 20, cost: 0.01, webSearches: 2, cachedTokens: 60, cacheWriteTokens: 0, reasoningTokens: 8 },
+  usage: { promptTokens: 100, completionTokens: 20, cost: 0.01, webSearches: 2, cachedTokens: 60, cacheWriteTokens: 0, reasoningTokens: 8, loadMs: null, generationMs: null },
   webSearch: true, webSearches: 2, attachments: 1, firstTokenMs: 400, durationMs: 2000, status: 'complete', createdAt: 1000,
   ...over,
 });

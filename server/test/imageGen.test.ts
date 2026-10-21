@@ -9,7 +9,7 @@ import type { ImageModel, ImageSettings } from '../../shared/imageModels';
 import type { Attachment, ChatDetail, ChatSummary } from '../../shared/types';
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
-const USAGE: Usage = { promptTokens: 20, completionTokens: 1290, cost: 0.039, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null };
+const USAGE: Usage = { promptTokens: 20, completionTokens: 1290, cost: 0.039, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null };
 const SETTINGS: ImageSettings = { aspect: '1:1', size: '1K', quality: null, transparent: false };
 
 const banana: ImageModel = {

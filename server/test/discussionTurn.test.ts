@@ -10,7 +10,7 @@ import { getChatMessages } from '../src/messages';
 import type { DiscussionDetail, NewDiscussion } from '../../shared/types';
 
 type Turn = { text?: string[]; tool?: { name: string; arguments: string }; fail?: Error; hold?: Promise<void> };
-const USAGE = { promptTokens: 1, completionTokens: 2, cost: 0.002, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null };
+const USAGE = { promptTokens: 1, completionTokens: 2, cost: 0.002, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null };
 
 /** A fake streamChat that plays `turns` in order (then a plain reply), recording each call's prompt and tools. */
 function scripted(turns: Turn[]) {

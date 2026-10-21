@@ -11,7 +11,7 @@ import type { ImageModel, ImageSettings } from '../../shared/imageModels';
 import type { VideoModel, VideoSettings } from '../../shared/videoModels';
 import type { ChatSummary, ThreadKind } from '../../shared/types';
 
-const usage = (cost: number): Usage => ({ promptTokens: 10, completionTokens: 5, cost, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null });
+const usage = (cost: number): Usage => ({ promptTokens: 10, completionTokens: 5, cost, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null });
 
 function spend(db: DB, cost: number) {
   recordUsage(db, {

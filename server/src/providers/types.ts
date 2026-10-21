@@ -53,10 +53,18 @@ export interface LocalModelInfo {
   capsKnown: boolean;
 }
 
+/** Whether a model is in memory on its server, and the context window it was loaded with. */
+export interface LoadState {
+  loaded: boolean;
+  contextWindow: number | null;
+}
+
 export interface LocalClient extends ChatProvider {
   /** 1,500 ms timeout. */
   listModels(): Promise<LocalModelInfo[]>;
   /** `contextWindow` is the window to run the model with. */
   streamChat(o: ChatRequest & { contextWindow?: number }): AsyncGenerator<StreamEvent>;
   complete(o: CompleteRequest & { contextWindow?: number }): Promise<string>;
+  /** 1,500 ms timeout. Null when the server can't say (OpenAI-compatible servers, or any failure); never throws. */
+  loadState(model: string, contextWindow?: number): Promise<LoadState | null>;
 }
