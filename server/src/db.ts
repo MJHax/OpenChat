@@ -17,7 +17,19 @@ CREATE TABLE IF NOT EXISTS models (
   added_at INTEGER NOT NULL,
   input_modalities TEXT,
   supports_tools INTEGER,
-  supports_reasoning INTEGER
+  supports_reasoning INTEGER,
+  context_window INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS local_servers (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL CHECK (type IN ('ollama','lmstudio','openai')),
+  name TEXT NOT NULL,
+  base_url TEXT NOT NULL,
+  auto INTEGER NOT NULL DEFAULT 0,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  removed_at INTEGER,
+  created_at INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS memories (
@@ -258,6 +270,7 @@ function migrate(db: DB): void {
   if (!modelColumns.includes('input_modalities')) db.exec('ALTER TABLE models ADD COLUMN input_modalities TEXT');
   if (!modelColumns.includes('supports_tools')) db.exec('ALTER TABLE models ADD COLUMN supports_tools INTEGER');
   if (!modelColumns.includes('supports_reasoning')) db.exec('ALTER TABLE models ADD COLUMN supports_reasoning INTEGER');
+  if (!modelColumns.includes('context_window')) db.exec('ALTER TABLE models ADD COLUMN context_window INTEGER');
   const messageColumns = (db.prepare('PRAGMA table_info(messages)').all() as { name: string }[]).map((c) => c.name);
   if (!messageColumns.includes('web_search')) db.exec('ALTER TABLE messages ADD COLUMN web_search INTEGER NOT NULL DEFAULT 0');
   if (!messageColumns.includes('sources')) db.exec('ALTER TABLE messages ADD COLUMN sources TEXT');
@@ -265,6 +278,7 @@ function migrate(db: DB): void {
   if (!messageColumns.includes('participant_id')) db.exec('ALTER TABLE messages ADD COLUMN participant_id TEXT');
   if (!messageColumns.includes('handoff_to')) db.exec('ALTER TABLE messages ADD COLUMN handoff_to TEXT');
   if (!messageColumns.includes('effort')) db.exec('ALTER TABLE messages ADD COLUMN effort TEXT');
+  if (!messageColumns.includes('context_dropped')) db.exec('ALTER TABLE messages ADD COLUMN context_dropped INTEGER NOT NULL DEFAULT 0');
   const videoJobColumns = (db.prepare('PRAGMA table_info(video_jobs)').all() as { name: string }[]).map((c) => c.name);
   if (!videoJobColumns.includes('download_failed_at')) db.exec('ALTER TABLE video_jobs ADD COLUMN download_failed_at INTEGER');
   const attachmentColumns = (db.prepare('PRAGMA table_info(attachments)').all() as { name: string }[]).map((c) => c.name);

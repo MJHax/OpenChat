@@ -4,6 +4,7 @@ import { HttpError } from './http';
 import { getSetting, setSetting } from './settings';
 import { cachedCapabilities } from './catalog';
 import type { CatalogModel, LibraryModel } from '../../shared/types';
+import { parseLocalModelId } from '../../shared/localModels';
 
 interface ModelRow {
   id: string;
@@ -14,6 +15,7 @@ interface ModelRow {
   input_modalities: string | null;
   supports_tools: number | null;
   supports_reasoning: number | null;
+  context_window: number | null;
 }
 
 const TEXT_ONLY = ['text'];
@@ -62,8 +64,10 @@ export function modelSupportsReasoning(db: DB, id: string): boolean {
 
 /** A model's context window in tokens; null when it isn't in the library or OpenRouter didn't say. */
 export function modelContextLength(db: DB, id: string): number | null {
-  const row = db.prepare('SELECT context_length FROM models WHERE id = ?').get(id) as { context_length: number | null } | undefined;
-  return row?.context_length ?? null;
+  const row = db.prepare('SELECT context_length, context_window FROM models WHERE id = ?').get(id) as
+    | { context_length: number | null; context_window: number | null }
+    | undefined;
+  return row?.context_window ?? row?.context_length ?? null;
 }
 
 export function displayNameOf(db: DB, id: string): string {
@@ -75,18 +79,29 @@ export function listLibrary(db: DB): LibraryModel[] {
   const defaultId = getSetting(db, 'default_model_id');
   const rows = db.prepare('SELECT * FROM models ORDER BY added_at').all() as ModelRow[];
   backfillCapabilities(db, rows);
-  return rows.map((r) => ({
-    id: r.id,
-    displayName: r.display_name,
-    contextLength: r.context_length,
-    promptPrice: r.prompt_price,
-    completionPrice: r.completion_price,
-    isDefault: r.id === defaultId,
-    inputModalities: parseModalities(r.input_modalities),
-    supportsTools: r.supports_tools === 1,
-    supportsReasoning: r.supports_reasoning === 1,
-    source: 'openrouter', serverId: null, serverName: null, contextWindow: null, capsKnown: true,
-  }));
+  const servers = new Map(
+    (db.prepare('SELECT id, name, type FROM local_servers WHERE removed_at IS NULL').all() as { id: string; name: string; type: string }[]).map((s) => [s.id, s]),
+  );
+  return rows.map((r) => {
+    const local = parseLocalModelId(r.id);
+    const server = local ? servers.get(local.serverId) : undefined;
+    return {
+      id: r.id,
+      displayName: r.display_name,
+      contextLength: r.context_length,
+      promptPrice: r.prompt_price,
+      completionPrice: r.completion_price,
+      isDefault: r.id === defaultId,
+      inputModalities: parseModalities(r.input_modalities),
+      supportsTools: r.supports_tools === 1,
+      supportsReasoning: r.supports_reasoning === 1,
+      source: local ? 'local' : 'openrouter',
+      serverId: local?.serverId ?? null,
+      serverName: server?.name ?? null,
+      contextWindow: r.context_window,
+      capsKnown: server?.type !== 'openai',
+    };
+  });
 }
 
 export function requireLibraryModel(db: DB, id: string): void {
