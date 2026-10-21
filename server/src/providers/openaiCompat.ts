@@ -67,7 +67,7 @@ export function createOpenAIChat(
     yield* readChatStream(
       res.body,
       (_status, message) => {
-        throw failure(String(message));
+        throw failure(typeof message === 'string' && message ? message : 'unknown error');
       },
       usageOf,
     );

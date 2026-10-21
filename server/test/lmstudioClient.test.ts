@@ -215,4 +215,12 @@ describe('OpenAI-compatible client', () => {
     expect(err.message).toBe("My server couldn't run this model: bad key");
     expect(err.status).toBe(401);
   });
+
+  it('says "unknown error" when an error chunk carries no message', async () => {
+    const sse = 'data: {"error":{"code":500}}\n\ndata: [DONE]\n\n';
+    const fetchImpl: typeof fetch = async () => new Response(sse, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    const client = createOpenAICompatClient({ name: 'My server', baseUrl: 'http://127.0.0.1:1' }, fetchImpl);
+    const err = await collect(client.streamChat({ model: 'gpt-local', messages: hello })).catch((e) => e);
+    expect(err.message).toBe("My server couldn't run this model: unknown error");
+  });
 });
