@@ -4,10 +4,22 @@ import type {
   Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle, StatsRange, StatsResponse, ChatStats, ContextUsage,
   GeneratedItems, MediaCatalog, MediaKind, MediaLibraryModel, MediaStatsResponse, MediaThreadStats, ThreadKind, StorageUsage, DeleteTarget, LimitStatus,
   DiscussionDetail, DiscussionState, DiscussionSummary, DiscussionTurnDone, DiscussionTurnError, DiscussionTurnStart, NewDiscussion,
-  LibraryResponse, LibrarySource, SavedPrompt,
+  LibraryResponse, LibrarySource, SavedPrompt, LocalServerStatus, LocalCatalog,
 } from '../../shared/types';
+import type { LocalServerType } from '../../shared/localModels';
 import type { ImageSettings } from '../../shared/imageModels';
 import type { VideoSettings } from '../../shared/videoModels';
+
+export class ApiError extends Error {
+  status: number;
+  data: Record<string, unknown>;
+  constructor(message: string, status: number, data: Record<string, unknown>) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.data = data;
+  }
+}
 
 async function json<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -16,7 +28,7 @@ async function json<T>(method: string, url: string, body?: unknown): Promise<T> 
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw new ApiError((data as { error?: string }).error ?? `Request failed (${res.status})`, res.status, data as Record<string, unknown>);
   return data as T;
 }
 
@@ -45,7 +57,16 @@ export const api = {
   listModels: () => json<LibraryModel[]>('GET', '/api/models'),
   catalog: (refresh = false) => json<CatalogResponse>('GET', `/api/models/catalog${refresh ? '?refresh=1' : ''}`),
   addModel: (id: string) => json<LibraryModel[]>('POST', '/api/models', { id }),
-  updateModel: (patch: { id: string; displayName?: string; isDefault?: boolean }) => json<LibraryModel[]>('PATCH', '/api/models', patch),
+  updateModel: (patch: {
+    id: string; displayName?: string; isDefault?: boolean; contextWindow?: number; supportsTools?: boolean; supportsImages?: boolean;
+  }) => json<LibraryModel[]>('PATCH', '/api/models', patch),
+  localServers: () => json<LocalServerStatus[]>('GET', '/api/local-servers'),
+  addLocalServer: (body: { type: LocalServerType; name: string; baseUrl: string }) => json<LocalServerStatus[]>('POST', '/api/local-servers', body),
+  updateLocalServer: (id: string, patch: { name?: string; baseUrl?: string; enabled?: boolean }) =>
+    json<LocalServerStatus[]>('PATCH', `/api/local-servers/${encodeURIComponent(id)}`, patch),
+  removeLocalServer: (id: string) => json<LocalServerStatus[]>('DELETE', `/api/local-servers/${encodeURIComponent(id)}`),
+  detectLocalServers: () => json<LocalServerStatus[]>('POST', '/api/local-servers/detect'),
+  localModels: () => json<LocalCatalog>('GET', '/api/local-servers/models'),
   removeModel: (id: string) => json<LibraryModel[]>('DELETE', `/api/models?id=${encodeURIComponent(id)}`),
 
   generateImage: (threadId: string, body: {

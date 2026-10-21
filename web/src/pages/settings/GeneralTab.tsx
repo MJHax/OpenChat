@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { LibraryModel, SettingsUpdate, SettingsView } from '../../../../shared/types';
 import { api } from '../../api';
 import { SEARCH_NOTE } from '../../lib/search';
+import { LocalServersCard } from './LocalServersCard';
 
 export interface GeneralTabProps {
   view: SettingsView;
@@ -44,8 +45,10 @@ export function GeneralTab({ view, models, section, update }: GeneralTabProps) {
 
   return (
     <>
-      <h2>OpenRouter API key</h2>
+      <h2>Models</h2>
       <div className="card">
+        <strong>OpenRouter</strong>
+        <div className="muted small">Optional. Needed for OpenRouter models, images and video.</div>
         <div className="muted small">
           {view.hasApiKey
             ? `Using key ${view.apiKeyMasked} from ${view.apiKeySource === 'env' ? 'the .env file' : 'Settings'}.`
@@ -71,6 +74,8 @@ export function GeneralTab({ view, models, section, update }: GeneralTabProps) {
         )}
         {keyStatus && <div className="small">{keyStatus}</div>}
       </div>
+
+      <LocalServersCard />
 
       <h2>Personalization</h2>
       <div className="card">
@@ -99,6 +104,7 @@ export function GeneralTab({ view, models, section, update }: GeneralTabProps) {
             <option value="">Same model as the chat</option>
             {models.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
           </select>
+          <span className="muted small" style={{ fontWeight: 400 }}>Chats that only used local models are titled by their own model, so they never leave your machine.</span>
         </label>
         <label className="field">
           Model for memories
