@@ -206,4 +206,34 @@ describe('ollama client load timings', () => {
     server = undefined;
     expect(await client.loadState('qwen3:1.7b', 4096)).toBeNull();
   });
+
+  it('sends tool calls and results back with parsed arguments', async () => {
+    const client = await start();
+    server!.reply({ text: ['ok'] });
+    await collect(
+      client.streamChat({
+        model: 'qwen3:1.7b',
+        messages: [
+          { role: 'user', content: 'hi' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'web_search', arguments: '{"query":"cats"}' }] },
+          { role: 'tool', content: 'result', toolCallId: 'call_1', toolName: 'web_search' },
+        ],
+      }),
+    );
+    const messages = (chatBody() as any).messages;
+    expect(messages[1]).toEqual({ role: 'assistant', content: '', tool_calls: [{ function: { name: 'web_search', arguments: { query: 'cats' } } }] });
+    expect(messages[2]).toEqual({ role: 'tool', content: 'result', tool_name: 'web_search' });
+  });
+
+  it('sends unparseable tool arguments as an empty object', async () => {
+    const client = await start();
+    server!.reply({ text: ['ok'] });
+    await collect(
+      client.streamChat({
+        model: 'qwen3:1.7b',
+        messages: [{ role: 'assistant', content: '', toolCalls: [{ id: 'c', name: 'web_search', arguments: 'not json' }] }],
+      }),
+    );
+    expect((chatBody() as any).messages[0].tool_calls[0].function.arguments).toEqual({});
+  });
 });

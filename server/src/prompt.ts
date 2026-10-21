@@ -18,9 +18,21 @@ export type ContentPart =
 
 export type CacheControl = { type: 'ephemeral' };
 
+/** A function call a model asked for; `arguments` is the JSON text the model wrote. */
+export interface ToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content: string | ContentPart[];
+  /** On an assistant message: the calls it made. */
+  toolCalls?: ToolCall[];
+  /** On a tool message: which call it answers. */
+  toolCallId?: string;
+  toolName?: string;
 }
 
 /** OpenRouter's PDF handling; OpenChat always names the engine so the paid OCR default never runs by surprise. */

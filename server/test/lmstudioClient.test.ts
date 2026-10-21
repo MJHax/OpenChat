@@ -40,6 +40,28 @@ const stalledBody: typeof fetch = async (_url, init) =>
   new Response(new ReadableStream({ start: (c) => init?.signal?.addEventListener('abort', () => c.error(init.signal!.reason)) }), { status: 200 });
 
 describe('LM Studio client', () => {
+  it('sends tool calls and results back in the OpenAI shape', async () => {
+    const client = await startLm();
+    server!.reply({ text: ['ok'] });
+    await collect(
+      client.streamChat({
+        model: QWEN,
+        messages: [
+          { role: 'user', content: 'hi' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'web_search', arguments: '{"query":"cats"}' }] },
+          { role: 'tool', content: 'result', toolCallId: 'call_1', toolName: 'web_search' },
+        ],
+      }),
+    );
+    const messages = (chatBody() as any).messages;
+    expect(messages[1]).toEqual({
+      role: 'assistant',
+      content: '',
+      tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'web_search', arguments: '{"query":"cats"}' } }],
+    });
+    expect(messages[2]).toEqual({ role: 'tool', tool_call_id: 'call_1', content: 'result' });
+  });
+
   it('reads a stalled model listing as unreachable', async () => {
     const client = createLmStudioClient({ name: 'LM Studio', baseUrl: 'http://127.0.0.1:1234' }, stalledBody);
     await expect(client.listModels()).rejects.toThrow("Can't reach LM Studio at 127.0.0.1:1234. Is it running?");

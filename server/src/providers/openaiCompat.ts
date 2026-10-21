@@ -11,6 +11,11 @@ type Server = { name: string; baseUrl: string };
 /** Messages without OpenRouter-only parts: cache markers are dropped, and PDF `file` parts (unsupported locally) are left out. */
 function toLocalMessages(messages: ChatMessage[]): object[] {
   return messages.map((m) => {
+    if (m.role === 'tool') return { role: 'tool', tool_call_id: m.toolCallId, content: typeof m.content === 'string' ? m.content : '' };
+    if (m.toolCalls?.length) {
+      const tool_calls = m.toolCalls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments } }));
+      return { role: m.role, content: typeof m.content === 'string' ? m.content : '', tool_calls };
+    }
     if (typeof m.content === 'string') return { role: m.role, content: m.content };
     const parts = m.content.flatMap((p): object[] =>
       p.type === 'text' ? [{ type: 'text', text: p.text }] : p.type === 'image_url' ? [{ type: 'image_url', image_url: { url: p.image_url.url } }] : [],

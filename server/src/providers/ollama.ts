@@ -10,11 +10,27 @@ interface OllamaMessage {
   role: string;
   content: string;
   images?: string[];
+  tool_calls?: { function: { name: string; arguments: object } }[];
+  tool_name?: string;
+}
+
+function parseArguments(text: string): object {
+  try {
+    const value = JSON.parse(text);
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  } catch {
+    return {};
+  }
 }
 
 /** OpenAI-shaped messages to Ollama's: text parts joined, image data URLs moved to `images`, everything else dropped. */
 function toOllamaMessages(messages: ChatMessage[]): OllamaMessage[] {
-  return messages.map((m) => {
+  return messages.map((m): OllamaMessage => {
+    if (m.role === 'tool') return { role: 'tool', content: typeof m.content === 'string' ? m.content : '', ...(m.toolName ? { tool_name: m.toolName } : {}) };
+    if (m.toolCalls?.length) {
+      const tool_calls = m.toolCalls.map((c) => ({ function: { name: c.name, arguments: parseArguments(c.arguments) } }));
+      return { role: m.role, content: typeof m.content === 'string' ? m.content : '', tool_calls };
+    }
     if (typeof m.content === 'string') return { role: m.role, content: m.content };
     const texts: string[] = [];
     const images: string[] = [];
