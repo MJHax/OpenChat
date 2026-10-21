@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { makeApp } from './appHelpers';
 import { OpenRouterError } from '../src/openrouter';
+import { startFakeSearchServer } from '../../test/fakeSearchServer';
 import type { Memory, SettingsView } from '../../shared/types';
 
 describe('settings routes', () => {
@@ -65,5 +66,52 @@ describe('memory routes', () => {
     const { call } = makeApp();
     expect((await call('POST', '/api/memories', { content: '   ' })).status).toBe(400);
     expect((await call('PATCH', '/api/memories/999', { enabled: false })).status).toBe(404);
+  });
+});
+
+describe('web search settings routes', () => {
+  it('rejects a bad service and a bad address with 400', async () => {
+    const { call } = makeApp();
+    const a = await call('PUT', '/api/settings', { searchService: 'brave' });
+    expect(a.status).toBe(400);
+    expect(((await a.json()) as { error: string }).error).toBe('Web search service must be none, searxng, or tavily.');
+    const b = await call('PUT', '/api/settings', { searxngUrl: 'ftp://x' });
+    expect(b.status).toBe(400);
+    expect(((await b.json()) as { error: string }).error).toBe('SearXNG address must start with http:// or https://.');
+  });
+
+  it('saves a Tavily setup without echoing the key', async () => {
+    const { call } = makeApp();
+    const res = await call('PUT', '/api/settings', { searchService: 'tavily', tavilyKey: ' tvly-abcdefghijkl ' });
+    const text = await res.text();
+    expect(text).not.toContain('tvly-abcdefghijkl');
+    expect(JSON.parse(text)).toMatchObject({ hasTavilyKey: true, tavilyKeyMasked: 'tvly-a…ijkl', searchReady: true });
+  });
+
+  it('tests the saved search setup', async () => {
+    const fake = await startFakeSearchServer();
+    try {
+      const { call } = makeApp({}, { OPENROUTER_API_KEY: 'k', OPENCHAT_TAVILY_URL: fake.url });
+      const test = async () => (await (await call('POST', '/api/settings/test-search')).json()) as { ok: boolean; error?: string };
+
+      expect(await test()).toEqual({ ok: false, error: 'Choose a search service and fill in its details first.' });
+
+      await call('PUT', '/api/settings', { searchService: 'searxng', searxngUrl: `${fake.url}/` });
+      expect(await test()).toEqual({ ok: true });
+
+      fake.setJson(false);
+      expect((await test()).error).toMatch(/^SearXNG answered, but its JSON output is turned off\./);
+      fake.setJson(true);
+
+      await call('PUT', '/api/settings', { searchService: 'tavily', tavilyKey: 'tvly-wrong' });
+      expect(await test()).toEqual({ ok: false, error: "Tavily didn't accept this API key." });
+      await call('PUT', '/api/settings', { tavilyKey: 'tvly-test' });
+      expect(await test()).toEqual({ ok: true });
+
+      await call('PUT', '/api/settings', { searchService: 'none' });
+      expect((await test()).ok).toBe(false);
+    } finally {
+      await fake.close();
+    }
   });
 });

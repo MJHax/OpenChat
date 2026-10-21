@@ -357,6 +357,9 @@ export interface LimitStatus {
   resetsAt: number;
 }
 
+export type SearchServiceId = 'none' | 'searxng' | 'tavily';
+export const SEARCH_SERVICES: SearchServiceId[] = ['none', 'searxng', 'tavily'];
+
 export interface SettingsView {
   hasApiKey: boolean;
   apiKeySource: 'settings' | 'env' | 'none';
@@ -372,6 +375,12 @@ export interface SettingsView {
   titleModelId: string;
   memoryModelId: string;
   spendingLimits: SpendingLimits;
+  searchService: SearchServiceId;
+  searxngUrl: string;
+  hasTavilyKey: boolean;
+  tavilyKeyMasked: string;
+  /** True when the chosen search service has everything it needs. */
+  searchReady: boolean;
 }
 
 export type SettingsUpdate = Partial<{
@@ -387,6 +396,9 @@ export type SettingsUpdate = Partial<{
   titleModelId: string;
   memoryModelId: string;
   spendingLimits: SpendingLimits;
+  searchService: SearchServiceId;
+  searxngUrl: string;
+  tavilyKey: string;
 }>;
 
 export interface SearchHit {

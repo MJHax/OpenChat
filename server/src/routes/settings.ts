@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Deps } from '../app';
 import { readJson } from '../http';
 import { getSettingsView, resolveApiKey, updateSettings } from '../settings';
+import { webSearchService } from '../webSearch';
 import { limitStatuses } from '../limits';
 import type { SettingsUpdate } from '../../../shared/types';
 
@@ -22,6 +23,17 @@ export function settingsRoutes({ db, env, openrouter }: Deps): Hono {
     if (!key) return c.json({ ok: false, error: 'No API key set.' });
     try {
       await openrouter.checkKey(key);
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  r.post('/test-search', async (c) => {
+    const service = webSearchService(db, env);
+    if (!service) return c.json({ ok: false, error: 'Choose a search service and fill in its details first.' });
+    try {
+      await service.test();
       return c.json({ ok: true });
     } catch (err) {
       return c.json({ ok: false, error: (err as Error).message });

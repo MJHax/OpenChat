@@ -67,3 +67,29 @@ describe('appearance settings', () => {
     expect(() => updateSettings(db, { animations: 'yes' as never })).toThrow(HttpError);
   });
 });
+
+describe('web search settings', () => {
+  it('defaults to none and not ready', () => {
+    const db = openDb(':memory:');
+    expect(getSettingsView(db, {})).toMatchObject({ searchService: 'none', searxngUrl: '', hasTavilyKey: false, tavilyKeyMasked: '', searchReady: false });
+  });
+  it('masks the Tavily key and never exposes it', () => {
+    const db = openDb(':memory:');
+    updateSettings(db, { searchService: 'tavily', tavilyKey: ' tvly-abcdefghijkl ' });
+    const view = getSettingsView(db, {});
+    expect(view).toMatchObject({ searchService: 'tavily', hasTavilyKey: true, tavilyKeyMasked: 'tvly-a…ijkl', searchReady: true });
+    expect(JSON.stringify(view)).not.toContain('tvly-abcdefghijkl');
+  });
+  it('trims the SearXNG address and drops a trailing slash', () => {
+    const db = openDb(':memory:');
+    updateSettings(db, { searchService: 'searxng', searxngUrl: ' http://localhost:8080/ ' });
+    expect(getSettingsView(db, {})).toMatchObject({ searxngUrl: 'http://localhost:8080', searchReady: true });
+    updateSettings(db, { searxngUrl: '' });
+    expect(getSettingsView(db, {})).toMatchObject({ searxngUrl: '', searchReady: false });
+  });
+  it('rejects bad values', () => {
+    const db = openDb(':memory:');
+    expect(() => updateSettings(db, { searchService: 'brave' as never })).toThrow('Web search service must be none, searxng, or tavily.');
+    expect(() => updateSettings(db, { searxngUrl: 'ftp://x' })).toThrow('SearXNG address must start with http:// or https://.');
+  });
+});

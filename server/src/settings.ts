@@ -2,7 +2,8 @@ import type { DB } from './db';
 import { HttpError } from './http';
 import type { Persona } from './prompt';
 import { getLimits, saveLimits } from './limits';
-import { ACCENTS, COLOR_STYLES, type Accent, type ColorStyle, type SettingsUpdate, type SettingsView, type Theme } from '../../shared/types';
+import { webSearchService } from './webSearch';
+import { ACCENTS, COLOR_STYLES, SEARCH_SERVICES, type SearchServiceId, type Accent, type ColorStyle, type SettingsUpdate, type SettingsView, type Theme } from '../../shared/types';
 
 const DEFAULTS = {
   api_key: '',
@@ -18,6 +19,9 @@ const DEFAULTS = {
   default_video_model_id: '',
   title_model_id: '',
   memory_model_id: '',
+  web_search_service: 'none',
+  searxng_url: '',
+  tavily_api_key: '',
 };
 export type SettingKey = keyof typeof DEFAULTS;
 export type Env = Record<string, string | undefined>;
@@ -39,6 +43,9 @@ const UPDATE_KEYS: Record<StringField, SettingKey> = {
   defaultModelId: 'default_model_id',
   titleModelId: 'title_model_id',
   memoryModelId: 'memory_model_id',
+  searchService: 'web_search_service',
+  searxngUrl: 'searxng_url',
+  tavilyKey: 'tavily_api_key',
 };
 
 export function getSetting(db: DB, key: SettingKey): string {
@@ -66,6 +73,7 @@ export function maskKey(key: string): string {
 
 export function getSettingsView(db: DB, env: Env): SettingsView {
   const { key, source } = resolveApiKey(db, env);
+  const tavilyKey = getSetting(db, 'tavily_api_key');
   return {
     hasApiKey: Boolean(key),
     apiKeySource: source,
@@ -81,6 +89,11 @@ export function getSettingsView(db: DB, env: Env): SettingsView {
     titleModelId: getSetting(db, 'title_model_id'),
     memoryModelId: getSetting(db, 'memory_model_id'),
     spendingLimits: getLimits(db),
+    searchService: getSetting(db, 'web_search_service') as SearchServiceId,
+    searxngUrl: getSetting(db, 'searxng_url'),
+    hasTavilyKey: Boolean(tavilyKey),
+    tavilyKeyMasked: maskKey(tavilyKey),
+    searchReady: webSearchService(db, env) !== null,
   };
 }
 
@@ -93,6 +106,13 @@ export function updateSettings(db: DB, update: SettingsUpdate): void {
   }
   if (update.colorStyle !== undefined && !COLOR_STYLES.includes(update.colorStyle)) {
     throw new HttpError(400, 'Color style must be flat or vivid.');
+  }
+  if (update.searchService !== undefined && !SEARCH_SERVICES.includes(update.searchService)) {
+    throw new HttpError(400, 'Web search service must be none, searxng, or tavily.');
+  }
+  const searxngUrl = typeof update.searxngUrl === 'string' ? update.searxngUrl.trim().replace(/\/+$/, '') : undefined;
+  if (searxngUrl !== undefined && searxngUrl !== '' && !/^https?:\/\/\S+$/i.test(searxngUrl)) {
+    throw new HttpError(400, 'SearXNG address must start with http:// or https://.');
   }
   const flags = Object.keys(FLAGS) as FlagField[];
   for (const field of flags) {
@@ -108,7 +128,8 @@ export function updateSettings(db: DB, update: SettingsUpdate): void {
     const value = update[field];
     if (value === undefined) continue;
     if (typeof value !== 'string') throw new HttpError(400, `${field} must be a string.`);
-    setSetting(db, key, field === 'apiKey' ? value.trim() : value);
+    const trimmed = field === 'apiKey' || field === 'tavilyKey';
+    setSetting(db, key, field === 'searxngUrl' ? (searxngUrl as string) : trimmed ? value.trim() : value);
   }
 }
 

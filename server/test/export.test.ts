@@ -37,6 +37,8 @@ async function seed() {
   writeFileSync(join(deps.mediaDir, `${vr.id}.mp4`), Buffer.from('fake mp4 bytes'));
   setSetting(db, 'api_key', 'sk-or-secret-abcdef123456');
   setSetting(db, 'about_me', 'I like tea');
+  setSetting(db, 'web_search_service', 'tavily');
+  setSetting(db, 'tavily_api_key', 'tvly-secret-abcdef123456');
   await call('POST', '/api/memories', { content: 'Lives by the sea' });
   await call('POST', '/api/prompts', { title: '', content: 'Bullets only' });
   return { ...ctx, chatA, chatB, upload, png, vr, r1 };
@@ -68,6 +70,9 @@ describe('GET /api/data/export', () => {
     expect(data.prompts[0].content).toBe('Bullets only');
     expect(data.settings.about_me).toBe('I like tea');
     expect(data.settings.api_key).toBeUndefined();
+    expect(data.settings.web_search_service).toBe('tavily');
+    expect(data.settings.tavily_api_key).toBeUndefined();
+    expect(raw).not.toContain('tvly-secret');
 
     // Same title twice: each file is still separate.
     const a = `openchat-export/chats/Plans- a-b -test-${chatA.slice(0, 8)}.md`;
