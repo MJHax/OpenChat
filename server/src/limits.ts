@@ -76,10 +76,10 @@ function renderingEstimate(db: DB): number {
   }, 0);
 }
 
-/** Everything OpenChat spent since `since`: the same calls the Stats page counts. */
+/** Everything OpenChat spent since `since`: the same calls the Stats page counts. Local models cost nothing and never count. */
 function spentSince(db: DB, since: number): number {
   return (db.prepare(
-    `SELECT (SELECT COALESCE(SUM(cost), 0) FROM usage_events WHERE created_at >= ?)
+    `SELECT (SELECT COALESCE(SUM(cost), 0) FROM usage_events WHERE created_at >= ? AND COALESCE(model_id, '') NOT LIKE 'local:%')
        + (SELECT COALESCE(SUM(cost), 0) FROM media_events WHERE created_at >= ?) AS total`,
   ).get(since, since) as { total: number }).total;
 }

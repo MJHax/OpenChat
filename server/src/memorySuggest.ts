@@ -7,6 +7,7 @@ import { now } from './db';
 import { recordUsage, type UsageStatus } from './usage';
 import { spendBlock } from './limits';
 import { getSetting } from './settings';
+import { isLocalModelId } from '../../shared/localModels';
 
 export const MEMORY_PROMPT =
   'Turn the following text into one short fact worth remembering about the user, written in the third person ' +
@@ -29,7 +30,7 @@ export async function suggestMemory(deps: Deps, text: unknown): Promise<string> 
   const model = getSetting(db, 'memory_model_id') || getSetting(db, 'default_model_id');
   if (!model) throw new HttpError(400, 'Add a model in the Model Library first.');
   const provider = chatProviderOrHttp(deps, model);
-  const block = spendBlock(db);
+  const block = isLocalModelId(model) ? null : spendBlock(db);
   if (block) throw new HttpError(402, `${block.short}. Type the fact yourself.`);
 
   const startedAt = now();

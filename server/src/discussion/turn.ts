@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 import type { Deps } from '../app';
-import { newId } from '../db';
+import { newId, type DB } from '../db';
 import { getChatRow, setActiveLeaf, touchChat } from '../chats';
 import { getChatMessages, insertMessage } from '../messages';
 import type { Usage } from '../openrouter';
@@ -11,8 +11,13 @@ import { callTimer, failureStatus, timingFields, replyErrorMessage, saveIfChatEx
 import { buildDiscussionPrompt, cleanReply, moderatorTools, nextSpeaker, readToolCall, turnsTaken } from './engine';
 import { discussionState, getDiscussionRow, getParticipants, setStatus } from './store';
 import type {
-  DiscussionState, DiscussionTurnDone, DiscussionTurnError, DiscussionTurnStart, Message, MessageStatus,
+  DiscussionParticipant, DiscussionState, DiscussionTurnDone, DiscussionTurnError, DiscussionTurnStart, Message, MessageStatus,
 } from '../../../shared/types';
+
+/** The participant who speaks next: the choice `streamTurn` makes, shared so the route can check the limit against its model. */
+export function turnSpeaker(db: DB, chatId: string): DiscussionParticipant {
+  return nextSpeaker(getParticipants(db, chatId), getChatMessages(db, chatId));
+}
 
 /**
  * Streams one discussion turn as SSE: start → (delta|reasoning)* → done | error. The server picks the speaker, saves its
@@ -24,7 +29,7 @@ export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () 
   const { topic } = getDiscussionRow(db, chatId);
   const participants = getParticipants(db, chatId);
   const history = getChatMessages(db, chatId);
-  const speaker = nextSpeaker(participants, history);
+  const speaker = turnSpeaker(db, chatId);
   const others = participants.filter((p) => p.id !== speaker.id).map((p) => p.name);
   const messages = buildDiscussionPrompt(topic, participants, history, speaker);
   const tools = speaker.isModerator ? moderatorTools(participants) : undefined;

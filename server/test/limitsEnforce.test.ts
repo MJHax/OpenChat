@@ -1,15 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
+import { startFakeLocalServer, type FakeServer } from '../../test/fakeLocalServer';
 import { makeApp, readEvents } from './appHelpers';
 import type { OpenRouterClient, StreamEvent, Usage } from '../src/openrouter';
 import { recordUsage } from '../src/usage';
-import { saveLimits } from '../src/limits';
+import { limitStatuses, saveLimits } from '../src/limits';
+import { addServer } from '../src/localServers';
+import { addModel } from '../src/library';
+import { setSetting } from '../src/settings';
+import { localModelId } from '../../shared/localModels';
 import { addMediaModel } from '../src/mediaLibrary';
 import { insertMessage } from '../src/messages';
 import { whenIdle } from '../src/imageGen';
 import type { DB } from '../src/db';
 import type { ImageModel, ImageSettings } from '../../shared/imageModels';
 import type { VideoModel, VideoSettings } from '../../shared/videoModels';
-import type { ChatSummary, ThreadKind } from '../../shared/types';
+import { withCatalogDefaults, type ChatSummary, type DiscussionDetail, type ThreadKind } from '../../shared/types';
 
 const usage = (cost: number): Usage => ({ promptTokens: 10, completionTokens: 5, cost, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null });
 
@@ -136,5 +141,106 @@ describe('spending limits on paid requests', () => {
     const res = await errorOf(await s.call('POST', '/api/memories/suggest', { text: 'I live in Oslo' }));
     expect(res).toEqual({ status: 402, error: 'Daily spending limit reached. Type the fact yourself.' });
     expect(s.counts.complete).toBe(0);
+  });
+});
+
+describe('spending limits and local models', () => {
+  let fake: FakeServer | undefined;
+  afterEach(async () => {
+    await fake?.close();
+    fake = undefined;
+  });
+
+  /** A $1 daily limit already spent, with a fake local server whose model is in My models and OpenRouter models m/a, m/b. */
+  async function localSetup() {
+    fake = await startFakeLocalServer({ flavor: 'ollama', models: [{ name: 'gemma3:1b', contextLength: 32768 }] });
+    const s = setup();
+    const server = addServer(s.db, { type: 'ollama', name: 'Ollama', baseUrl: fake.url, auto: false });
+    const local = localModelId(server.id, 'gemma3:1b');
+    addModel(s.db, withCatalogDefaults({ id: local, name: 'gemma3:1b', contextLength: 32768 }));
+    limitTo(s.db, 1);
+    spend(s.db, 2);
+    return { ...s, local, fake: fake! };
+  }
+  const discussion = async (s: Awaited<ReturnType<typeof localSetup>>, first: string, second: string) =>
+    ((await (await s.call('POST', '/api/discussions', {
+      topic: 'Eggs', turnLimit: 4,
+      participants: [
+        { name: 'A', modelId: first, instructions: 'Argue yes.', isModerator: false },
+        { name: 'B', modelId: second, instructions: 'Argue no.', isModerator: false },
+      ],
+    })).json()) as DiscussionDetail).chat.id;
+
+  it('send, regenerate and edit to a local model still stream', async () => {
+    const s = await localSetup();
+    const chatId = await s.thread();
+    const sent = await readEvents(await s.call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: s.local }));
+    expect(sent.map((e) => e.event)).toContain('done');
+    const userId = sent.find((e) => e.event === 'start')!.data.userMessageId;
+    const regen = await readEvents(await s.call('POST', `/api/chats/${chatId}/regenerate`, { parentId: userId, modelId: s.local }));
+    expect(regen.map((e) => e.event)).toContain('done');
+    const edit = await readEvents(await s.call('POST', `/api/chats/${chatId}/edit`, { messageId: userId, content: 'Hello', modelId: s.local }));
+    expect(edit.map((e) => e.event)).toContain('done');
+    expect(s.counts.stream).toBe(0);
+  });
+
+  it('compare of local and OpenRouter runs the local slot and refuses the OpenRouter one', async () => {
+    const s = await localSetup();
+    const chatId = await s.thread();
+    const events = await readEvents(await s.call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelIds: [s.local, 'm/a'] }));
+    const done = events.filter((e) => e.event === 'slot-done');
+    const failed = events.filter((e) => e.event === 'slot-error');
+    expect(done.map((e) => e.data.slot)).toEqual([0]);
+    expect(failed.map((e) => e.data.slot)).toEqual([1]);
+    expect(failed[0].data.message).toMatch(/^Daily spending limit reached/);
+    expect(s.counts.stream).toBe(0);
+    expect(s.db.prepare("SELECT COUNT(*) AS n FROM usage_events WHERE model_id = 'm/a'").get()).toEqual({ n: 0 });
+  });
+
+  it('compare of two OpenRouter models is refused with nothing saved', async () => {
+    const s = await localSetup();
+    const chatId = await s.thread();
+    const res = await errorOf(await s.call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelIds: ['m/a', 'm/b'] }));
+    expect(res.status).toBe(402);
+    expect(s.messages(chatId)).toBe(0);
+  });
+
+  it('a discussion turn by a local speaker runs; one by an OpenRouter speaker is refused', async () => {
+    const s = await localSetup();
+    const localFirst = await discussion(s, s.local, 'm/a');
+    expect((await readEvents(await s.call('POST', `/api/discussions/${localFirst}/turn`))).map((e) => e.event)).toContain('done');
+    const remoteFirst = await discussion(s, 'm/a', s.local);
+    expect((await s.call('POST', `/api/discussions/${remoteFirst}/turn`)).status).toBe(402);
+  });
+
+  it('titles a local-only chat over the limit', async () => {
+    const s = await localSetup();
+    s.fake.reply({ text: ['Hello'] });
+    s.fake.reply({ text: ['Local title'] });
+    const chatId = await s.thread();
+    const events = await readEvents(await s.call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: s.local }));
+    expect(events.find((e) => e.event === 'title')!.data.title).toBe('Local title');
+  });
+
+  it('summarizes and suggests memories with a local model, but refuses an OpenRouter one', async () => {
+    const s = await localSetup();
+    const id = await discussion(s, s.local, s.local);
+    expect((await s.call('POST', `/api/discussions/${id}/summary`, { modelId: s.local })).status).toBe(200);
+    expect(await errorOf(await s.call('POST', `/api/discussions/${id}/summary`, { modelId: 'm/a' }))).toMatchObject({ status: 402 });
+    setSetting(s.db, 'memory_model_id', s.local);
+    expect((await s.call('POST', '/api/memories/suggest', { text: 'I live in Oslo' })).status).toBe(200);
+    setSetting(s.db, 'memory_model_id', 'm/a');
+    expect((await s.call('POST', '/api/memories/suggest', { text: 'I live in Oslo' })).status).toBe(402);
+    expect(s.counts.complete).toBe(0);
+  });
+
+  it('does not count a local usage row toward the spent total', async () => {
+    const s = await localSetup();
+    const before = limitStatuses(s.db)[0].spent;
+    recordUsage(s.db, {
+      purpose: 'reply', chatId: null, messageId: null, runId: null, kind: 'send', compare: false, modelId: s.local, usage: usage(0.5),
+      webSearch: false, webSearches: null, attachments: 0, firstTokenMs: null, durationMs: null, status: 'complete', createdAt: Date.now(),
+    });
+    expect(limitStatuses(s.db)[0].spent).toBe(before);
   });
 });

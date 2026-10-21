@@ -8,6 +8,7 @@ import { recordUsage, type ReplyKind, type UsageStatus } from './usage';
 import { insertMessage } from './messages';
 import type { Usage } from './openrouter';
 import { chatProvider } from './providers';
+import { isLocalModelId } from '../../shared/localModels';
 import { maybeGenerateTitle } from './title';
 import type {
   Effort,
@@ -30,6 +31,8 @@ interface CompareOptions {
   thinking?: boolean;
   /** Models whose window couldn't hold the chat; their replies are marked as having lost context. */
   droppedModelIds?: Set<string>;
+  /** Set when a spending limit is reached: OpenRouter slots fail with it, unrun and unlogged; local slots run normally. */
+  limitMessage?: string;
   /** Called once, when every reply is saved or the stream ends, whichever comes first. */
   onFinish?: () => void;
 }
@@ -93,6 +96,10 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
   }
 
   async function runSlot(i: number, slot: CompareSlot, send: (event: string, data: unknown) => Promise<unknown>): Promise<Message | null> {
+    if (o.limitMessage !== undefined && !isLocalModelId(slot.modelId)) {
+      await send('slot-error', { slot: i, message: o.limitMessage, partial: null } satisfies CompareSlotError);
+      return null;
+    }
     let text = '';
     let usage: Usage | null = null;
     let sources: Source[] = [];

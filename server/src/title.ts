@@ -68,11 +68,11 @@ async function generateTitle(deps: Deps, chatId: string, fallbackModel: string):
     .map((m) => `${m.role}: ${m.role === 'assistant' ? copyText(m.content) : m.content}${m.attachments.length ? ` [attached: ${m.attachments.map((a) => a.filename).join(', ')}]` : ''}`)
     .join('\n\n')
     .slice(0, 4000);
-  // Over a spending limit the chat just keeps its default title.
-  if (spendBlock(db)) return null;
   let model = getSetting(db, 'title_model_id') || fallbackModel;
   // A chat that never left the local server isn't titled by OpenRouter, whatever the title setting says.
   if (!isLocalModelId(model) && isLocalOnlyChat(db, chatId)) model = fallbackModel;
+  // Over a spending limit the chat just keeps its default title; a local model is free.
+  if (!isLocalModelId(model) && spendBlock(db)) return null;
   const startedAt = now();
   const t0 = Date.now();
   let usage: Usage | null = null;

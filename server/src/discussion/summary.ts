@@ -2,6 +2,7 @@ import type { Deps } from '../app';
 import { now } from '../db';
 import { HttpError } from '../http';
 import { checkSpend } from '../limits';
+import { isLocalModelId } from '../../../shared/localModels';
 import { getChatMessages } from '../messages';
 import type { Usage } from '../openrouter';
 import { chatProviderOrHttp } from '../providers';
@@ -29,7 +30,7 @@ export function transcriptText(topic: string, participants: DiscussionParticipan
 export async function summarizeDiscussion(deps: Deps, chatId: string, modelId: string): Promise<DiscussionSummary> {
   const { db } = deps;
   const { topic } = getDiscussionRow(db, chatId);
-  checkSpend(db);
+  if (!isLocalModelId(modelId)) checkSpend(db);
   const provider = chatProviderOrHttp(deps, modelId);
   const messages = [
     { role: 'system' as const, content: SUMMARY_PROMPT },

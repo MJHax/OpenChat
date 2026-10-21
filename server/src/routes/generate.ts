@@ -9,7 +9,8 @@ import { streamComparison } from '../compare';
 import type { DB } from '../db';
 import { EFFORTS, type Effort, type Message } from '../../../shared/types';
 import type { ReplyKind } from '../usage';
-import { checkSpend } from '../limits';
+import { checkSpend, spendBlock } from '../limits';
+import { isLocalModelId } from '../../../shared/localModels';
 import { contextOverflow, overflowMessage } from '../contextCheck';
 
 const requireText = (value: unknown, error: string): string => {
@@ -71,13 +72,17 @@ export function generationRoutes(deps: Deps): Hono {
 
   /**
    * Reserves the chat for one generation. A running generation wins over a pending choice (it sets that choice).
-   * A reached spending limit refuses new work here, before anything is saved; work already running is never stopped.
+   * A reached spending limit refuses new OpenRouter work here, before anything is saved; work already running is never stopped.
+   * Local models are free, so they never wait on it. A comparison mixing both returns the limit message for its OpenRouter slots.
    */
-  function claim(chat: ChatRow): void {
-    checkSpend(db);
+  function claim(chat: ChatRow, modelIds: string[]): string | undefined {
+    const paid = modelIds.filter((id) => !isLocalModelId(id));
+    if (paid.length === modelIds.length) checkSpend(db);
+    const limitMessage = paid.length > 0 && paid.length < modelIds.length ? spendBlock(db)?.message : undefined;
     if (inFlight.has(chat.id)) throw new HttpError(409, 'A reply is still being generated in this chat. Wait for it to finish.');
     if (pendingChoice(db, chat)) throw new HttpError(409, 'Pick a reply to continue.');
     inFlight.add(chat.id);
+    return limitMessage;
   }
 
   /**
@@ -99,7 +104,7 @@ export function generationRoutes(deps: Deps): Hono {
 
   function reply(c: Context, o: {
     chatId: string; parentId: string; modelIds: string[]; userMessageId: string | null; kind: ReplyKind; attachments: number;
-    effort: Effort | undefined; thinking: boolean | undefined; droppedModelIds: Set<string>;
+    effort: Effort | undefined; thinking: boolean | undefined; droppedModelIds: Set<string>; limitMessage?: string;
   }): Response {
     const onFinish = () => inFlight.delete(o.chatId);
     try {
@@ -132,12 +137,12 @@ export function generationRoutes(deps: Deps): Hono {
     const content = requireContent(body.content, attachments);
     const modelIds = requireModels(body);
     requireViewable(db, modelIds, attachments);
-    claim(chat);
+    const limitMessage = claim(chat, modelIds);
     const droppedModelIds = checkOverflow(chatId, body.allowOverflow, { chatId, parentId: chat.active_leaf_id, newMessage: { content, attachments }, modelIds });
     const user = saveUserMessage(chatId, chat.active_leaf_id, content, attachments, webSearch);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
-    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id, kind: 'send', attachments: attachments.length, effort, thinking, droppedModelIds });
+    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id, kind: 'send', attachments: attachments.length, effort, thinking, droppedModelIds, limitMessage });
   });
 
   r.post('/:id/regenerate', async (c) => {
@@ -148,9 +153,9 @@ export function generationRoutes(deps: Deps): Hono {
     const thinking = requireThinking(body.thinking);
     const parent = requireUserMessage(db, chatId, body.parentId);
     const modelIds = requireModels(body);
-    claim(chat);
+    const limitMessage = claim(chat, modelIds);
     const droppedModelIds = checkOverflow(chatId, body.allowOverflow, { chatId, parentId: parent.id, newMessage: null, modelIds });
-    return reply(c, { chatId, parentId: parent.id, modelIds, userMessageId: null, kind: 'regenerate', attachments: 0, effort, thinking, droppedModelIds });
+    return reply(c, { chatId, parentId: parent.id, modelIds, userMessageId: null, kind: 'regenerate', attachments: 0, effort, thinking, droppedModelIds, limitMessage });
   });
 
   r.post('/:id/edit', async (c) => {
@@ -168,12 +173,12 @@ export function generationRoutes(deps: Deps): Hono {
     const modelIds = requireModels(body);
     // Only images added in this edit are blocked; kept ones reach a text-only model as a note, like any earlier image.
     requireViewable(db, modelIds, attachments.filter((a) => a.messageId === null));
-    claim(chat);
+    const limitMessage = claim(chat, modelIds);
     const droppedModelIds = checkOverflow(chatId, body.allowOverflow, { chatId, parentId: original.parentId, newMessage: { content, attachments }, modelIds });
     const user = saveUserMessage(chatId, original.parentId, content, attachments, webSearch);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
-    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id, kind: 'edit', attachments: attachments.length, effort, thinking, droppedModelIds });
+    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id, kind: 'edit', attachments: attachments.length, effort, thinking, droppedModelIds, limitMessage });
   });
 
   return r;

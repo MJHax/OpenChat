@@ -5,7 +5,8 @@ import { getChatRow, setActiveLeaf, touchChat } from '../chats';
 import { insertMessage } from '../messages';
 import { checkSpend } from '../limits';
 import { createDiscussion, discussionState, getDiscussionDetail, getDiscussionRow, setStatus, setTurnLimit } from '../discussion/store';
-import { streamTurn } from '../discussion/turn';
+import { streamTurn, turnSpeaker } from '../discussion/turn';
+import { isLocalModelId } from '../../../shared/localModels';
 import { summarizeDiscussion } from '../discussion/summary';
 import { renderReport, REPORT_CSP } from '../discussion/report';
 import { displayNameOf } from '../library';
@@ -24,11 +25,11 @@ export function discussionRoutes(deps: Deps): Hono {
 
   r.get('/:id', (c) => c.json(getDiscussionDetail(db, c.req.param('id'))));
 
-  /** One turn. A reached spending limit refuses it before anything is saved; a turn already running is never stopped. */
+  /** One turn. A reached spending limit refuses an OpenRouter speaker's turn before anything is saved, never a local one's; a turn already running is never stopped. */
   r.post('/:id/turn', (c) => {
     const id = c.req.param('id');
     const discussion = getDiscussionRow(db, id);
-    checkSpend(db);
+    if (!isLocalModelId(turnSpeaker(db, id).modelId)) checkSpend(db);
     if (inFlight.has(id)) throw new HttpError(409, 'A turn is still running in this discussion.');
     const ended = 'This discussion has ended. Add turns to continue.';
     if (discussion.status === 'ended') throw new HttpError(409, ended);
