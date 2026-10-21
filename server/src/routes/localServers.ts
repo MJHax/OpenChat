@@ -78,7 +78,8 @@ export function localServerRoutes(deps: Deps): Hono {
   r.get('/models', async (c) => {
     await detect(false);
     const probes = await probeServers(db);
-    const update = db.prepare('UPDATE models SET context_length = ?, input_modalities = ?, supports_tools = ?, supports_reasoning = ? WHERE id = ?');
+    const update = db.prepare('UPDATE models SET context_length = ?, input_modalities = ?, supports_tools = ?, supports_reasoning = ?, '
+      + 'context_window = CASE WHEN ? IS NOT NULL AND context_window > ? THEN ? ELSE context_window END WHERE id = ?');
     const models: LocalModel[] = [];
     for (const { status, models: found } of probes) {
       if (!status.online) continue;
@@ -89,7 +90,7 @@ export function localServerRoutes(deps: Deps): Hono {
         // OpenAI-compatible servers report nothing, so their capabilities are the user's; a listing whose capability
         // lookup failed must not overwrite what is known.
         if (status.type !== 'openai' && m.capsKnown) {
-          update.run(m.contextLength, JSON.stringify(m.inputModalities), m.supportsTools ? 1 : 0, m.supportsReasoning ? 1 : 0, id);
+          update.run(m.contextLength, JSON.stringify(m.inputModalities), m.supportsTools ? 1 : 0, m.supportsReasoning ? 1 : 0, m.contextLength, m.contextLength, m.contextLength, id);
         }
       }
     }

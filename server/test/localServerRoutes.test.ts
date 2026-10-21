@@ -145,6 +145,21 @@ describe('local server routes', () => {
     expect(row).toEqual({ context_length: 40960, supports_tools: 1, supports_reasoning: 1 });
   });
 
+  it('clamps a chosen context window to a smaller maximum found on refresh', async () => {
+    const f = await fake('ollama');
+    const { call, db } = appWith([{ type: 'ollama', baseUrl: f.url }]);
+    const [s] = await (await call('GET', '/api/local-servers')).json();
+    const big = `local:${s.id}:qwen3:1.7b`;
+    const small = `local:${s.id}:gemma3:1b`;
+    const ins = db.prepare('INSERT INTO models (id, display_name, context_length, context_window, supports_tools, supports_reasoning, input_modalities, added_at) VALUES (?, ?, ?, ?, 0, 0, ?, ?)');
+    ins.run(big, 'qwen3:1.7b', 100000, 100000, '["text"]', now()); // the max is now 40960
+    ins.run(small, 'gemma3:1b', 100000, 2048, '["text"]', now()); // a window under the max stays
+    await call('GET', '/api/local-servers/models');
+    const window = (id: string) => (db.prepare('SELECT context_length, context_window FROM models WHERE id = ?').get(id) as any);
+    expect(window(big)).toEqual({ context_length: 40960, context_window: 40960 });
+    expect(window(small).context_window).toBe(2048);
+  });
+
   it('leaves stored capabilities alone when a listing could not read them', async () => {
     const f = await fake('ollama');
     const { call, db } = appWith([{ type: 'ollama', baseUrl: f.url }]);
