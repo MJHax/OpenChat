@@ -1,6 +1,6 @@
 import type { StreamEvent, Usage } from '../openrouter';
 import type { ChatMessage } from '../prompt';
-import { localFetch } from './localHttp';
+import { localFetch, readListing } from './localHttp';
 import { LocalServerError, type ChatRequest, type CompleteRequest, type LocalClient, type LocalModelInfo } from './types';
 
 const LIST_TIMEOUT_MS = 1_500;
@@ -73,7 +73,7 @@ export function createOllamaClient(server: { name: string; baseUrl: string }, fe
 
   async function describe(name: string, sizeBytes: number | null): Promise<LocalModelInfo> {
     try {
-      const show: any = await (await post('/api/show', { model: name }, undefined, LIST_TIMEOUT_MS)).json();
+      const show: any = await readListing(await post('/api/show', { model: name }, undefined, LIST_TIMEOUT_MS), server);
       const caps: string[] = Array.isArray(show.capabilities) ? show.capabilities : [];
       const key = Object.keys(show.model_info ?? {}).find((k) => k.endsWith('.context_length'));
       const ctx = key ? show.model_info[key] : null;
@@ -94,7 +94,7 @@ export function createOllamaClient(server: { name: string; baseUrl: string }, fe
 
   return {
     async listModels() {
-      const tags: any = await (await localFetch(server, '/api/tags', { timeoutMs: LIST_TIMEOUT_MS }, fetchImpl)).json();
+      const tags: any = await readListing(await localFetch(server, '/api/tags', { timeoutMs: LIST_TIMEOUT_MS }, fetchImpl), server);
       const entries: { name: string; size: number | null }[] = (tags.models ?? []).map((m: any) => ({
         name: m.name ?? m.model,
         size: typeof m.size === 'number' ? m.size : null,

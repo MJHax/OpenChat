@@ -27,6 +27,13 @@ const chatBody = () => server!.requests.find((r) => r.path === '/api/chat')!.bod
 const hello = [{ role: 'user' as const, content: 'hi' }];
 
 describe('ollama client', () => {
+  it('reads a stalled model listing as unreachable', async () => {
+    const stalled: typeof fetch = async (_url, init) =>
+      new Response(new ReadableStream({ start: (c) => init?.signal?.addEventListener('abort', () => c.error(init.signal!.reason)) }), { status: 200 });
+    const client = createOllamaClient({ name: 'Ollama', baseUrl: 'http://127.0.0.1:11434' }, stalled);
+    await expect(client.listModels()).rejects.toThrow("Can't reach Ollama at 127.0.0.1:11434. Is it running?");
+  });
+
   it('lists models with capabilities', async () => {
     const client = await start();
     const models = await client.listModels();

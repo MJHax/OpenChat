@@ -1,6 +1,6 @@
 import type { StreamEvent, Usage } from '../openrouter';
 import type { ChatMessage } from '../prompt';
-import { localFetch } from './localHttp';
+import { localFetch, readListing } from './localHttp';
 import { readChatStream } from './openaiStream';
 import { LocalServerError, type ChatRequest, type CompleteRequest, type LocalClient, type LocalModelInfo } from './types';
 
@@ -90,7 +90,7 @@ export function createOpenAIChat(
 export function createOpenAICompatClient(server: Server, fetchImpl: typeof fetch = fetch): LocalClient {
   return {
     async listModels() {
-      const body: any = await (await localFetch(server, '/v1/models', { timeoutMs: LIST_TIMEOUT_MS }, fetchImpl)).json();
+      const body: any = await readListing(await localFetch(server, '/v1/models', { timeoutMs: LIST_TIMEOUT_MS }, fetchImpl), server);
       return (body.data ?? []).map(
         (m: any): LocalModelInfo => ({
           name: String(m.id),

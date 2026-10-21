@@ -35,7 +35,27 @@ const startOpenAI = async () => {
   return createOpenAICompatClient({ name: 'My server', baseUrl: server.url });
 };
 
+/** Answers with headers at once, then never finishes the body (until the request is aborted). */
+const stalledBody: typeof fetch = async (_url, init) =>
+  new Response(new ReadableStream({ start: (c) => init?.signal?.addEventListener('abort', () => c.error(init.signal!.reason)) }), { status: 200 });
+
 describe('LM Studio client', () => {
+  it('reads a stalled model listing as unreachable', async () => {
+    const client = createLmStudioClient({ name: 'LM Studio', baseUrl: 'http://127.0.0.1:1234' }, stalledBody);
+    await expect(client.listModels()).rejects.toThrow("Can't reach LM Studio at 127.0.0.1:1234. Is it running?");
+  });
+
+  it('chats on when the model listing before the chat stalls, skipping the load step', async () => {
+    await startLm();
+    const real = fetch;
+    const fetchImpl: typeof fetch = (input, init) => (String(input).endsWith('/api/v1/models') ? stalledBody(input, init) : real(input, init));
+    const client = createLmStudioClient({ name: 'LM Studio', baseUrl: server!.url }, fetchImpl);
+    server!.reply({ text: ['ok'] });
+    const events = await collect(client.streamChat({ model: QWEN, messages: hello, contextWindow: 4096 }));
+    expect(events.some((e) => e.type === 'delta')).toBe(true);
+    expect(loads()).toHaveLength(0);
+  });
+
   it('lists models with capabilities', async () => {
     const client = await startLm();
     expect(await client.listModels()).toEqual([

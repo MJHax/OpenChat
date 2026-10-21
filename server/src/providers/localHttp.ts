@@ -15,6 +15,15 @@ async function errorDetail(res: Response): Promise<string> {
   return res.statusText || `HTTP ${res.status}`;
 }
 
+/** The JSON body of a listing answer. The call's timeout is still armed while the body arrives, so a stall reads as unreachable. */
+export async function readListing(res: Response, server: { name: string; baseUrl: string }): Promise<any> {
+  try {
+    return await res.json();
+  } catch {
+    throw new LocalServerError(`Can't reach ${server.name} at ${hostOf(server.baseUrl)}. Is it running?`, 0);
+  }
+}
+
 /** fetch for a local server: unreachable or slow servers and non-2xx answers become LocalServerError. */
 export async function localFetch(
   server: { name: string; baseUrl: string },
