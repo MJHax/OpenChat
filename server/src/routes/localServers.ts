@@ -5,7 +5,7 @@ import { detectLocalServers, probeServers, serverStatuses } from '../localDetect
 import { addServer, findServer, getServer, removeServer, updateServer } from '../localServers';
 import { localClientFor } from '../providers';
 import type { LocalModelInfo } from '../providers/types';
-import { localModelId, normalizeBaseUrl } from '../../../shared/localModels';
+import { SERVER_TYPE_NAMES, localModelId, normalizeBaseUrl } from '../../../shared/localModels';
 import type { LocalServerType } from '../../../shared/localModels';
 import type { LocalCatalog, LocalModel } from '../../../shared/types';
 
@@ -26,12 +26,21 @@ function cleanName(name: unknown): string {
   return text;
 }
 
+/** "an Ollama server", "an LM Studio server", "an OpenAI-compatible server". */
+const KIND_PHRASE: Record<LocalServerType, string> = {
+  ollama: 'an Ollama server',
+  lmstudio: 'an LM Studio server',
+  openai: 'an OpenAI-compatible server',
+};
+
 /** A server is only saved at an address that answers. */
-async function checkConnection(type: LocalServerType, baseUrl: string): Promise<void> {
+async function checkConnection(type: LocalServerType, name: string, baseUrl: string): Promise<void> {
   try {
-    await localClientFor({ id: '', type, name: '', baseUrl, auto: false, enabled: true }).listModels();
+    await localClientFor({ id: '', type, name: name || SERVER_TYPE_NAMES[type], baseUrl, auto: false, enabled: true }).listModels();
   } catch (e) {
-    throw new HttpError(400, `Couldn't connect: ${(e as Error).message}`);
+    // Status 0 is "nobody answered"; any other status means something answered, but not like this kind of server.
+    const status = (e as { status?: number }).status ?? 0;
+    throw new HttpError(400, status > 0 ? `Couldn't connect: ${baseUrl} doesn't look like ${KIND_PHRASE[type]}.` : `Couldn't connect: ${(e as Error).message}`);
   }
 }
 
@@ -97,7 +106,7 @@ export function localServerRoutes(deps: Deps): Hono {
     const name = cleanName(body.name);
     const baseUrl = cleanAddress(body.baseUrl);
     if (findServer(db, type, baseUrl)) throw new HttpError(409, 'That server is already in your list.');
-    await checkConnection(type, baseUrl);
+    await checkConnection(type, name, baseUrl);
     addServer(db, { type, name, baseUrl, auto: false });
     return c.json(await serverStatuses(db), 201);
   });
@@ -118,7 +127,7 @@ export function localServerRoutes(deps: Deps): Hono {
       if (patch.baseUrl !== current.baseUrl) {
         const clash = findServer(db, current.type, patch.baseUrl);
         if (clash && clash.id !== id) throw new HttpError(409, 'That server is already in your list.');
-        await checkConnection(current.type, patch.baseUrl);
+        await checkConnection(current.type, patch.name ?? current.name, patch.baseUrl);
       }
     }
     updateServer(db, id, patch);

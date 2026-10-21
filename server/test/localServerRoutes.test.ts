@@ -80,7 +80,18 @@ describe('local server routes', () => {
     await closed.close();
     const bad = await call('POST', '/api/local-servers', { type: 'ollama', name: 'Nope', baseUrl: closedUrl });
     expect(bad.status).toBe(400);
-    expect((await bad.json()).error).toMatch(/^Couldn't connect:/);
+    const closedHost = new URL(closedUrl).host;
+    expect((await bad.json()).error).toBe(`Couldn't connect: Can't reach Nope at ${closedHost}. Is it running?`);
+  });
+
+  it('says an address is not that kind of server when it answers with an error', async () => {
+    const other = await fake('openai');
+    const { call } = appWith([]);
+    const bad = await call('POST', '/api/local-servers', { type: 'ollama', name: 'Mine', baseUrl: other.url });
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).error).toBe(`Couldn't connect: ${other.url} doesn't look like an Ollama server.`);
+    const lm = await call('POST', '/api/local-servers', { type: 'lmstudio', name: 'Mine', baseUrl: other.url });
+    expect((await lm.json()).error).toBe(`Couldn't connect: ${other.url} doesn't look like an LM Studio server.`);
   });
 
   it('validates the body', async () => {
@@ -117,7 +128,7 @@ describe('local server routes', () => {
     await closed.close();
     const bad = await call('PATCH', `/api/local-servers/${s.id}`, { baseUrl: closedUrl });
     expect(bad.status).toBe(400);
-    expect((await bad.json()).error).toMatch(/^Couldn't connect:/);
+    expect((await bad.json()).error).toBe(`Couldn't connect: Can't reach Mine at ${new URL(closedUrl).host}. Is it running?`);
   });
 
   it('lists models and refreshes the capabilities of stored ones', async () => {
