@@ -42,6 +42,7 @@ const toMessage = (r: MessageRow, attachments: Map<string, Message['attachments'
   participantId: r.participant_id ?? null,
   handoffTo: r.handoff_to ?? null,
   effort: (r.effort as Effort | null) ?? null,
+  contextDropped: false,
 });
 
 export type NewMessage = Pick<Message, 'chatId' | 'parentId' | 'role' | 'content'> &

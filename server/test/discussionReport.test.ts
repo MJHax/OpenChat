@@ -7,7 +7,7 @@ import type { DiscussionDetail, Message } from '../../shared/types';
 const msg = (over: Partial<Message>): Message => ({
   id: 'm', chatId: 'c', parentId: null, role: 'assistant', content: '', modelId: 'test/tools', promptTokens: null, completionTokens: null,
   cost: null, status: 'complete', createdAt: 0, attachments: [], webSearch: false, sources: [], webSearches: null, participantId: null,
-  handoffTo: null, effort: null, ...over,
+  handoffTo: null, effort: null, contextDropped: false, ...over,
 });
 
 const detail = (messages: Message[], summary: DiscussionDetail['summary'] = null): DiscussionDetail => ({

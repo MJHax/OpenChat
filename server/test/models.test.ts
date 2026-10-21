@@ -155,7 +155,7 @@ describe('model library', () => {
     const { call } = setup();
     const added = (await (await call('POST', '/api/models', { id: 'openai/gpt-4o:free' })).json()) as LibraryModel[];
     expect(added).toEqual([
-      { id: 'openai/gpt-4o:free', displayName: 'GPT-4o (free)', contextLength: 128000, promptPrice: 0, completionPrice: 0, isDefault: true, inputModalities: ['text'], supportsTools: false, supportsReasoning: false },
+      { id: 'openai/gpt-4o:free', displayName: 'GPT-4o (free)', contextLength: 128000, promptPrice: 0, completionPrice: 0, isDefault: true, inputModalities: ['text'], supportsTools: false, supportsReasoning: false, source: 'openrouter', serverId: null, serverName: null, contextWindow: null, capsKnown: true },
     ]);
 
     await call('POST', '/api/models', { id: '~anthropic/claude' });

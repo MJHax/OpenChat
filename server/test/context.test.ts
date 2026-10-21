@@ -10,7 +10,7 @@ let n = 0;
 function msg(role: Message['role'], content: string, extra: Partial<Message> = {}): Message {
   return {
     id: `m${n++}`, chatId: 'c', parentId: null, role, content, modelId: null, promptTokens: null, completionTokens: null, cost: null,
-    status: 'complete', createdAt: 0, attachments: [], webSearch: false, sources: [], webSearches: null, participantId: null, handoffTo: null, effort: null, ...extra,
+    status: 'complete', createdAt: 0, attachments: [], webSearch: false, sources: [], webSearches: null, participantId: null, handoffTo: null, effort: null, contextDropped: false, ...extra,
   };
 }
 const file = (kind: Attachment['kind'], id: string): Attachment => ({ id, kind, filename: `${id}.x`, mime: '', size: 0 });

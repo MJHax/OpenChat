@@ -1,5 +1,6 @@
 import type { ImageModel, ImageSettings } from './imageModels';
 import type { VideoModel } from './videoModels';
+import type { LocalServerType } from './localModels';
 
 export type MediaModel = ImageModel | VideoModel;
 
@@ -57,6 +58,8 @@ export interface Message {
   handoffTo: string | null;
   /** Assistant messages: the reasoning effort asked for; null when the model's default was used. */
   effort: Effort | null;
+  /** Assistant messages: whether older turns were left out to fit a local model's context window. */
+  contextDropped: boolean;
 }
 
 export interface DiscussionParticipant {
@@ -265,6 +268,13 @@ export interface LibraryModel {
   supportsTools: boolean;
   /** Whether it takes a reasoning effort; false when unknown. */
   supportsReasoning: boolean;
+  source: 'openrouter' | 'local';
+  serverId: string | null;
+  serverName: string | null;
+  /** Local models: the context window the app uses; null for OpenRouter models. */
+  contextWindow: number | null;
+  /** False when a local server does not report capabilities (OpenAI-compatible servers). */
+  capsKnown: boolean;
 }
 
 /** How hard a reasoning model thinks before answering; OpenRouter maps it to each provider's own setting. */
@@ -385,7 +395,7 @@ export interface StreamStart { userMessageId: string | null; assistantMessageId:
 export interface StreamDelta { text: string }
 export interface StreamReasoning { text: string }
 export interface StreamDone { message: Message }
-export interface StreamError { message: string; partial: Message | null }
+export interface StreamError { message: string; partial: Message | null; overflow?: ContextOverflow[] }
 export interface StreamTitle { title: string }
 
 // Server-sent events emitted when a generation endpoint is called with `modelIds` (a comparison)
@@ -587,4 +597,44 @@ export interface ContextUsage {
   estimated: boolean;
   /** Sums to `used`. Always approximate: OpenRouter reports one total, not a split. */
   parts: ContextParts;
+}
+
+export interface LocalServer {
+  id: string;
+  type: LocalServerType;
+  name: string;
+  baseUrl: string;
+  auto: boolean;
+  enabled: boolean;
+}
+
+export interface LocalServerStatus extends LocalServer {
+  online: boolean;
+  modelCount: number | null;
+  error: string | null;
+}
+
+export interface LocalModel {
+  id: string;
+  serverId: string;
+  name: string;
+  sizeBytes: number | null;
+  contextLength: number | null;
+  inputModalities: string[];
+  supportsTools: boolean;
+  supportsReasoning: boolean;
+  /** False for openai-type servers, which report no capabilities. */
+  capsKnown: boolean;
+}
+
+export interface LocalCatalog {
+  servers: LocalServerStatus[];
+  models: LocalModel[];
+}
+
+export interface ContextOverflow {
+  modelId: string;
+  displayName: string;
+  window: number;
+  estimate: number;
 }

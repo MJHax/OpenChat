@@ -16,7 +16,7 @@ let n = 0;
 const say = (who: DiscussionParticipant | null, content: string, handoffTo: string | null = null): Message => ({
   id: `m${n++}`, chatId: 'c', parentId: null, role: who ? 'assistant' : 'user', content, modelId: who?.modelId ?? null,
   promptTokens: null, completionTokens: null, cost: null, status: 'complete', createdAt: n, attachments: [], webSearch: false,
-  sources: [], webSearches: null, participantId: who?.id ?? null, handoffTo, effort: null,
+  sources: [], webSearches: null, participantId: who?.id ?? null, handoffTo, effort: null, contextDropped: false,
 });
 const host = (content: string) => say(null, content);
 

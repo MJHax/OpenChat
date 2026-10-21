@@ -3,7 +3,7 @@ import { cheapestModel, endText, initials, turnLabel } from './discussion';
 import type { LibraryModel } from '../../../shared/types';
 
 const model = (id: string, completionPrice: number | null, promptPrice: number | null = 0): LibraryModel => ({
-  id, displayName: id, contextLength: null, promptPrice, completionPrice, isDefault: false, inputModalities: ['text'], supportsTools: false, supportsReasoning: false,
+  id, displayName: id, contextLength: null, promptPrice, completionPrice, isDefault: false, inputModalities: ['text'], supportsTools: false, supportsReasoning: false, source: 'openrouter', serverId: null, serverName: null, contextWindow: null, capsKnown: true,
 });
 
 describe('cheapestModel', () => {

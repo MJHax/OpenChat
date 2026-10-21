@@ -3,7 +3,7 @@ import { initialModelId, pickMediaEntry, sortLibrary, sortMediaLibrary } from '.
 import type { VideoModel } from '../../../shared/videoModels';
 import type { LibraryModel, MediaLibraryModel, Message } from '../../../shared/types';
 
-const lib = (id: string, isDefault = false): LibraryModel => ({ id, displayName: id, contextLength: null, promptPrice: null, completionPrice: null, isDefault, inputModalities: ['text'], supportsTools: false, supportsReasoning: false });
+const lib = (id: string, isDefault = false): LibraryModel => ({ id, displayName: id, contextLength: null, promptPrice: null, completionPrice: null, isDefault, inputModalities: ['text'], supportsTools: false, supportsReasoning: false, source: 'openrouter', serverId: null, serverName: null, contextWindow: null, capsKnown: true });
 const reply = (modelId: string): Pick<Message, 'role' | 'modelId'> => ({ role: 'assistant', modelId });
 const models = [lib('a/one'), lib('b/two', true), lib('c/three')];
 

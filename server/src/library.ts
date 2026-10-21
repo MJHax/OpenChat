@@ -85,6 +85,7 @@ export function listLibrary(db: DB): LibraryModel[] {
     inputModalities: parseModalities(r.input_modalities),
     supportsTools: r.supports_tools === 1,
     supportsReasoning: r.supports_reasoning === 1,
+    source: 'openrouter', serverId: null, serverName: null, contextWindow: null, capsKnown: true,
   }));
 }
 

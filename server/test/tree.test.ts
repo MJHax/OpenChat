@@ -5,7 +5,7 @@ import type { Message } from '../../shared/types';
 let t = 0;
 const msg = (id: string, parentId: string | null, role: Message['role'] = 'user'): Message => ({
   id, chatId: 'c', parentId, role, content: id, modelId: null,
-  promptTokens: null, completionTokens: null, cost: null, status: 'complete', createdAt: ++t, attachments: [], webSearch: false, sources: [], webSearches: null, participantId: null, handoffTo: null, effort: null,
+  promptTokens: null, completionTokens: null, cost: null, status: 'complete', createdAt: ++t, attachments: [], webSearch: false, sources: [], webSearches: null, participantId: null, handoffTo: null, effort: null, contextDropped: false,
 });
 
 // u1 ─┬─ a1 ── u2 ── a3
