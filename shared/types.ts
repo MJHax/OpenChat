@@ -60,6 +60,15 @@ export interface Message {
   effort: Effort | null;
   /** Assistant messages: whether older turns were left out to fit a local model's context window. */
   contextDropped: boolean;
+  /** Local models' replies: how the reply went; null for OpenRouter replies, user messages and old rows. */
+  timing: ReplyTiming | null;
+}
+
+/** How a local model's reply went: the wait for the first token, the time to load the model, and generation speed. */
+export interface ReplyTiming {
+  firstTokenMs: number | null;
+  loadMs: number | null;
+  tokensPerSec: number | null;
 }
 
 export interface DiscussionParticipant {

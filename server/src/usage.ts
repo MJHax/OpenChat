@@ -2,6 +2,7 @@ import type { DB } from './db';
 import { cachedPrices } from './catalog';
 import type { Usage } from './openrouter';
 import type { ThreadKind } from '../../shared/types';
+import { parseLocalModelId } from '../../shared/localModels';
 
 export type UsagePurpose = 'reply' | 'title' | 'memory' | 'summary';
 export type ReplyKind = 'send' | 'edit' | 'regenerate';
@@ -54,6 +55,10 @@ export interface UsageRow {
   attachments: number;
   firstTokenMs: number | null;
   durationMs: number | null;
+  /** Local models: time spent loading the model into memory; null when it was already loaded or not reported. */
+  loadMs: number | null;
+  /** Local models: time spent generating; null for OpenRouter calls. */
+  generationMs: number | null;
   status: UsageStatus;
   backfilled: boolean;
   threadKind: ThreadKind;
@@ -67,18 +72,31 @@ export function cacheSavings(db: DB, modelId: string, cachedTokens: number | nul
   return cachedTokens * (prices.prompt - prices.cacheRead);
 }
 
+/**
+ * How long a local call spent generating: what the server reported, else the stream time after the first token.
+ * Null for OpenRouter models, whose generation time isn't known.
+ */
+export function generationMsFor(modelId: string, usage: Usage | null, firstTokenMs: number | null, durationMs: number | null): number | null {
+  if (parseLocalModelId(modelId) === null) return null;
+  if (usage?.generationMs != null) return usage.generationMs;
+  if (firstTokenMs === null || durationMs === null) return null;
+  const span = durationMs - firstTokenMs;
+  return span > 0 ? span : null;
+}
+
 export function recordUsage(db: DB, e: UsageEventInput): void {
   const u = e.usage;
   db.prepare(
     `INSERT INTO usage_events (created_at, purpose, chat_id, message_id, run_id, kind, compare, model_id, prompt_tokens, completion_tokens,
        cached_tokens, cache_write_tokens, reasoning_tokens, cost, cache_savings, web_search, web_searches, attachments, first_token_ms,
-       duration_ms, status, thread_kind)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       duration_ms, status, thread_kind, load_ms, generation_ms)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     e.createdAt, e.purpose, e.chatId, e.messageId, e.runId, e.kind, e.compare ? 1 : 0, e.modelId, u?.promptTokens ?? null,
     u?.completionTokens ?? null, u?.cachedTokens ?? null, u?.cacheWriteTokens ?? null, u?.reasoningTokens ?? null, u?.cost ?? null,
     cacheSavings(db, e.modelId, u?.cachedTokens ?? null), e.webSearch ? 1 : 0, e.webSearches, e.attachments, e.firstTokenMs,
-    e.durationMs, e.status, e.threadKind ?? 'chat',
+    e.durationMs, e.status, e.threadKind ?? 'chat', u?.loadMs ?? null,
+    generationMsFor(e.modelId, u, e.firstTokenMs, e.durationMs),
   );
 }
 
@@ -87,7 +105,8 @@ interface Raw {
   kind: ReplyKind | null; compare: number; model_id: string; prompt_tokens: number | null; completion_tokens: number | null;
   cached_tokens: number | null; cache_write_tokens: number | null; reasoning_tokens: number | null; cost: number | null;
   cache_savings: number | null; web_search: number; web_searches: number | null; attachments: number; first_token_ms: number | null;
-  duration_ms: number | null; status: UsageStatus; backfilled: number; thread_kind: ThreadKind;
+  duration_ms: number | null; status: UsageStatus; backfilled: number; thread_kind: ThreadKind; load_ms: number | null;
+  generation_ms: number | null;
 }
 
 const toRow = (r: Raw): UsageRow => ({
@@ -112,6 +131,8 @@ const toRow = (r: Raw): UsageRow => ({
   attachments: r.attachments,
   firstTokenMs: r.first_token_ms,
   durationMs: r.duration_ms,
+  loadMs: r.load_ms,
+  generationMs: r.generation_ms,
   status: r.status,
   backfilled: r.backfilled === 1,
   threadKind: r.thread_kind ?? 'chat',

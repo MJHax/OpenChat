@@ -136,6 +136,8 @@ CREATE TABLE IF NOT EXISTS usage_events (
   attachments INTEGER NOT NULL DEFAULT 0,
   first_token_ms INTEGER,
   duration_ms INTEGER,
+  load_ms INTEGER,
+  generation_ms INTEGER,
   status TEXT NOT NULL CHECK (status IN ('complete', 'stopped', 'error')),
   backfilled INTEGER NOT NULL DEFAULT 0,
   -- Which kind of thread the call belonged to ('chat', 'image', 'video'), so title calls count under the right stats.
@@ -266,6 +268,8 @@ function migrate(db: DB): void {
   allowSummaryUsage(db);
   const usageColumns = (db.prepare('PRAGMA table_info(usage_events)').all() as { name: string }[]).map((c) => c.name);
   if (!usageColumns.includes('thread_kind')) db.exec("ALTER TABLE usage_events ADD COLUMN thread_kind TEXT NOT NULL DEFAULT 'chat'");
+  if (!usageColumns.includes('load_ms')) db.exec('ALTER TABLE usage_events ADD COLUMN load_ms INTEGER');
+  if (!usageColumns.includes('generation_ms')) db.exec('ALTER TABLE usage_events ADD COLUMN generation_ms INTEGER');
   const modelColumns = (db.prepare('PRAGMA table_info(models)').all() as { name: string }[]).map((c) => c.name);
   if (!modelColumns.includes('input_modalities')) db.exec('ALTER TABLE models ADD COLUMN input_modalities TEXT');
   if (!modelColumns.includes('supports_tools')) db.exec('ALTER TABLE models ADD COLUMN supports_tools INTEGER');
@@ -279,6 +283,9 @@ function migrate(db: DB): void {
   if (!messageColumns.includes('handoff_to')) db.exec('ALTER TABLE messages ADD COLUMN handoff_to TEXT');
   if (!messageColumns.includes('effort')) db.exec('ALTER TABLE messages ADD COLUMN effort TEXT');
   if (!messageColumns.includes('context_dropped')) db.exec('ALTER TABLE messages ADD COLUMN context_dropped INTEGER NOT NULL DEFAULT 0');
+  if (!messageColumns.includes('first_token_ms')) db.exec('ALTER TABLE messages ADD COLUMN first_token_ms INTEGER');
+  if (!messageColumns.includes('load_ms')) db.exec('ALTER TABLE messages ADD COLUMN load_ms INTEGER');
+  if (!messageColumns.includes('generation_ms')) db.exec('ALTER TABLE messages ADD COLUMN generation_ms INTEGER');
   const videoJobColumns = (db.prepare('PRAGMA table_info(video_jobs)').all() as { name: string }[]).map((c) => c.name);
   if (!videoJobColumns.includes('download_failed_at')) db.exec('ALTER TABLE video_jobs ADD COLUMN download_failed_at INTEGER');
   const attachmentColumns = (db.prepare('PRAGMA table_info(attachments)').all() as { name: string }[]).map((c) => c.name);

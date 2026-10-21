@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { openDb, type DB } from '../src/db';
 import { createChat, deleteChat } from '../src/chats';
 import { insertMessage } from '../src/messages';
-import { cacheSavings, loadUsageRows, recordUsage, type UsageEventInput } from '../src/usage';
+import { cacheSavings, generationMsFor, loadUsageRows, recordUsage, type UsageEventInput } from '../src/usage';
 
 const event = (over: Partial<UsageEventInput> = {}): UsageEventInput => ({
   purpose: 'reply', chatId: null, messageId: null, runId: 'run-1', kind: 'send', compare: false, modelId: 'a/b',
@@ -103,5 +103,37 @@ describe('usage backfill', () => {
 
   it('copies nothing into a fresh database', () => {
     expect(loadUsageRows(openDb(':memory:'), null)).toEqual([]);
+  });
+});
+
+describe('generationMsFor', () => {
+  const usage = (generationMs: number | null) => ({ promptTokens: 1, completionTokens: 1, cost: 0, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs });
+
+  it('is null for OpenRouter models', () => {
+    expect(generationMsFor('openai/gpt-4o', usage(400), 300, 1300)).toBeNull();
+  });
+
+  it('prefers the time the server reported', () => {
+    expect(generationMsFor('local:s1:qwen', usage(400), 300, 1300)).toBe(400);
+  });
+
+  it('falls back to the stream time after the first token', () => {
+    expect(generationMsFor('local:s1:qwen', usage(null), 300, 1300)).toBe(1000);
+    expect(generationMsFor('local:s1:qwen', null, 300, 1300)).toBe(1000);
+  });
+
+  it('is null when the first token never came or the span is not positive', () => {
+    expect(generationMsFor('local:s1:qwen', usage(null), null, 1300)).toBeNull();
+    expect(generationMsFor('local:s1:qwen', usage(null), 1300, 1300)).toBeNull();
+  });
+});
+
+describe('recordUsage timings', () => {
+  it('round-trips load and generation time', () => {
+    const db = openDb(':memory:');
+    const usage = { promptTokens: 1, completionTokens: 5, cost: 0, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: 1500, generationMs: 400 };
+    recordUsage(db, event({ modelId: 'local:s1:qwen', usage }));
+    recordUsage(db, event({ modelId: 'a/b' }));
+    expect(loadUsageRows(db, null).map((r) => [r.loadMs, r.generationMs])).toEqual([[1500, 400], [null, null]]);
   });
 });

@@ -225,6 +225,26 @@ describe('web search storage', () => {
     expect(getMessage(db, 'm1')).toMatchObject({ webSearch: false, sources: [], webSearches: null });
     db.close();
   });
+
+  it('adds the timing columns to old databases, and old messages read timing: null', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'openchat-')), 'old.db');
+    const old = new Database(file);
+    old.exec(`
+      CREATE TABLE chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, active_leaf_id TEXT);
+      CREATE TABLE messages (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, chat_id TEXT NOT NULL, parent_id TEXT,
+        role TEXT NOT NULL, content TEXT NOT NULL, model_id TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, cost REAL,
+        status TEXT NOT NULL DEFAULT 'complete', created_at INTEGER NOT NULL);
+      INSERT INTO chats VALUES ('c1', 'Old', 1, 1, 'm1');
+      INSERT INTO messages (id, chat_id, parent_id, role, content, completion_tokens, created_at) VALUES ('m1', 'c1', NULL, 'assistant', 'hi', 20, 1);
+    `);
+    old.close();
+    const db = openDb(file);
+    const cols = (table: string) => (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+    expect(cols('messages')).toEqual(expect.arrayContaining(['first_token_ms', 'load_ms', 'generation_ms']));
+    expect(cols('usage_events')).toEqual(expect.arrayContaining(['load_ms', 'generation_ms']));
+    expect(getMessage(db, 'm1')?.timing).toBeNull();
+    db.close();
+  });
 });
 
 describe('discussion storage', () => {

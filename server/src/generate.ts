@@ -14,7 +14,7 @@ import { buildMessages, pdfPlugins, withCacheMarkers, type ChatMessage, type Plu
 import { chatPersona } from './settings';
 import { maybeGenerateTitle } from './title';
 import { activePath } from './tree';
-import { recordUsage, type ReplyKind, type UsageStatus } from './usage';
+import { generationMsFor, recordUsage, type ReplyKind, type UsageStatus } from './usage';
 import type { Effort, Message, MessageStatus, Source, StreamDone, StreamError, StreamStart, StreamTitle } from '../../shared/types';
 
 export function replyErrorMessage(err: unknown): string {
@@ -90,12 +90,24 @@ export function callTimer() {
   const startedAt = now();
   const t0 = Date.now();
   let firstTokenMs: number | null = null;
+  let ended: { firstTokenMs: number | null; durationMs: number } | undefined;
   return {
     startedAt,
     token() {
       firstTokenMs ??= Date.now() - t0;
     },
-    finish: () => ({ firstTokenMs, durationMs: Date.now() - t0 }),
+    /** Ends the timing; later calls return the same numbers, so the saved reply and its usage row agree. */
+    finish: () => (ended ??= { firstTokenMs, durationMs: Date.now() - t0 }),
+  };
+}
+
+/** The timing columns of a saved reply: all null for OpenRouter models, whose replies carry no timing. */
+export function timingFields(modelId: string, usage: Usage | null, t: { firstTokenMs: number | null; durationMs: number }) {
+  const local = isLocalModelId(modelId);
+  return {
+    firstTokenMs: local ? t.firstTokenMs : null,
+    loadMs: usage?.loadMs ?? null,
+    generationMs: generationMsFor(modelId, usage, t.firstTokenMs, t.durationMs),
   };
 }
 
@@ -170,6 +182,7 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
         webSearches: searchCount(prompt.webSearch, usage, sources),
         effort: prompt.effort ?? null,
         contextDropped: o.droppedModelIds?.has(o.modelId) ?? false,
+        ...timingFields(o.modelId, usage, timer.finish()),
       });
       setActiveLeaf(db, o.chatId, message.id);
       touchChat(db, o.chatId);

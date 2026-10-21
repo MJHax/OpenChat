@@ -16,7 +16,7 @@ const ev = (over: Partial<MediaEventRow> = {}): MediaEventRow => ({
 const titleRow = (cost: number, threadKind: UsageRow['threadKind']): UsageRow => ({
   id: 1, createdAt: NOW - HOUR, purpose: 'title', chatId: 't1', messageId: null, runId: null, kind: null, compare: false, modelId: 'm/x',
   promptTokens: 30, completionTokens: 4, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, cost, cacheSavings: null,
-  webSearch: false, webSearches: null, attachments: 0, firstTokenMs: null, durationMs: null, status: 'complete', backfilled: false, threadKind,
+  webSearch: false, webSearches: null, attachments: 0, firstTokenMs: null, durationMs: null, loadMs: null, generationMs: null, status: 'complete', backfilled: false, threadKind,
 });
 
 const stats = (events: MediaEventRow[], titleRows: UsageRow[] = [], range: StatsRange = 'all') =>

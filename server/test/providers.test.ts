@@ -22,8 +22,8 @@ const MODELS = [
 ];
 
 /** An app with no OpenRouter key and an Ollama fake whose two models are in My models. */
-async function setup(openrouter: Parameters<typeof makeApp>[0] = {}, env: Parameters<typeof makeApp>[1] = {}) {
-  fake = await startFakeLocalServer({ flavor: 'ollama', models: MODELS });
+async function setup(openrouter: Parameters<typeof makeApp>[0] = {}, env: Parameters<typeof makeApp>[1] = {}, models: typeof MODELS = MODELS) {
+  fake = await startFakeLocalServer({ flavor: 'ollama', models });
   const app = makeApp(openrouter, env);
   const server = addServer(app.db, { type: 'ollama', name: 'Ollama', baseUrl: fake.url, auto: false });
   const ids = { qwen: localModelId(server.id, 'qwen3:1.7b'), gemma: localModelId(server.id, 'gemma3:1b') };
@@ -170,6 +170,67 @@ describe('local model routing', () => {
     expect(body.think).toBe(false);
     expect(body.model).toBe('qwen3:1.7b');
     expect(body.stream).toBe(false);
+  });
+});
+
+describe('reply timings', () => {
+  const SLOW = [{ ...MODELS[0], loadMs: 1200 }, MODELS[1]];
+  const usageRows = (s: Awaited<ReturnType<typeof setup>>) =>
+    s.db.prepare('SELECT message_id, load_ms, generation_ms FROM usage_events WHERE purpose = ? ORDER BY id').all('reply') as
+      { message_id: string; load_ms: number | null; generation_ms: number | null }[];
+
+  it('saves load time and speed on a local reply and its usage row', async () => {
+    const s = await setup({}, {}, SLOW);
+    s.fake.reply({ text: ['Hi'], promptTokens: 10, completionTokens: 20, evalMs: 500 });
+    s.fake.reply({ text: ['Title'] });
+    const events = await readEvents(await send(s, { modelId: s.ids.qwen }));
+    const msg = events.find((e) => e.event === 'done')!.data.message;
+    expect(msg.timing.loadMs).toBeGreaterThanOrEqual(1200);
+    expect(msg.timing.tokensPerSec).toBe(40);
+    expect(typeof msg.timing.firstTokenMs).toBe('number');
+    const [row] = usageRows(s);
+    expect(row).toEqual({ message_id: msg.id, load_ms: msg.timing.loadMs, generation_ms: 500 });
+  });
+
+  it('records timings for a compare slot', async () => {
+    const s = await setup({}, {}, SLOW);
+    s.fake.reply({ text: ['A'], completionTokens: 10, evalMs: 500 });
+    s.fake.reply({ text: ['B'], completionTokens: 10, evalMs: 500 });
+    const events = await readEvents(await send(s, { modelIds: [s.ids.gemma, s.ids.qwen] }));
+    const messages = events.filter((e) => e.event === 'slot-done').map((e) => e.data.message);
+    expect(messages).toHaveLength(2);
+    for (const m of messages) expect(m.timing).toMatchObject({ tokensPerSec: 20 });
+    expect(usageRows(s).map((r) => r.generation_ms)).toEqual([500, 500]);
+  });
+
+  it('records timings for a discussion turn', async () => {
+    const s = await setup();
+    const created = (await (await s.call('POST', '/api/discussions', {
+      topic: 'Eggs', turnLimit: 4,
+      participants: [
+        { name: 'A', modelId: s.ids.gemma, instructions: 'Argue yes.', isModerator: false },
+        { name: 'B', modelId: s.ids.qwen, instructions: 'Argue no.', isModerator: false },
+      ],
+    })).json()) as DiscussionDetail;
+    s.fake.reply({ text: ['Yes'], completionTokens: 50, evalMs: 500 });
+    const turn = await readEvents(await s.call('POST', `/api/discussions/${created.chat.id}/turn`));
+    const msg = turn.find((e) => e.event === 'done')!.data.message;
+    expect(msg.timing).toMatchObject({ tokensPerSec: 100 });
+    expect(usageRows(s)[0].generation_ms).toBe(500);
+  });
+
+  it('leaves OpenRouter replies without timing', async () => {
+    const s = await setup({
+      streamChat: async function* () {
+        yield { type: 'delta', text: 'ok' };
+        yield { type: 'usage', usage: { promptTokens: 5, completionTokens: 5, cost: 0.01, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null } };
+      },
+    }, { OPENROUTER_API_KEY: 'sk-or-test-1234567890' });
+    const events = await readEvents(await send(s, { modelId: 'openai/gpt-4o' }));
+    const msg = events.find((e) => e.event === 'done')!.data.message;
+    expect(msg.timing).toBeNull();
+    expect(s.db.prepare('SELECT first_token_ms, load_ms, generation_ms FROM messages WHERE id = ?').get(msg.id)).toEqual({ first_token_ms: null, load_ms: null, generation_ms: null });
+    expect(usageRows(s)[0]).toMatchObject({ load_ms: null, generation_ms: null });
   });
 });
 

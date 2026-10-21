@@ -3,7 +3,7 @@ import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 import type { Deps } from './app';
 import { newId } from './db';
 import { getChatRow, setActiveLeaf, setCompareParent, touchChat } from './chats';
-import { callTimer, failureStatus, saveIfChatExists, mergeSources, promptFor, replyErrorMessage, searchCount, thinkFor } from './generate';
+import { callTimer, failureStatus, timingFields, saveIfChatExists, mergeSources, promptFor, replyErrorMessage, searchCount, thinkFor } from './generate';
 import { recordUsage, type ReplyKind, type UsageStatus } from './usage';
 import { insertMessage } from './messages';
 import type { Usage } from './openrouter';
@@ -121,6 +121,7 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
         webSearches: searchCount(prompt.webSearch, usage, sources),
         effort: prompt.effort ?? null,
         contextDropped: o.droppedModelIds?.has(slot.modelId) ?? false,
+        ...timingFields(slot.modelId, usage, timer.finish()),
       });
 
     let resolved = false;

@@ -7,7 +7,7 @@ import { getChatMessages, insertMessage } from '../messages';
 import type { Usage } from '../openrouter';
 import { chatProvider } from '../providers';
 import { recordUsage, type UsageStatus } from '../usage';
-import { callTimer, failureStatus, replyErrorMessage, saveIfChatExists } from '../generate';
+import { callTimer, failureStatus, timingFields, replyErrorMessage, saveIfChatExists } from '../generate';
 import { buildDiscussionPrompt, cleanReply, moderatorTools, nextSpeaker, readToolCall, turnsTaken } from './engine';
 import { discussionState, getDiscussionRow, getParticipants, setStatus } from './store';
 import type {
@@ -64,6 +64,7 @@ export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () 
         id: messageId, chatId, parentId: getChatRow(db, chatId)?.active_leaf_id ?? null, role: 'assistant', content,
         modelId: speaker.modelId, promptTokens: usage?.promptTokens ?? null, completionTokens: usage?.completionTokens ?? null,
         cost: usage?.cost ?? null, status, participantId: speaker.id, handoffTo,
+        ...timingFields(speaker.modelId, usage, timer.finish()),
       });
       setActiveLeaf(db, chatId, message.id);
       touchChat(db, chatId);

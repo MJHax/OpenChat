@@ -31,6 +31,15 @@ describe('POST /api/chats/:id/fork', () => {
     expect(fork.messages[1].contextDropped).toBe(true);
   });
 
+  it('keeps the timing of copied replies', async () => {
+    const ctx = makeApp();
+    const { chat, a1 } = await branchedChat(ctx);
+    ctx.db.prepare('UPDATE messages SET first_token_ms = 300, load_ms = 1500, generation_ms = 500, completion_tokens = 20 WHERE id = ?').run(a1.id);
+    const created = (await (await ctx.call('POST', `/api/chats/${chat.id}/fork`, { messageId: a1.id })).json()) as ChatSummary;
+    const fork = await detailOf(ctx.call, created.id);
+    expect(fork.messages[1].timing).toEqual({ firstTokenMs: 300, loadMs: 1500, tokensPerSec: 40 });
+  });
+
   it('copies the path up to the message into a new chat, with files and instructions', async () => {
     const ctx = makeApp();
     const { chat, file, a1 } = await branchedChat(ctx);

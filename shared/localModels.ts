@@ -14,6 +14,9 @@ export const DETECT_CANDIDATES: { type: 'ollama' | 'lmstudio'; baseUrl: string }
 
 export const DEFAULT_LOCAL_WINDOW = 16_384;
 
+/** A local model's load time shows on a reply and counts in Stats only from here up; less means it was already in memory. */
+export const COLD_LOAD_MS = 1_000;
+
 const PREFIX = 'local:';
 
 /** Local model ids are `local:<serverId>:<name>`; server ids never contain a colon, names may. */
