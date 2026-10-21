@@ -22,6 +22,15 @@ async function branchedChat(ctx: ReturnType<typeof makeApp>) {
 }
 
 describe('POST /api/chats/:id/fork', () => {
+  it('keeps the lost-context mark on copied replies', async () => {
+    const ctx = makeApp();
+    const { chat, a1 } = await branchedChat(ctx);
+    ctx.db.prepare('UPDATE messages SET context_dropped = 1 WHERE id = ?').run(a1.id);
+    const created = (await (await ctx.call('POST', `/api/chats/${chat.id}/fork`, { messageId: a1.id })).json()) as ChatSummary;
+    const fork = await detailOf(ctx.call, created.id);
+    expect(fork.messages[1].contextDropped).toBe(true);
+  });
+
   it('copies the path up to the message into a new chat, with files and instructions', async () => {
     const ctx = makeApp();
     const { chat, file, a1 } = await branchedChat(ctx);
