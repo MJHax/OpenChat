@@ -324,6 +324,16 @@ describe('cleanTitle', () => {
     expect(cleanTitle('## **Rust lifetimes**\nextra')).toBe('Rust lifetimes');
     expect(cleanTitle('   ')).toBe('');
   });
+
+  it('skips preamble lines from small models', () => {
+    expect(cleanTitle("Here's a title:\n\nRayleigh Scattering Explained")).toBe('Rayleigh Scattering Explained');
+    expect(cleanTitle('Sure! Here is a concise title:\n**Cats vs Dogs**')).toBe('Cats vs Dogs');
+  });
+
+  it('strips a leading Title: label', () => {
+    expect(cleanTitle('Title: Sky Colors')).toBe('Sky Colors');
+    expect(cleanTitle('title: Sky Colors')).toBe('Sky Colors');
+  });
 });
 
 describe('attachments in prompts', () => {

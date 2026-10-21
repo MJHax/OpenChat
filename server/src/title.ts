@@ -12,8 +12,11 @@ import { spendBlock } from './limits';
 import { isLocalModelId } from '../../shared/localModels';
 
 export function cleanTitle(raw: string): string {
-  const firstLine = raw.trim().split('\n')[0] ?? '';
-  return firstLine
+  const lines = raw.trim().split('\n').map((line) => line.trim()).filter((line) => line !== '');
+  // Small models often open with a preamble ("Here's a title:") before the title itself.
+  const answer = lines.find((line) => !line.endsWith(':')) ?? lines[0] ?? '';
+  return answer
+    .replace(/^title:\s*/i, '')
     .replace(/^["'`*#\s]+/, '')
     .replace(/["'`*.\s]+$/, '')
     .slice(0, 80);
