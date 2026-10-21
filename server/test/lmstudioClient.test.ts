@@ -264,6 +264,13 @@ describe('LM Studio load timings', () => {
     expect(await client.loadState('cold')).toBeNull();
   });
 
+  it('gives up on a slow listing after 1.5 s in loadState', async () => {
+    const client = await startTimed({ listDelayMs: 2000 });
+    const started = Date.now();
+    expect(await client.loadState('cold')).toBeNull();
+    expect(Date.now() - started).toBeLessThan(1900);
+  });
+
   it('waits up to 10 s for a slow pre-chat listing before the load request', async () => {
     const client = await startTimed({ listDelayMs: 2000 });
     await usageOf(client, 'cold');

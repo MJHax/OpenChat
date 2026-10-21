@@ -29,7 +29,7 @@ export function createLmStudioClient(server: { name: string; baseUrl: string }, 
 
     async loadState(model): Promise<LoadState | null> {
       try {
-        const info = (await fetchModels(PREPARE_TIMEOUT_MS)).find((m) => m.key === model);
+        const info = (await fetchModels()).find((m) => m.key === model);
         if (!info) return null;
         const instances: any[] = info.loaded_instances ?? [];
         const ctx = instances[0]?.config?.context_length;
