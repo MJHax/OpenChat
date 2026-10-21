@@ -333,6 +333,9 @@ describe('cleanTitle', () => {
   it('strips a leading Title: label', () => {
     expect(cleanTitle('Title: Sky Colors')).toBe('Sky Colors');
     expect(cleanTitle('title: Sky Colors')).toBe('Sky Colors');
+    expect(cleanTitle('**Title:** Foo')).toBe('Foo');
+    expect(cleanTitle('**Title: Foo**')).toBe('Foo');
+    expect(cleanTitle('## Title: Foo')).toBe('Foo');
   });
 });
 

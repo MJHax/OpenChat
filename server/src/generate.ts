@@ -46,7 +46,7 @@ export function promptFor(deps: Deps, chatId: string, parentId: string, modelId:
   const messages = buildMessages(chatPersona(db, chatId), path, { inputModalities, loadData }, { imageNames: chatImageNames(db, chatId) }, note);
   return {
     messages: withCacheMarkers(modelId, messages), plugins: pdfPlugins(path, inputModalities), webSearch,
-    effort: effort && modelSupportsReasoning(db, modelId) ? effort : undefined,
+    effort: effort && !isLocalModelId(modelId) && modelSupportsReasoning(db, modelId) ? effort : undefined,
   };
 }
 

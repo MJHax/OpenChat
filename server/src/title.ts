@@ -16,6 +16,7 @@ export function cleanTitle(raw: string): string {
   // Small models often open with a preamble ("Here's a title:") before the title itself.
   const answer = lines.find((line) => !line.endsWith(':')) ?? lines[0] ?? '';
   return answer
+    .replace(/^[*_#\s]+/, '') // emphasis or heading marks may sit before the label: "**Title:** Foo"
     .replace(/^title:\s*/i, '')
     .replace(/^["'`*#\s]+/, '')
     .replace(/["'`*.\s]+$/, '')

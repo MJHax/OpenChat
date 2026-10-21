@@ -82,6 +82,12 @@ describe('local model routing', () => {
     expect(chatBodies(s.fake)).toHaveLength(0);
   });
 
+  it('does not label a local reasoning reply with an effort', async () => {
+    const s = await setup();
+    const events = await readEvents(await send(s, { modelId: s.ids.qwen, effort: 'high' }));
+    expect(events.find((e) => e.event === 'done')!.data.message.effort).toBeNull();
+  });
+
   it('regenerates and edits with a local model', async () => {
     const s = await setup();
     const sent = await readEvents(await send(s, { modelId: s.ids.gemma }));
