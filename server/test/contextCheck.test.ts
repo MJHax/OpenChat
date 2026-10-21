@@ -57,8 +57,10 @@ describe('the check before sending', () => {
     expect(body.overflow[0]).toMatchObject({ modelId: s.ids.small, displayName: 'small', window: 2048 });
     expect(body.overflow[0].estimate).toBeGreaterThan(2048);
     expect((await detail(s)).messages).toHaveLength(before);
-    // the chat is released: a later send is not told a reply is still running
-    expect((await send(s, { modelId: s.ids.small })).status).toBe(409);
+    // the chat is released: a leaked lock would answer 409 "still being generated" here
+    const again = await send(s, { modelId: s.ids.small, allowOverflow: true });
+    expect(again.status).toBe(200);
+    expect((await readEvents(again)).some((e) => e.event === 'done')).toBe(true);
   });
 
   it('sends anyway when allowed, marking the reply as having lost context', async () => {
@@ -118,5 +120,26 @@ describe('the check before sending', () => {
     expect(((await res.json()) as any).overflow[0].modelId).toBe(s.ids.small);
     const ok = await s.call('POST', `/api/chats/${s.chatId}/continue`, { modelId: s.ids.small, allowOverflow: true });
     expect(ok.status).toBe(201);
+  });
+
+  it('checks an edit against the path before the edited message, not the old text', async () => {
+    const s = await setup();
+    const { u } = longChat(s); // the long part is the message being edited; its parent is null
+    const short = await s.call('POST', `/api/chats/${s.chatId}/edit`, { messageId: u.id, content: 'Short now', modelId: s.ids.small });
+    expect(short.status).toBe(200);
+    await readEvents(short);
+    const t = await setup();
+    const { u: u2 } = longChat(t);
+    const long = await t.call('POST', `/api/chats/${t.chatId}/edit`, { messageId: u2.id, content: LONG, modelId: t.ids.small, allowOverflow: true });
+    expect(long.status).toBe(200);
+    const done = (await readEvents(long)).find((e) => e.event === 'done')!.data.message as Message;
+    expect(done.contextDropped).toBe(true);
+  });
+
+  it('rejects a non-boolean allowOverflow', async () => {
+    const s = await setup();
+    const res = await send(s, { modelId: s.ids.small, allowOverflow: 'yes' });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as any).error).toBe('allowOverflow must be true or false.');
   });
 });

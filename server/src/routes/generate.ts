@@ -87,6 +87,7 @@ export function generationRoutes(deps: Deps): Hono {
    */
   function checkOverflow(chatId: string, allowOverflow: unknown, o: Parameters<typeof contextOverflow>[1]): Set<string> {
     try {
+      if (allowOverflow !== undefined && typeof allowOverflow !== 'boolean') throw new HttpError(400, 'allowOverflow must be true or false.');
       const overflow = contextOverflow(db, o);
       if (overflow.length && allowOverflow !== true) throw new HttpError(409, overflowMessage(overflow), { overflow });
       return new Set(overflow.map((x) => x.modelId));
