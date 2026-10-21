@@ -1,3 +1,4 @@
+import { NEEDS_KEY } from '../lib/needsKey';
 import { snapVideoSettings, usd, videoPrice, type VideoModel, type VideoSettings } from '../../../shared/videoModels';
 import type { Attachment, MediaLibraryModel } from '../../../shared/types';
 import { FrameSlot } from './FrameSlot';
@@ -83,7 +84,7 @@ export function VideoComposer(p: Props) {
             {price.nextSteps.map((n) => ` · ${n.label === 'sound' ? 'sound' : n.label} would add ${usd(n.extra)}`).join('')}
           </div>
         )}
-        {reason && <div className="composer-hint">{reason === 'Needs an OpenRouter key.' ? <a href="#/settings">{reason}</a> : reason}</div>}
+        {reason && <div className="composer-hint">{reason === NEEDS_KEY ? <a href="#/settings">{reason}</a> : reason}</div>}
       </div>
     </div>
   );

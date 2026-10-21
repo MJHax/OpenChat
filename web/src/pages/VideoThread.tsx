@@ -1,3 +1,4 @@
+import { NEEDS_KEY } from '../lib/needsKey';
 import { useEffect, useRef, useState } from 'react';
 import { defaultVideoSettings, snapVideoSettings, usd, type VideoModel, type VideoSettings } from '../../../shared/videoModels';
 import type { Attachment, ChatDetail, MediaLibraryModel, PathMessage, SettingsView } from '../../../shared/types';
@@ -152,7 +153,7 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
     if (threadId) setDetail(await api.selectMessage(threadId, id).catch(() => detail));
   };
   const nameOf = (id: string) => library.find((e) => e.id === id)?.displayName ?? id;
-  const blocked = appSettings && !appSettings.hasApiKey ? 'Needs an OpenRouter key.'
+  const blocked = appSettings && !appSettings.hasApiKey ? NEEDS_KEY
     : rendering ? 'A clip is still rendering in this thread.' : sending ? '' : null;
 
   return (

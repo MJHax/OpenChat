@@ -1,3 +1,4 @@
+import { NEEDS_KEY } from '../lib/needsKey';
 import { useRef } from 'react';
 import { canGenerate, estimateImageCost, snapSettings, type ImageModel, type ImageSettings } from '../../../shared/imageModels';
 import type { Attachment, MediaLibraryModel } from '../../../shared/types';
@@ -99,7 +100,7 @@ export function ImageComposer(p: Props) {
             Generate{price?.cost != null ? ` · ${price.estimated ? '~' : ''}${money(price.cost)}` : ''}
           </button>
         </div>
-        {reason && <div className="composer-hint">{reason === 'Needs an OpenRouter key.' ? <a href="#/settings">{reason}</a> : reason}</div>}
+        {reason && <div className="composer-hint">{reason === NEEDS_KEY ? <a href="#/settings">{reason}</a> : reason}</div>}
       </div>
     </div>
   );

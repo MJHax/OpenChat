@@ -1,3 +1,4 @@
+import { NEEDS_KEY } from '../lib/needsKey';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { defaultSettings, snapSettings, type ImageModel, type ImageSettings } from '../../../shared/imageModels';
 import type { Attachment, ChatDetail, ImageGeneration, MediaLibraryModel, PathMessage, SettingsView } from '../../../shared/types';
@@ -185,7 +186,7 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
   };
 
   const nameOf = (id: string) => library.find((e) => e.id === id)?.displayName ?? id;
-  const blocked = appSettings && !appSettings.hasApiKey ? 'Needs an OpenRouter key.'
+  const blocked = appSettings && !appSettings.hasApiKey ? NEEDS_KEY
     : running ? 'An image is still being made in this thread.' : sending ? '' : null;
 
   return (

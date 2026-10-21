@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Attachment, ChatDetail, ContextOverflow, Effort, LibraryModel, LocalServerStatus, Message, SettingsView } from '../../../shared/types';
 import { ApiError, api, streamComparison, streamGeneration } from '../api';
 import { ContextOverflowDialog } from './ContextOverflowDialog';
+import { draftAfterFailedSend } from '../lib/overflow';
 import { COMPARE_OFF, compareModels, loadCompare, saveCompare, type CompareState } from '../lib/compare';
 import { initialModelId } from '../lib/models';
 import { loadSearch, saveSearch } from '../lib/search';
@@ -396,7 +397,11 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     const opts = ask.opts;
     setOverflowAsk(null);
     if (opts.kind !== 'regenerate') setPrefill((p) => ({ nonce: (p?.nonce ?? 0) + 1, text: '', clear: true }));
-    if (!(await run(opts, true)) && opts.kind === 'edit') setFailedEdit({ messageId: opts.messageId, text: opts.text, attachments: opts.attachments });
+    if (await run(opts, true)) return;
+    // Nothing was saved: give the draft back.
+    if (opts.kind === 'edit') setFailedEdit({ messageId: opts.messageId, text: opts.text, attachments: opts.attachments });
+    const back = draftAfterFailedSend(opts);
+    if (back) setPrefill((p) => ({ nonce: (p?.nonce ?? 0) + 1, text: back.text, attachments: back.attachments }));
   };
   const regenerate = (index: number, model: string | null) => {
     const list = model ? [model] : compareList;
@@ -506,7 +511,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
               <div className="setup-hint">
                 <div>Add a model in the <a href="#/models">Model Library</a> to start chatting. You can use an OpenRouter key, or a local server like Ollama or LM Studio.</div>
                 {localFound && (
-                  <div><a href="#/models">{localFound.name} found with {localFound.modelCount ?? 0} {localFound.modelCount === 1 ? 'model' : 'models'}.</a></div>
+                  <div><a href="#/models">{localFound.name} found{localFound.modelCount === null ? '' : ` with ${localFound.modelCount} ${localFound.modelCount === 1 ? 'model' : 'models'}`}.</a></div>
                 )}
               </div>
             )}
