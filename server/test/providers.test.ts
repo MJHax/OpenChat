@@ -58,6 +58,21 @@ describe('local model routing', () => {
     expect(events.filter((e) => e.event === 'slot-error')).toHaveLength(0);
   });
 
+  it('never counts a local reply as web-searched, even for a web-searched message', async () => {
+    const s = await setup();
+    const sent = await readEvents(await send(s, { modelId: s.ids.gemma, webSearch: true }));
+    expect(sent.find((e) => e.event === 'done')!.data.message.webSearch).toBe(false);
+    const userId = sent.find((e) => e.event === 'start')!.data.userMessageId;
+    const regen = await readEvents(await s.call('POST', `/api/chats/${s.chatId}/regenerate`, { parentId: userId, modelId: s.ids.qwen }));
+    expect(regen.find((e) => e.event === 'done')!.data.message.webSearch).toBe(false);
+    const bodies = chatBodies(s.fake);
+    for (const b of bodies) {
+      expect(b).not.toHaveProperty('tools');
+      expect(JSON.stringify(b)).not.toMatch(/search/i);
+    }
+    expect(s.db.prepare('SELECT COUNT(*) AS n FROM usage_events WHERE web_search = 1').get()).toEqual({ n: 0 });
+  });
+
   it('regenerates and edits with a local model', async () => {
     const s = await setup();
     const sent = await readEvents(await send(s, { modelId: s.ids.gemma }));

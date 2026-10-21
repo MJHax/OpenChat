@@ -229,7 +229,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       userAttachments: opts.kind === 'regenerate' ? [] : opts.attachments,
       startedAt: Date.now(),
       // Regenerate searches again only if the message being answered asked for search.
-      webSearch: opts.kind === 'regenerate' ? messages.find((m) => m.id === opts.parentId)?.webSearch ?? false : sendSearch,
+      webSearch: opts.kind === 'regenerate' ? messages.find((m) => m.id === opts.parentId)?.webSearch && searchAllowed(models, opts.models) || false : sendSearch,
       slots: opts.models.map((id) => ({ modelId: id, text: '', reasoning: '', error: null, message: null, done: false })),
     });
     const updateSlot = (slot: number, change: (s: SlotState) => SlotState) => {

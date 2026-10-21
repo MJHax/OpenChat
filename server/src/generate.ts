@@ -40,7 +40,8 @@ export function promptFor(deps: Deps, chatId: string, parentId: string, modelId:
   const path = activePath(getChatMessages(db, chatId), parentId);
   const inputModalities = modelModalities(db, modelId);
   const loadData = (id: string) => getAttachmentData(db, id) ?? Buffer.alloc(0);
-  const webSearch = path.at(-1)?.webSearch ? (modelSupportsTools(db, modelId) ? 'tool' : 'plugin') : undefined;
+  // Local models never search yet (local web search arrives in stage 3), even when the message asked for it.
+  const webSearch = path.at(-1)?.webSearch && !isLocalModelId(modelId) ? (modelSupportsTools(db, modelId) ? 'tool' : 'plugin') : undefined;
   const note = getChatRow(db, chatId)?.context_note;
   const messages = buildMessages(chatPersona(db, chatId), path, { inputModalities, loadData }, { imageNames: chatImageNames(db, chatId) }, note);
   return {
