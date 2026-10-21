@@ -41,7 +41,7 @@ export function createApp(deps: Deps): Hono {
   const app = new Hono();
 
   app.onError((err, c) => {
-    if (err instanceof HttpError) return c.json({ error: err.message }, err.status as ContentfulStatusCode);
+    if (err instanceof HttpError) return c.json({ error: err.message, ...err.extra }, err.status as ContentfulStatusCode);
     console.error(err);
     return c.json({ error: 'Internal server error' }, 500);
   });

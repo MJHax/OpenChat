@@ -28,6 +28,8 @@ interface CompareOptions {
   effort?: Effort;
   /** Local thinking models only: false turns thinking off. */
   thinking?: boolean;
+  /** Models whose window couldn't hold the chat; their replies are marked as having lost context. */
+  droppedModelIds?: Set<string>;
   /** Called once, when every reply is saved or the stream ends, whichever comes first. */
   onFinish?: () => void;
 }
@@ -118,6 +120,7 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
         sources,
         webSearches: searchCount(prompt.webSearch, usage, sources),
         effort: prompt.effort ?? null,
+        contextDropped: o.droppedModelIds?.has(slot.modelId) ?? false,
       });
 
     let resolved = false;

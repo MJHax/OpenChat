@@ -80,9 +80,9 @@ export function chatRoutes(deps: Deps): Hono {
 
   /** "Summarize and continue": the summary is written by `modelId`, the chat's current model. */
   r.post('/:id/continue', async (c) => {
-    const body = await readJson<{ modelId?: unknown }>(c);
+    const body = await readJson<{ modelId?: unknown; allowOverflow?: unknown }>(c);
     if (typeof body.modelId !== 'string' || !body.modelId.trim()) throw new HttpError(400, 'Pick a model first.');
-    return c.json(await continueChat(deps, c.req.param('id'), body.modelId.trim()), 201);
+    return c.json(await continueChat(deps, c.req.param('id'), body.modelId.trim(), body.allowOverflow === true), 201);
   });
 
   /** A new chat holding the conversation up to `messageId`, to take it somewhere else without touching this one. */

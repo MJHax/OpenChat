@@ -10,6 +10,7 @@ import type { DB } from '../db';
 import { EFFORTS, type Effort, type Message } from '../../../shared/types';
 import type { ReplyKind } from '../usage';
 import { checkSpend } from '../limits';
+import { contextOverflow, overflowMessage } from '../contextCheck';
 
 const requireText = (value: unknown, error: string): string => {
   if (typeof value !== 'string' || !value.trim()) throw new HttpError(400, error);
@@ -79,9 +80,25 @@ export function generationRoutes(deps: Deps): Hono {
     inFlight.add(chat.id);
   }
 
+  /**
+   * Before anything is saved: the local models that can't hold the chat plus the new message. Refuses with the list
+   * unless the user chose to send anyway, in which case those models' replies are marked as having lost context.
+   * On a refusal the chat is released again.
+   */
+  function checkOverflow(chatId: string, allowOverflow: unknown, o: Parameters<typeof contextOverflow>[1]): Set<string> {
+    try {
+      const overflow = contextOverflow(db, o);
+      if (overflow.length && allowOverflow !== true) throw new HttpError(409, overflowMessage(overflow), { overflow });
+      return new Set(overflow.map((x) => x.modelId));
+    } catch (err) {
+      inFlight.delete(chatId);
+      throw err;
+    }
+  }
+
   function reply(c: Context, o: {
     chatId: string; parentId: string; modelIds: string[]; userMessageId: string | null; kind: ReplyKind; attachments: number;
-    effort: Effort | undefined; thinking: boolean | undefined;
+    effort: Effort | undefined; thinking: boolean | undefined; droppedModelIds: Set<string>;
   }): Response {
     const onFinish = () => inFlight.delete(o.chatId);
     try {
@@ -106,7 +123,7 @@ export function generationRoutes(deps: Deps): Hono {
   r.post('/:id/messages', async (c) => {
     const chatId = c.req.param('id');
     const chat = requireChat(db, chatId);
-    const body = await readJson<{ content?: string; modelId?: unknown; modelIds?: unknown; attachmentIds?: unknown; webSearch?: unknown; effort?: unknown; thinking?: unknown }>(c);
+    const body = await readJson<{ content?: string; modelId?: unknown; modelIds?: unknown; attachmentIds?: unknown; webSearch?: unknown; effort?: unknown; thinking?: unknown; allowOverflow?: unknown }>(c);
     const webSearch = requireFlag(body.webSearch);
     const effort = requireEffort(body.effort);
     const thinking = requireThinking(body.thinking);
@@ -115,29 +132,31 @@ export function generationRoutes(deps: Deps): Hono {
     const modelIds = requireModels(body);
     requireViewable(db, modelIds, attachments);
     claim(chat);
+    const droppedModelIds = checkOverflow(chatId, body.allowOverflow, { chatId, parentId: chat.active_leaf_id, newMessage: { content, attachments }, modelIds });
     const user = saveUserMessage(chatId, chat.active_leaf_id, content, attachments, webSearch);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
-    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id, kind: 'send', attachments: attachments.length, effort, thinking });
+    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id, kind: 'send', attachments: attachments.length, effort, thinking, droppedModelIds });
   });
 
   r.post('/:id/regenerate', async (c) => {
     const chatId = c.req.param('id');
     const chat = requireChat(db, chatId);
-    const body = await readJson<{ parentId?: string; modelId?: unknown; modelIds?: unknown; effort?: unknown; thinking?: unknown }>(c);
+    const body = await readJson<{ parentId?: string; modelId?: unknown; modelIds?: unknown; effort?: unknown; thinking?: unknown; allowOverflow?: unknown }>(c);
     const effort = requireEffort(body.effort);
     const thinking = requireThinking(body.thinking);
     const parent = requireUserMessage(db, chatId, body.parentId);
     const modelIds = requireModels(body);
     claim(chat);
-    return reply(c, { chatId, parentId: parent.id, modelIds, userMessageId: null, kind: 'regenerate', attachments: 0, effort, thinking });
+    const droppedModelIds = checkOverflow(chatId, body.allowOverflow, { chatId, parentId: parent.id, newMessage: null, modelIds });
+    return reply(c, { chatId, parentId: parent.id, modelIds, userMessageId: null, kind: 'regenerate', attachments: 0, effort, thinking, droppedModelIds });
   });
 
   r.post('/:id/edit', async (c) => {
     const chatId = c.req.param('id');
     const chat = requireChat(db, chatId);
     const body = await readJson<{
-      messageId?: string; content?: string; modelId?: unknown; modelIds?: unknown; attachmentIds?: unknown; webSearch?: unknown; effort?: unknown; thinking?: unknown;
+      messageId?: string; content?: string; modelId?: unknown; modelIds?: unknown; attachmentIds?: unknown; webSearch?: unknown; effort?: unknown; thinking?: unknown; allowOverflow?: unknown;
     }>(c);
     const webSearch = requireFlag(body.webSearch);
     const effort = requireEffort(body.effort);
@@ -149,10 +168,11 @@ export function generationRoutes(deps: Deps): Hono {
     // Only images added in this edit are blocked; kept ones reach a text-only model as a note, like any earlier image.
     requireViewable(db, modelIds, attachments.filter((a) => a.messageId === null));
     claim(chat);
+    const droppedModelIds = checkOverflow(chatId, body.allowOverflow, { chatId, parentId: original.parentId, newMessage: { content, attachments }, modelIds });
     const user = saveUserMessage(chatId, original.parentId, content, attachments, webSearch);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
-    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id, kind: 'edit', attachments: attachments.length, effort, thinking });
+    return reply(c, { chatId, parentId: user.id, modelIds, userMessageId: user.id, kind: 'edit', attachments: attachments.length, effort, thinking, droppedModelIds });
   });
 
   return r;

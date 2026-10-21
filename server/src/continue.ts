@@ -2,6 +2,7 @@ import type { Deps } from './app';
 import { now } from './db';
 import { HttpError } from './http';
 import { chatImageNames, getAttachmentData } from './attachments';
+import { contextOverflow, overflowMessage } from './contextCheck';
 import { createChat, requireChat, setActiveLeaf } from './chats';
 import { modelModalities } from './library';
 import { getChatMessages, insertMessage } from './messages';
@@ -43,13 +44,15 @@ export function seedContent(path: { role: 'user' | 'assistant'; content: string 
  * Has `modelId` summarize the chat's active path, then opens a new chat holding that summary as its context note, the
  * latest generated files as a seed reply, and the old chat's instructions. Nothing is created if the summary fails.
  */
-export async function continueChat(deps: Deps, chatId: string, modelId: string): Promise<ChatSummary> {
+export async function continueChat(deps: Deps, chatId: string, modelId: string, allowOverflow = false): Promise<ChatSummary> {
   const { db } = deps;
   const chat = requireChat(db, chatId);
   if (chat.kind !== 'chat') throw new HttpError(400, 'Only chats can be continued.');
   const path = activePath(getChatMessages(db, chatId), chat.active_leaf_id);
   if (!path.some((m) => m.role === 'user')) throw new HttpError(400, 'There is nothing to summarize yet.');
   const provider = chatProviderOrHttp(deps, modelId);
+  const overflow = contextOverflow(db, { chatId, parentId: chat.active_leaf_id, newMessage: null, modelIds: [modelId] });
+  if (overflow.length && !allowOverflow) throw new HttpError(409, overflowMessage(overflow), { overflow });
 
   // The same prompt a reply would get, plus the request: its prefix is likely still cached from the last reply. A last
   // message whose reply was lost goes into the request as an open question; sent as is, the model answers it first.
