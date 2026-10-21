@@ -4,6 +4,7 @@ import { HttpError, readJson } from '../http';
 import { detectLocalServers, probeServers, serverStatuses } from '../localDetect';
 import { addServer, findServer, getServer, removeServer, updateServer } from '../localServers';
 import { localClientFor } from '../providers';
+import type { LocalModelInfo } from '../providers/types';
 import { localModelId, normalizeBaseUrl } from '../../../shared/localModels';
 import type { LocalServerType } from '../../../shared/localModels';
 import type { LocalCatalog, LocalModel } from '../../../shared/types';
@@ -34,6 +35,21 @@ async function checkConnection(type: LocalServerType, baseUrl: string): Promise<
   }
 }
 
+/** A model as the library and the picker show it. */
+export function toLocalModel(serverId: string, m: LocalModelInfo): LocalModel {
+  return {
+    id: localModelId(serverId, m.name),
+    serverId,
+    name: m.name,
+    sizeBytes: m.sizeBytes,
+    contextLength: m.contextLength,
+    inputModalities: m.inputModalities,
+    supportsTools: m.supportsTools,
+    supportsReasoning: m.supportsReasoning,
+    capsKnown: m.capsKnown,
+  };
+}
+
 export function localServerRoutes(deps: Deps): Hono {
   const { db } = deps;
   const r = new Hono();
@@ -58,18 +74,9 @@ export function localServerRoutes(deps: Deps): Hono {
     for (const { status, models: found } of probes) {
       if (!status.online) continue;
       for (const m of found) {
-        const id = localModelId(status.id, m.name);
-        models.push({
-          id,
-          serverId: status.id,
-          name: m.name,
-          sizeBytes: m.sizeBytes,
-          contextLength: m.contextLength,
-          inputModalities: m.inputModalities,
-          supportsTools: m.supportsTools,
-          supportsReasoning: m.supportsReasoning,
-          capsKnown: m.capsKnown,
-        });
+        const model = toLocalModel(status.id, m);
+        const id = model.id;
+        models.push(model);
         // OpenAI-compatible servers report nothing, so their capabilities are the user's; a listing whose capability
         // lookup failed must not overwrite what is known.
         if (status.type !== 'openai' && m.capsKnown) {

@@ -3,6 +3,9 @@ import { makeApp } from './appHelpers';
 import { OpenRouterError } from '../src/openrouter';
 import type { CatalogModel, CatalogResponse, LibraryModel } from '../../shared/types';
 import { withCatalogDefaults } from '../../shared/types';
+import { startFakeLocalServer, type FakeModel } from '../../test/fakeLocalServer';
+import { addServer } from '../src/localServers';
+import { localModelId } from '../../shared/localModels';
 import { modelModalities, modelSupportsReasoning, modelSupportsTools } from '../src/library';
 
 const CATALOG: CatalogModel[] = [
@@ -256,5 +259,87 @@ describe('reasoning support', () => {
     db.prepare('UPDATE models SET supports_reasoning = NULL').run();
     const list = (await (await call('GET', '/api/models')).json()) as LibraryModel[];
     expect(list.map((m) => m.supportsReasoning)).toEqual([true, false]);
+  });
+});
+
+describe('local models in the library', () => {
+  async function withServer(flavor: 'ollama' | 'openai', models: FakeModel[]) {
+    const fake = await startFakeLocalServer({ flavor, models });
+    const ctx = makeApp();
+    const server = addServer(ctx.db, { type: flavor, name: flavor === 'ollama' ? 'Ollama' : 'Other', baseUrl: fake.url, auto: false });
+    return { ...ctx, fake, server };
+  }
+
+  it('adds, edits and removes a local model', async () => {
+    const { call, fake, server } = await withServer('ollama', [{ name: 'qwen3:1.7b', contextLength: 40960, tools: true }]);
+    try {
+      const id = localModelId(server.id, 'qwen3:1.7b');
+      const res = await call('POST', '/api/models', { id });
+      expect(res.status).toBe(201);
+      const list = (await res.json()) as LibraryModel[];
+      expect(list.find((m) => m.id === id)).toMatchObject({
+        source: 'local', serverName: 'Ollama', displayName: 'qwen3:1.7b', promptPrice: 0, completionPrice: 0,
+        contextWindow: 16384, contextLength: 40960, supportsTools: true,
+      });
+
+      expect((await call('PATCH', '/api/models', { id, contextWindow: 32768 })).status).toBe(200);
+      expect(((await (await call('GET', '/api/models')).json()) as LibraryModel[]).find((m) => m.id === id)?.contextWindow).toBe(32768);
+      const bad = await call('PATCH', '/api/models', { id, contextWindow: 50000 });
+      expect(bad.status).toBe(400);
+      expect(((await bad.json()) as { error: string }).error).toBe('The context window must be between 1,024 and 40,960 tokens.');
+      expect((await call('PATCH', '/api/models', { id, supportsTools: false })).status).toBe(400);
+
+      const del = await call('DELETE', `/api/models?id=${encodeURIComponent(id)}`);
+      expect(((await del.json()) as LibraryModel[]).some((m) => m.id === id)).toBe(false);
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it('404s a model the server no longer has, and 502s an offline server', async () => {
+    const { call, fake, server } = await withServer('ollama', [{ name: 'a' }]);
+    try {
+      const missing = await call('POST', '/api/models', { id: localModelId(server.id, 'gone') });
+      expect(missing.status).toBe(404);
+      expect(((await missing.json()) as { error: string }).error).toBe("That model isn't on Ollama any more.");
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it('502s when the server is offline', async () => {
+    const { call, db } = makeApp();
+    const server = addServer(db, { type: 'ollama', name: 'Ollama', baseUrl: 'http://127.0.0.1:9', auto: false });
+    const res = await call('POST', '/api/models', { id: localModelId(server.id, 'x') });
+    expect(res.status).toBe(502);
+  });
+
+  it('lets the user set capabilities only on openai servers', async () => {
+    const o = await withServer('openai', [{ name: 'm' }]);
+    const ol = await withServer('ollama', [{ name: 'm' }]);
+    try {
+      const id = localModelId(o.server.id, 'm');
+      await o.call('POST', '/api/models', { id });
+      const res = await o.call('PATCH', '/api/models', { id, supportsTools: true, supportsImages: true });
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as LibraryModel[]).find((m) => m.id === id)).toMatchObject({ supportsTools: true, inputModalities: ['text', 'image'] });
+      expect(modelModalities(o.db, id)).toEqual(['text', 'image']);
+
+      const oid = localModelId(ol.server.id, 'm');
+      await ol.call('POST', '/api/models', { id: oid });
+      const bad = await ol.call('PATCH', '/api/models', { id: oid, supportsImages: true });
+      expect(bad.status).toBe(400);
+      expect(((await bad.json()) as { error: string }).error).toBe('This server reports what the model supports.');
+    } finally {
+      await o.fake.close();
+      await ol.fake.close();
+    }
+  });
+
+  it('refuses an OpenRouter model when there is no key', async () => {
+    const { call } = makeApp({}, {});
+    const res = await call('POST', '/api/models', { id: 'openai/gpt-4o' });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe('Add an OpenRouter key in Settings to use OpenRouter models.');
   });
 });

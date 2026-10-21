@@ -3,8 +3,8 @@ import { now } from './db';
 import { HttpError } from './http';
 import { getSetting, setSetting } from './settings';
 import { cachedCapabilities } from './catalog';
-import type { CatalogModel, LibraryModel } from '../../shared/types';
-import { parseLocalModelId } from '../../shared/localModels';
+import type { CatalogModel, LibraryModel, LocalModel } from '../../shared/types';
+import { defaultContextWindow, parseLocalModelId } from '../../shared/localModels';
 
 interface ModelRow {
   id: string;
@@ -116,6 +116,42 @@ export function addModel(db: DB, meta: CatalogModel): void {
     meta.supportsTools ? 1 : 0, meta.supportsReasoning ? 1 : 0,
   );
   if (!getSetting(db, 'default_model_id')) setSetting(db, 'default_model_id', meta.id);
+}
+
+export function addLocalModel(db: DB, m: LocalModel): void {
+  db.prepare(
+    'INSERT OR IGNORE INTO models (id, display_name, context_length, context_window, prompt_price, completion_price, added_at, input_modalities, supports_tools, supports_reasoning) VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?, ?)',
+  ).run(
+    m.id, m.name, m.contextLength, defaultContextWindow(m.contextLength), now(), JSON.stringify(m.inputModalities),
+    m.supportsTools ? 1 : 0, m.supportsReasoning ? 1 : 0,
+  );
+  if (!getSetting(db, 'default_model_id')) setSetting(db, 'default_model_id', m.id);
+}
+
+const MIN_CONTEXT_WINDOW = 1024;
+
+/** Sets how much of a local model's context a chat uses, within what the model supports. */
+export function setContextWindow(db: DB, id: string, tokens: number): void {
+  if (!parseLocalModelId(id)) throw new HttpError(400, 'Only local models have a context window setting.');
+  const row = db.prepare('SELECT context_length FROM models WHERE id = ?').get(id) as { context_length: number | null } | undefined;
+  if (!row) throw new HttpError(404, 'Model is not in your library.');
+  const max = row.context_length;
+  if (!Number.isInteger(tokens) || tokens < MIN_CONTEXT_WINDOW || (max !== null && tokens > max)) {
+    const range = max === null ? 'at least 1,024' : `between 1,024 and ${max.toLocaleString('en-US')}`;
+    throw new HttpError(400, `The context window must be ${range} tokens.`);
+  }
+  db.prepare('UPDATE models SET context_window = ? WHERE id = ?').run(tokens, id);
+}
+
+/** OpenAI-compatible servers report nothing about a model, so what it supports is the user's call. */
+export function setLocalCaps(db: DB, id: string, caps: { supportsTools?: boolean; supportsImages?: boolean }): void {
+  const local = parseLocalModelId(id);
+  const server = local ? (db.prepare('SELECT type FROM local_servers WHERE id = ?').get(local.serverId) as { type: string } | undefined) : undefined;
+  if (server?.type !== 'openai') throw new HttpError(400, 'This server reports what the model supports.');
+  if (caps.supportsTools !== undefined) db.prepare('UPDATE models SET supports_tools = ? WHERE id = ?').run(caps.supportsTools ? 1 : 0, id);
+  if (caps.supportsImages !== undefined) {
+    db.prepare('UPDATE models SET input_modalities = ? WHERE id = ?').run(JSON.stringify(caps.supportsImages ? ['text', 'image'] : TEXT_ONLY), id);
+  }
 }
 
 export function renameModel(db: DB, id: string, name: string): void {
