@@ -228,7 +228,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     setOverflowAsk(null);
     setVersions(null);
     setFailedEdit(null);
-    const sendSearch = webSearch && searchAllowed(models, opts.models);
+    const sendSearch = webSearch && searchAllowed(models, opts.models, settings?.searchReady ?? false);
     const streamChat = await ensureChat();
     if (!streamChat) return false;
     const isShown = () => viewChatRef.current === streamChat;
@@ -241,7 +241,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       userAttachments: opts.kind === 'regenerate' ? [] : opts.attachments,
       startedAt: Date.now(),
       // Regenerate searches again only if the message being answered asked for search.
-      webSearch: opts.kind === 'regenerate' ? messages.find((m) => m.id === opts.parentId)?.webSearch && searchAllowed(models, opts.models) || false : sendSearch,
+      webSearch: opts.kind === 'regenerate' ? messages.find((m) => m.id === opts.parentId)?.webSearch && searchAllowed(models, opts.models, settings?.searchReady ?? false) || false : sendSearch,
       slots: opts.models.map((id) => ({ modelId: id, text: '', reasoning: '', status: null, error: null, message: null, done: false })),
     });
     const updateSlot = (slot: number, change: (s: SlotState) => SlotState) => {
@@ -623,6 +623,8 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
           compare={compare}
           onCompareChange={setCompare}
           webSearch={webSearch}
+          searchService={settings?.searchService ?? 'none'}
+          searchReady={settings?.searchReady ?? false}
           onWebSearchChange={setWebSearch}
           effort={effort}
           onEffortChange={setEffort}

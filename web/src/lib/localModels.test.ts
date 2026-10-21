@@ -41,9 +41,13 @@ describe('modelDetails', () => {
 describe('searchAllowed', () => {
   const models = [model({ id: 'l', source: 'local' }), model({ id: 'o' })];
   it('is blocked only when every chosen model is local', () => {
-    expect(searchAllowed(models, ['l'])).toBe(false);
-    expect(searchAllowed(models, ['l', 'o'])).toBe(true);
-    expect(searchAllowed(models, ['o'])).toBe(true);
-    expect(searchAllowed(models, [])).toBe(true);
+    expect(searchAllowed(models, ['l'], false)).toBe(false);
+    expect(searchAllowed(models, ['l', 'o'], false)).toBe(true);
+    expect(searchAllowed(models, ['o'], false)).toBe(true);
+    expect(searchAllowed(models, [], false)).toBe(true);
+  });
+  it('is allowed for local models once a search service is ready', () => {
+    expect(searchAllowed(models, ['l'], true)).toBe(true);
+    expect(searchAllowed(models, ['l', 'o'], true)).toBe(true);
   });
 });

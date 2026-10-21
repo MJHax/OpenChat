@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { EFFORTS, type Attachment, type Effort, type LibraryModel } from '../../../shared/types';
+import { EFFORTS, type Attachment, type Effort, type LibraryModel, type SearchServiceId } from '../../../shared/types';
 import { sendBlockReason, skippedImagesNotice } from '../lib/attachments';
 import type { CompareState } from '../lib/compare';
 import { ArrowUp, Bookmark, Brain, Check, ChevronDown, Columns2, Globe, Square } from 'lucide-react';
 import { insertOnOwnLine } from '../lib/prompts';
 import { ModelPicker } from './ModelPicker';
 import { ChipPopover } from './ChipPopover';
-import { SEARCH_TOOLTIP } from '../lib/search';
+import { searchTooltip } from '../lib/search';
 import { searchAllowed } from '../lib/localModels';
 import { THINKING_TOOLTIP } from '../lib/thinking';
 import { EFFORT_HINTS, EFFORT_TOOLTIP, effortLabel } from '../lib/effort';
@@ -24,6 +24,8 @@ interface Props {
   compare: CompareState;
   onCompareChange(next: CompareState): void;
   webSearch: boolean;
+  searchService: SearchServiceId;
+  searchReady: boolean;
   onWebSearchChange(on: boolean): void;
   /** Reasoning effort; null leaves it to the model. */
   effort: Effort | null;
@@ -54,7 +56,7 @@ interface Props {
 export interface ComposerPrefill { text?: string; attachments?: Attachment[]; files?: File[]; /** Empty the message box and its attachments. */ clear?: boolean; nonce: number }
 
 export function Composer({
-  disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, webSearch, onWebSearchChange, effort, onEffortChange, thinking, onThinkingChange,
+  disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, webSearch, searchService, searchReady, onWebSearchChange, effort, onEffortChange, thinking, onThinkingChange,
   replyModels, path,
   onSend, onStop, showCompareToggle, prefill, insert, onInsertUsed, onOpenPrompts,
 }: Props) {
@@ -65,8 +67,9 @@ export function Composer({
   const rememberCaret = () => { if (ref.current) caretRef.current = ref.current.selectionEnd; };
 
   const draft = useAttachmentDraft();
-  /** Local models can't search the web yet, so the toggle is off when every model chosen is local. */
-  const searchBlocked = !searchAllowed(replyModels, replyModels.map((m) => m.id));
+  /** Local models search through a search service, so the toggle is off for them until one is set up. */
+  const searchBlocked = !searchAllowed(replyModels, replyModels.map((m) => m.id), searchReady);
+  const allLocal = replyModels.length > 0 && replyModels.every((m) => m.source === 'local');
   const localThinking = replyModels.some((m) => m.source === 'local' && m.supportsReasoning);
 
   useEffect(() => {
@@ -146,7 +149,7 @@ export function Composer({
           <div className="composer-models">
             <AttachButton onFiles={draft.add} onAttachments={draft.restore} />
             <button className="icon-btn" aria-pressed={webSearch && !searchBlocked} aria-label="Web search" disabled={searchBlocked}
-              title={searchBlocked ? 'Set up web search in Settings' : `Web search: ${webSearch ? 'on' : 'off'}. ${SEARCH_TOOLTIP}`}
+              title={searchTooltip({ on: webSearch, allLocal, service: searchService, ready: searchReady })}
               onClick={() => onWebSearchChange(!webSearch)}>
               <Globe size={15} />
             </button>

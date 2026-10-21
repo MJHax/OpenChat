@@ -95,6 +95,7 @@ export const api = {
   getSettings: () => json<SettingsView>('GET', '/api/settings'),
   updateSettings: (update: SettingsUpdate) => json<SettingsView>('PUT', '/api/settings', update),
   testKey: () => json<{ ok: boolean; error?: string }>('POST', '/api/settings/test-key'),
+  testSearch: () => json<{ ok: boolean; error?: string }>('POST', '/api/settings/test-search'),
   limits: () => json<LimitStatus[]>('GET', '/api/settings/limits'),
 
   storage: () => json<StorageUsage>('GET', '/api/data/storage'),

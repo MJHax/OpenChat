@@ -3,6 +3,7 @@ import type { LibraryModel, SettingsUpdate, SettingsView } from '../../../../sha
 import { api } from '../../api';
 import { SEARCH_NOTE } from '../../lib/search';
 import { LocalServersCard } from './LocalServersCard';
+import { WebSearchCard } from './WebSearchCard';
 
 export interface GeneralTabProps {
   view: SettingsView;
@@ -76,6 +77,8 @@ export function GeneralTab({ view, models, section, update }: GeneralTabProps) {
       </div>
 
       <LocalServersCard />
+
+      <WebSearchCard view={view} update={update} />
 
       <h2>Personalization</h2>
       <div className="card">

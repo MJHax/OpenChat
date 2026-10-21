@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect } from 'vitest';
-import { SEARCH_NOTE, SEARCH_TOOLTIP, domainOf, loadSearch, saveSearch, sourceLabel } from './search';
+import { SEARCH_NOTE, SEARCH_TOOLTIP, domainOf, loadSearch, saveSearch, searchTooltip, sourceLabel } from './search';
 
 function memoryStorage(): Storage {
   const data = new Map<string, string>();
@@ -56,5 +56,19 @@ describe('source display', () => {
   it('falls back to the URL when a source has no title', () => {
     expect(sourceLabel({ url: 'https://x.dev/a', title: '  ' })).toBe('https://x.dev/a');
     expect(sourceLabel({ url: 'https://x.dev/a', title: ' Docs ' })).toBe('Docs');
+  });
+});
+
+describe('searchTooltip', () => {
+  it('asks to set up search when only local models are chosen and no service is ready', () => {
+    expect(searchTooltip({ on: false, allLocal: true, service: 'none', ready: false })).toBe('Set up web search in Settings');
+  });
+  it('names the service when only local models are chosen and search is ready', () => {
+    expect(searchTooltip({ on: true, allLocal: true, service: 'searxng', ready: true })).toBe('Web search: on. Searches run through SearXNG.');
+    expect(searchTooltip({ on: false, allLocal: true, service: 'tavily', ready: true })).toBe('Web search: off. Searches run through Tavily.');
+  });
+  it('keeps the OpenRouter tooltip otherwise', () => {
+    expect(searchTooltip({ on: true, allLocal: false, service: 'tavily', ready: true })).toBe(`Web search: on. ${SEARCH_TOOLTIP}`);
+    expect(searchTooltip({ on: false, allLocal: false, service: 'none', ready: false })).toBe(`Web search: off. ${SEARCH_TOOLTIP}`);
   });
 });
