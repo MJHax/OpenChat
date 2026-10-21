@@ -4,18 +4,21 @@ import type { Deps } from './app';
 import { newId, now } from './db';
 import { getChatRow, setActiveLeaf, touchChat } from './chats';
 import { getChatMessages, insertMessage } from './messages';
-import { OpenRouterError, type Usage, type WebSearchMode } from './openrouter';
+import { type Usage, type WebSearchMode } from './openrouter';
+import { chatProvider } from './providers';
+import { ProviderError } from './providers/types';
+import { isLocalModelId } from '../../shared/localModels';
 import { chatImageNames, getAttachmentData } from './attachments';
 import { modelModalities, modelSupportsReasoning, modelSupportsTools } from './library';
 import { buildMessages, pdfPlugins, withCacheMarkers, type ChatMessage, type Plugin } from './prompt';
-import { chatPersona, resolveApiKey } from './settings';
+import { chatPersona } from './settings';
 import { maybeGenerateTitle } from './title';
 import { activePath } from './tree';
 import { recordUsage, type ReplyKind, type UsageStatus } from './usage';
 import type { Effort, Message, MessageStatus, Source, StreamDone, StreamError, StreamStart, StreamTitle } from '../../shared/types';
 
 export function replyErrorMessage(err: unknown): string {
-  if (err instanceof OpenRouterError) return err.message;
+  if (err instanceof ProviderError) return err.message;
   console.error(err);
   return 'Something went wrong while generating the reply.';
 }
@@ -46,6 +49,11 @@ export function promptFor(deps: Deps, chatId: string, parentId: string, modelId:
   };
 }
 
+/** The `think` to send for `modelId`: only local models that can think take it; undefined leaves the model's default. */
+export function thinkFor(db: Deps['db'], modelId: string, thinking: boolean | undefined): boolean | undefined {
+  return thinking !== undefined && isLocalModelId(modelId) && modelSupportsReasoning(db, modelId) ? thinking : undefined;
+}
+
 /** Adds sources not seen yet (by URL), keeping arrival order and the first title. */
 export function mergeSources(existing: Source[], incoming: Source[]): Source[] {
   const seen = new Set(existing.map((s) => s.url));
@@ -68,6 +76,8 @@ interface ReplyOptions {
   /** Files on the user message being answered, for send/edit; 0 for regenerate. */
   attachments: number;
   effort?: Effort;
+  /** Local thinking models only: false turns thinking off. */
+  thinking?: boolean;
   /** Called once, as soon as the reply is saved or the stream ends, whichever comes first. */
   onFinish?: () => void;
 }
@@ -106,9 +116,8 @@ export const failureStatus = (signal: AbortSignal): UsageStatus => (signal.abort
  * The reply is saved on completion; partial text is saved as 'stopped' on error or client disconnect.
  */
 export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
-  const { db, openrouter, env } = deps;
+  const { db } = deps;
   const prompt = promptFor(deps, o.chatId, o.parentId, o.modelId, o.effort);
-  const { key } = resolveApiKey(db, env);
   const assistantId = newId();
   const abort = new AbortController();
   let finished = false;
@@ -164,9 +173,12 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
     };
 
     await send('start', { userMessageId: o.userMessageId, assistantMessageId: assistantId } satisfies StreamStart);
+    let resolved = false;
     try {
-      if (!key) throw new OpenRouterError('No OpenRouter API key set. Add one in Settings.', 401);
-      for await (const event of openrouter.streamChat({ apiKey: key, model: o.modelId, ...prompt, signal: abort.signal })) {
+      const provider = chatProvider(deps, o.modelId);
+      resolved = true;
+      const think = thinkFor(db, o.modelId, o.thinking);
+      for await (const event of provider.streamChat({ model: o.modelId, ...prompt, think, signal: abort.signal })) {
         if (event.type === 'delta') {
           timer.token();
           text += event.text;
@@ -184,11 +196,11 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
       log('complete', message.id);
       await send('done', { message } satisfies StreamDone);
       finish(); // the reply is saved; titling below shouldn't block new generations in this chat
-      const title = await maybeGenerateTitle(deps, o.chatId, key, o.modelId);
+      const title = await maybeGenerateTitle(deps, o.chatId, o.modelId);
       if (title) await send('title', { title } satisfies StreamTitle);
     } catch (err) {
       const partial = text ? saveIfChatExists(() => save('stopped')) : null;
-      if (key) log(failureStatus(abort.signal), partial?.id ?? null);
+      if (resolved) log(failureStatus(abort.signal), partial?.id ?? null);
       if (abort.signal.aborted) return; // client went away; nothing to send
       await send('error', { message: replyErrorMessage(err), partial } satisfies StreamError);
     }

@@ -185,7 +185,7 @@ export function createVideoPoller(deps: Deps, opts: { now?: () => number; interv
         touchChat(db, j.thread_id!);
       })();
       clearJob(j.message_id);
-      if (alive) await maybeGenerateTitle(deps, j.thread_id!, key, getSetting(db, 'default_model_id') || j.model_id);
+      if (alive) await maybeGenerateTitle(deps, j.thread_id!, getSetting(db, 'default_model_id') || j.model_id);
       return;
     }
     const alive = isAlive(j);

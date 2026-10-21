@@ -6,6 +6,7 @@ import { getSetting } from './settings';
 import { activePath, repliesTo } from './tree';
 import { now } from './db';
 import type { Usage } from './openrouter';
+import { chatProvider } from './providers';
 import { recordUsage, type UsageStatus } from './usage';
 import { spendBlock } from './limits';
 
@@ -21,18 +22,18 @@ export function cleanTitle(raw: string): string {
 const titling = new Set<string>();
 
 /** Titles a chat once it has a complete reply. Never throws; returns the new title or null. */
-export async function maybeGenerateTitle(deps: Deps, chatId: string, apiKey: string, fallbackModel: string): Promise<string | null> {
+export async function maybeGenerateTitle(deps: Deps, chatId: string, fallbackModel: string): Promise<string | null> {
   if (titling.has(chatId)) return null;
   titling.add(chatId);
   try {
-    return await generateTitle(deps, chatId, apiKey, fallbackModel);
+    return await generateTitle(deps, chatId, fallbackModel);
   } finally {
     titling.delete(chatId);
   }
 }
 
-async function generateTitle(deps: Deps, chatId: string, apiKey: string, fallbackModel: string): Promise<string | null> {
-  const { db, openrouter } = deps;
+async function generateTitle(deps: Deps, chatId: string, fallbackModel: string): Promise<string | null> {
+  const { db } = deps;
   const chat = getChatRow(db, chatId);
   if (!chat || chat.title !== DEFAULT_TITLE) return null;
   const all = getChatMessages(db, chatId);
@@ -62,6 +63,7 @@ async function generateTitle(deps: Deps, chatId: string, apiKey: string, fallbac
   const startedAt = now();
   const t0 = Date.now();
   let usage: Usage | null = null;
+  let resolved = false;
   const log = (status: UsageStatus) =>
     recordUsage(db, {
       purpose: 'title', chatId, messageId: null, runId: null, kind: null, compare: false, modelId: model, usage, webSearch: false,
@@ -69,8 +71,9 @@ async function generateTitle(deps: Deps, chatId: string, apiKey: string, fallbac
       threadKind: chat.kind,
     });
   try {
-    const raw = await openrouter.complete({
-      apiKey,
+    const provider = chatProvider(deps, model);
+    resolved = true;
+    const raw = await provider.complete({
       model,
       onUsage: (u) => (usage = u),
       // Reasoning models think before answering; a small budget is spent entirely on reasoning.
@@ -86,7 +89,7 @@ async function generateTitle(deps: Deps, chatId: string, apiKey: string, fallbac
     renameChat(db, chatId, title);
     return title;
   } catch {
-    log('error');
+    if (resolved) log('error');
     return null;
   }
 }

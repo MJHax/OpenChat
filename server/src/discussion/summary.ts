@@ -3,8 +3,9 @@ import { now } from '../db';
 import { HttpError } from '../http';
 import { checkSpend } from '../limits';
 import { getChatMessages } from '../messages';
-import { OpenRouterError, type Usage } from '../openrouter';
-import { resolveApiKey } from '../settings';
+import type { Usage } from '../openrouter';
+import { chatProviderOrHttp } from '../providers';
+import { ProviderError } from '../providers/types';
 import { recordUsage, type UsageStatus } from '../usage';
 import { getDiscussionRow, getParticipants, saveSummary } from './store';
 import { HOST_NAME } from '../../../shared/discussion';
@@ -26,11 +27,10 @@ export function transcriptText(topic: string, participants: DiscussionParticipan
 
 /** Has `modelId` summarize the discussion and saves the result, replacing any earlier summary. */
 export async function summarizeDiscussion(deps: Deps, chatId: string, modelId: string): Promise<DiscussionSummary> {
-  const { db, env, openrouter } = deps;
+  const { db } = deps;
   const { topic } = getDiscussionRow(db, chatId);
   checkSpend(db);
-  const { key } = resolveApiKey(db, env);
-  if (!key) throw new HttpError(400, 'No OpenRouter API key set. Add one in Settings.');
+  const provider = chatProviderOrHttp(deps, modelId);
   const messages = [
     { role: 'system' as const, content: SUMMARY_PROMPT },
     { role: 'user' as const, content: transcriptText(topic, getParticipants(db, chatId), getChatMessages(db, chatId)) },
@@ -48,11 +48,11 @@ export async function summarizeDiscussion(deps: Deps, chatId: string, modelId: s
   let text: string;
   try {
     // Reasoning models think before answering, so the budget leaves room beyond the summary itself.
-    text = (await openrouter.complete({ apiKey: key, model: modelId, messages, maxTokens: 4000, onUsage: (u) => (usage = u) })).trim();
+    text = (await provider.complete({ model: modelId, messages, maxTokens: 4000, onUsage: (u) => (usage = u) })).trim();
     log('complete');
   } catch (err) {
     log('error');
-    throw new HttpError(502, err instanceof OpenRouterError ? err.message : 'Could not reach the model to write the summary.');
+    throw new HttpError(502, err instanceof ProviderError ? err.message : 'Could not reach the model to write the summary.');
   }
   if (!text) throw new HttpError(502, 'The model returned an empty summary. Try again or pick another model.');
   const summary: DiscussionSummary = { text, modelId, cost: (usage as Usage | null)?.cost ?? null, createdAt: now() };

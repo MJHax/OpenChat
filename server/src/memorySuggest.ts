@@ -1,10 +1,12 @@
 import type { Deps } from './app';
 import { HttpError } from './http';
-import { OpenRouterError, type Usage } from './openrouter';
+import type { Usage } from './openrouter';
+import { chatProviderOrHttp } from './providers';
+import { ProviderError } from './providers/types';
 import { now } from './db';
 import { recordUsage, type UsageStatus } from './usage';
 import { spendBlock } from './limits';
-import { getSetting, resolveApiKey } from './settings';
+import { getSetting } from './settings';
 
 export const MEMORY_PROMPT =
   'Turn the following text into one short fact worth remembering about the user, written in the third person ' +
@@ -21,13 +23,12 @@ export function cleanFact(raw: string): string {
 }
 
 export async function suggestMemory(deps: Deps, text: unknown): Promise<string> {
-  const { db, env, openrouter } = deps;
+  const { db } = deps;
   const input = typeof text === 'string' ? text.trim() : '';
   if (!input) throw new HttpError(400, 'Nothing to remember.');
   const model = getSetting(db, 'memory_model_id') || getSetting(db, 'default_model_id');
   if (!model) throw new HttpError(400, 'Add a model in the Model Library first.');
-  const { key } = resolveApiKey(db, env);
-  if (!key) throw new HttpError(400, 'No OpenRouter API key set. Add one in Settings.');
+  const provider = chatProviderOrHttp(deps, model);
   const block = spendBlock(db);
   if (block) throw new HttpError(402, `${block.short}. Type the fact yourself.`);
 
@@ -42,8 +43,7 @@ export async function suggestMemory(deps: Deps, text: unknown): Promise<string> 
 
   let raw: string;
   try {
-    raw = await openrouter.complete({
-      apiKey: key,
+    raw = await provider.complete({
       model,
       onUsage: (u) => (usage = u),
       // Reasoning models think before answering; a small budget is spent entirely on reasoning.
@@ -56,7 +56,7 @@ export async function suggestMemory(deps: Deps, text: unknown): Promise<string> 
     log('complete');
   } catch (err) {
     log('error');
-    throw new HttpError(502, err instanceof OpenRouterError ? err.message : 'Could not reach the memory model.');
+    throw new HttpError(502, err instanceof ProviderError ? err.message : 'Could not reach the memory model.');
   }
   const fact = cleanFact(raw);
   if (!fact) throw new HttpError(502, "The model didn't suggest anything. Type the fact yourself.");

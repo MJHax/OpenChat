@@ -4,8 +4,8 @@ import type { Deps } from '../app';
 import { newId } from '../db';
 import { getChatRow, setActiveLeaf, touchChat } from '../chats';
 import { getChatMessages, insertMessage } from '../messages';
-import { OpenRouterError, type Usage } from '../openrouter';
-import { resolveApiKey } from '../settings';
+import type { Usage } from '../openrouter';
+import { chatProvider } from '../providers';
 import { recordUsage, type UsageStatus } from '../usage';
 import { callTimer, failureStatus, replyErrorMessage, saveIfChatExists } from '../generate';
 import { buildDiscussionPrompt, cleanReply, moderatorTools, nextSpeaker, readToolCall, turnsTaken } from './engine';
@@ -20,8 +20,7 @@ import type {
  * The caller has already checked that a turn may start.
  */
 export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () => void): Response {
-  const { db, openrouter, env } = deps;
-  const { key } = resolveApiKey(db, env);
+  const { db } = deps;
   const { topic } = getDiscussionRow(db, chatId);
   const participants = getParticipants(db, chatId);
   const history = getChatMessages(db, chatId);
@@ -79,9 +78,11 @@ export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () 
     };
 
     await send('start', { messageId, participantId: speaker.id } satisfies DiscussionTurnStart);
+    let resolved = false;
     try {
-      if (!key) throw new OpenRouterError('No OpenRouter API key set. Add one in Settings.', 401);
-      for await (const event of openrouter.streamChat({ apiKey: key, model: speaker.modelId, messages, tools, signal: abort.signal })) {
+      const provider = chatProvider(deps, speaker.modelId);
+      resolved = true;
+      for await (const event of provider.streamChat({ model: speaker.modelId, messages, tools, signal: abort.signal })) {
         if (event.type === 'delta') {
           timer.token();
           text += event.text;
@@ -104,7 +105,7 @@ export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () 
     } catch (err) {
       // A cut-off reply still counts as a turn, so it is cleaned like any other and can reach the turn limit.
       const partial = text ? saveIfChatExists(() => save('stopped', cleanReply(text, speaker.name, others), null)) : null;
-      if (key) log(failureStatus(abort.signal), partial?.id ?? null);
+      if (resolved) log(failureStatus(abort.signal), partial?.id ?? null);
       let state: DiscussionState;
       try {
         if (partial) settle(null);

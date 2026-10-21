@@ -136,7 +136,7 @@ export async function startImageGeneration(deps: Deps, threadId: string, req: Im
         .run(usage?.cost ?? null, usage?.promptTokens ?? null, usage?.completionTokens ?? null, assistantId);
       db.prepare('UPDATE media_generations SET finished_at = ? WHERE message_id = ?').run(now(), assistantId);
       touchChat(db, threadId);
-      await maybeGenerateTitle(deps, threadId, key, getSetting(db, 'default_model_id') || model.id);
+      await maybeGenerateTitle(deps, threadId, getSetting(db, 'default_model_id') || model.id);
     } catch (err) {
       const message = replyErrorMessage(err);
       const alive = !!getChatRow(db, threadId) && !!getMessage(db, assistantId);

@@ -33,6 +33,8 @@ export interface CompleteRequest {
   model: string;
   messages: ChatMessage[];
   maxTokens?: number;
+  /** Local thinking models only: false turns thinking off; undefined leaves the model's default. */
+  think?: boolean;
   onUsage?: (u: Usage) => void;
 }
 

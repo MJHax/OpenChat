@@ -3,11 +3,11 @@ import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 import type { Deps } from './app';
 import { newId } from './db';
 import { getChatRow, setActiveLeaf, setCompareParent, touchChat } from './chats';
-import { callTimer, failureStatus, saveIfChatExists, mergeSources, promptFor, replyErrorMessage, searchCount } from './generate';
+import { callTimer, failureStatus, saveIfChatExists, mergeSources, promptFor, replyErrorMessage, searchCount, thinkFor } from './generate';
 import { recordUsage, type ReplyKind, type UsageStatus } from './usage';
 import { insertMessage } from './messages';
-import { OpenRouterError, type Usage } from './openrouter';
-import { resolveApiKey } from './settings';
+import type { Usage } from './openrouter';
+import { chatProvider } from './providers';
 import { maybeGenerateTitle } from './title';
 import type {
   Effort,
@@ -26,6 +26,8 @@ interface CompareOptions {
   attachments: number;
   /** Applied to each model that supports reasoning. */
   effort?: Effort;
+  /** Local thinking models only: false turns thinking off. */
+  thinking?: boolean;
   /** Called once, when every reply is saved or the stream ends, whichever comes first. */
   onFinish?: () => void;
 }
@@ -36,8 +38,7 @@ interface CompareOptions {
  * sibling under `parentId`, and the chat waits for the user to pick one (compare_parent_id).
  */
 export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Response {
-  const { db, openrouter, env } = deps;
-  const { key } = resolveApiKey(db, env);
+  const { db } = deps;
   const slots: CompareSlot[] = o.modelIds.map((modelId) => ({ assistantMessageId: newId(), modelId }));
   const abort = new AbortController();
   const runId = newId();
@@ -84,7 +85,7 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
 
     const firstComplete = saved.find((m) => m.status === 'complete');
     if (firstComplete) {
-      const title = await maybeGenerateTitle(deps, o.chatId, key, firstComplete.modelId!);
+      const title = await maybeGenerateTitle(deps, o.chatId, firstComplete.modelId!);
       if (title) await send('title', { title } satisfies StreamTitle);
     }
   }
@@ -119,9 +120,12 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
         effort: prompt.effort ?? null,
       });
 
+    let resolved = false;
     try {
-      if (!key) throw new OpenRouterError('No OpenRouter API key set. Add one in Settings.', 401);
-      for await (const event of openrouter.streamChat({ apiKey: key, model: slot.modelId, ...prompt, signal: abort.signal })) {
+      const provider = chatProvider(deps, slot.modelId);
+      resolved = true;
+      const think = thinkFor(db, slot.modelId, o.thinking);
+      for await (const event of provider.streamChat({ model: slot.modelId, ...prompt, think, signal: abort.signal })) {
         if (event.type === 'delta') {
           timer.token();
           text += event.text;
@@ -141,7 +145,7 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
       return message;
     } catch (err) {
       const partial = text ? saveIfChatExists(() => save('stopped')) : null;
-      if (key) log(failureStatus(abort.signal), partial?.id ?? null);
+      if (resolved) log(failureStatus(abort.signal), partial?.id ?? null);
       if (!abort.signal.aborted) await send('slot-error', { slot: i, message: replyErrorMessage(err), partial } satisfies CompareSlotError);
       return partial;
     }

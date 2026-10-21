@@ -5,9 +5,11 @@ import { chatImageNames, getAttachmentData } from './attachments';
 import { createChat, requireChat, setActiveLeaf } from './chats';
 import { modelModalities } from './library';
 import { getChatMessages, insertMessage } from './messages';
-import { OpenRouterError, type Usage } from './openrouter';
+import type { Usage } from './openrouter';
+import { chatProviderOrHttp } from './providers';
+import { ProviderError } from './providers/types';
 import { buildMessages, withCacheMarkers } from './prompt';
-import { chatPersona, resolveApiKey } from './settings';
+import { chatPersona } from './settings';
 import { activePath } from './tree';
 import { recordUsage, type UsageStatus } from './usage';
 import { parseFileBlocks } from '../../shared/files';
@@ -42,13 +44,12 @@ export function seedContent(path: { role: 'user' | 'assistant'; content: string 
  * latest generated files as a seed reply, and the old chat's instructions. Nothing is created if the summary fails.
  */
 export async function continueChat(deps: Deps, chatId: string, modelId: string): Promise<ChatSummary> {
-  const { db, env, openrouter } = deps;
+  const { db } = deps;
   const chat = requireChat(db, chatId);
   if (chat.kind !== 'chat') throw new HttpError(400, 'Only chats can be continued.');
   const path = activePath(getChatMessages(db, chatId), chat.active_leaf_id);
   if (!path.some((m) => m.role === 'user')) throw new HttpError(400, 'There is nothing to summarize yet.');
-  const { key } = resolveApiKey(db, env);
-  if (!key) throw new HttpError(400, 'No OpenRouter API key set. Add one in Settings.');
+  const provider = chatProviderOrHttp(deps, modelId);
 
   // The same prompt a reply would get, plus the request: its prefix is likely still cached from the last reply. A last
   // message whose reply was lost goes into the request as an open question; sent as is, the model answers it first.
@@ -73,11 +74,11 @@ export async function continueChat(deps: Deps, chatId: string, modelId: string):
   let summary: string;
   try {
     // Reasoning models think before answering, so the budget leaves room beyond the summary itself.
-    summary = (await openrouter.complete({ apiKey: key, model: modelId, messages, maxTokens: 4000, onUsage: (u) => (usage = u) })).trim();
+    summary = (await provider.complete({ model: modelId, messages, maxTokens: 4000, onUsage: (u) => (usage = u) })).trim();
     log('complete');
   } catch (err) {
     log('error');
-    throw new HttpError(502, err instanceof OpenRouterError ? err.message : 'Could not reach the model to write the summary.');
+    throw new HttpError(502, err instanceof ProviderError ? err.message : 'Could not reach the model to write the summary.');
   }
   if (!summary) throw new HttpError(502, 'The model returned an empty summary. Try again or pick another model.');
 
