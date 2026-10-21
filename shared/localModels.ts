@@ -51,6 +51,7 @@ export function normalizeBaseUrl(input: string): string {
   }
   s = s.replace(/\/+$/, '').replace(/\/v1$/i, '').replace(/\/+$/, '');
   if (!/^https?:\/\/[^/\s]+/.test(s)) throw bad();
+  if (/^https?:\/\/[^/]*@/.test(s)) throw new Error('Enter an address without a username or password.');
   return s;
 }
 

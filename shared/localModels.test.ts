@@ -25,6 +25,9 @@ describe('local model helpers', () => {
     expect(normalizeBaseUrl('https://gpu.lan:8443/')).toBe('https://gpu.lan:8443');
     expect(() => normalizeBaseUrl('ftp://x')).toThrow('Enter an address like http://localhost:11434.');
     expect(() => normalizeBaseUrl('')).toThrow();
+    for (const withLogin of ['http://user:pass@host:1234', 'user@localhost:11434', 'https://me@10.0.0.2']) {
+      expect(() => normalizeBaseUrl(withLogin)).toThrow('Enter an address without a username or password.');
+    }
     expect(hostOf('http://192.168.1.50:11434')).toBe('192.168.1.50:11434');
   });
 });
