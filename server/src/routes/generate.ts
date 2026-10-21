@@ -12,6 +12,7 @@ import type { ReplyKind } from '../usage';
 import { checkSpend, spendBlock } from '../limits';
 import { isLocalModelId } from '../../../shared/localModels';
 import { contextOverflow, overflowMessage } from '../contextCheck';
+import { loadedWindows } from '../providers';
 
 const requireText = (value: unknown, error: string): string => {
   if (typeof value !== 'string' || !value.trim()) throw new HttpError(400, error);
@@ -90,10 +91,10 @@ export function generationRoutes(deps: Deps): Hono {
    * unless the user chose to send anyway, in which case those models' replies are marked as having lost context.
    * On a refusal the chat is released again.
    */
-  function checkOverflow(chatId: string, allowOverflow: unknown, o: Parameters<typeof contextOverflow>[1]): Set<string> {
+  async function checkOverflow(chatId: string, allowOverflow: unknown, o: Parameters<typeof contextOverflow>[1]): Promise<Set<string>> {
     try {
       if (allowOverflow !== undefined && typeof allowOverflow !== 'boolean') throw new HttpError(400, 'allowOverflow must be true or false.');
-      const overflow = contextOverflow(db, o);
+      const overflow = contextOverflow(db, { ...o, windows: await loadedWindows(deps, o.modelIds) });
       if (overflow.length && allowOverflow !== true) throw new HttpError(409, overflowMessage(overflow), { overflow });
       return new Set(overflow.map((x) => x.modelId));
     } catch (err) {
@@ -138,7 +139,7 @@ export function generationRoutes(deps: Deps): Hono {
     const modelIds = requireModels(body);
     requireViewable(db, modelIds, attachments);
     const limitMessage = claim(chat, modelIds);
-    const droppedModelIds = checkOverflow(chatId, body.allowOverflow, { chatId, parentId: chat.active_leaf_id, newMessage: { content, attachments }, modelIds });
+    const droppedModelIds = await checkOverflow(chatId, body.allowOverflow, { chatId, parentId: chat.active_leaf_id, newMessage: { content, attachments }, modelIds });
     const user = saveUserMessage(chatId, chat.active_leaf_id, content, attachments, webSearch);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);
@@ -154,7 +155,7 @@ export function generationRoutes(deps: Deps): Hono {
     const parent = requireUserMessage(db, chatId, body.parentId);
     const modelIds = requireModels(body);
     const limitMessage = claim(chat, modelIds);
-    const droppedModelIds = checkOverflow(chatId, body.allowOverflow, { chatId, parentId: parent.id, newMessage: null, modelIds });
+    const droppedModelIds = await checkOverflow(chatId, body.allowOverflow, { chatId, parentId: parent.id, newMessage: null, modelIds });
     return reply(c, { chatId, parentId: parent.id, modelIds, userMessageId: null, kind: 'regenerate', attachments: 0, effort, thinking, droppedModelIds, limitMessage });
   });
 
@@ -174,7 +175,7 @@ export function generationRoutes(deps: Deps): Hono {
     // Only images added in this edit are blocked; kept ones reach a text-only model as a note, like any earlier image.
     requireViewable(db, modelIds, attachments.filter((a) => a.messageId === null));
     const limitMessage = claim(chat, modelIds);
-    const droppedModelIds = checkOverflow(chatId, body.allowOverflow, { chatId, parentId: original.parentId, newMessage: { content, attachments }, modelIds });
+    const droppedModelIds = await checkOverflow(chatId, body.allowOverflow, { chatId, parentId: original.parentId, newMessage: { content, attachments }, modelIds });
     const user = saveUserMessage(chatId, original.parentId, content, attachments, webSearch);
     setActiveLeaf(db, chatId, user.id);
     touchChat(db, chatId);

@@ -7,7 +7,7 @@ import { createChat, requireChat, setActiveLeaf } from './chats';
 import { modelModalities } from './library';
 import { getChatMessages, insertMessage } from './messages';
 import type { Usage } from './openrouter';
-import { chatProviderOrHttp } from './providers';
+import { chatProviderOrHttp, loadedWindows } from './providers';
 import { ProviderError } from './providers/types';
 import { buildMessages, withCacheMarkers } from './prompt';
 import { chatPersona } from './settings';
@@ -51,7 +51,7 @@ export async function continueChat(deps: Deps, chatId: string, modelId: string, 
   const path = activePath(getChatMessages(db, chatId), chat.active_leaf_id);
   if (!path.some((m) => m.role === 'user')) throw new HttpError(400, 'There is nothing to summarize yet.');
   const provider = chatProviderOrHttp(deps, modelId);
-  const overflow = contextOverflow(db, { chatId, parentId: chat.active_leaf_id, newMessage: null, modelIds: [modelId] });
+  const overflow = contextOverflow(db, { chatId, parentId: chat.active_leaf_id, newMessage: null, modelIds: [modelId], windows: await loadedWindows(deps, [modelId]) });
   if (overflow.length && !allowOverflow) throw new HttpError(409, overflowMessage(overflow), { overflow });
 
   // The same prompt a reply would get, plus the request: its prefix is likely still cached from the last reply. A last

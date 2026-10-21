@@ -10,6 +10,8 @@ export interface FakeModel {
   vision?: boolean;
   thinking?: boolean;
   loaded?: boolean;
+  /** LM Studio: starts loaded with this window instead of the model's own. */
+  loadedWindow?: number;
   /** Pause before the first chunk the first time the model is used while unloaded; it is loaded afterwards. */
   loadMs?: number;
 }
@@ -73,7 +75,7 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
       ollamaLoaded.set(m.name, win); // reported by /api/ps only once loading has finished
       return m.loadMs ?? 0;
     }
-    if (loadedWindow.has(m.name) || m.loaded) return 0;
+    if (loadedWindow.has(m.name) || m.loaded || m.loadedWindow) return 0;
     if (m.loadMs) await sleep(m.loadMs);
     loadedWindow.set(m.name, ctx(m));
     return m.loadMs ?? 0;
@@ -258,7 +260,7 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
           if (o.listDelayMs) await sleep(o.listDelayMs);
           return json(res, 200, {
             models: models.map((m) => {
-              const win = loadedWindow.get(m.name) ?? (m.loaded ? ctx(m) : undefined);
+              const win = loadedWindow.get(m.name) ?? m.loadedWindow ?? (m.loaded ? ctx(m) : undefined);
               return {
                 type: 'llm',
                 key: m.name,

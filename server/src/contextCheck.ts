@@ -16,12 +16,12 @@ import { activePath } from './tree';
 export const OVERFLOW_MARGIN = 1_024;
 
 /** How full `modelId`'s window is for `path` (a chat's active path, oldest first), as a reply would be sent. */
-export function estimatePath(db: DB, o: { modelId: string; chatId: string | null; path: Message[]; instructions?: string }): ContextUsage {
+export function estimatePath(db: DB, o: { modelId: string; chatId: string | null; path: Message[]; instructions?: string; windows?: Map<string, number> }): ContextUsage {
   // What the model is actually sent: older versions of a file are reduced to a stub.
   const sent = collapseSuperseded(o.path);
   const input = {
     modelId: o.modelId,
-    contextLength: modelContextLength(db, o.modelId),
+    contextLength: o.windows?.get(o.modelId) ?? modelContextLength(db, o.modelId),
     system: replySystemPrompt(chatPersona(db, o.chatId, o.instructions ?? ''), o.chatId ? chatImageNames(db, o.chatId) : []),
     note: o.chatId ? getChatRow(db, o.chatId)?.context_note ?? null : null,
     path: o.path.map((m, i) => ({ ...m, content: sent[i] })),
@@ -42,6 +42,8 @@ export function contextOverflow(db: DB, o: {
   parentId: string | null;
   newMessage: { content: string; attachments: AttachmentRow[] } | null;
   modelIds: string[];
+  /** The windows LM Studio models are loaded with; they win over the chosen ones. */
+  windows?: Map<string, number>;
 }): ContextOverflow[] {
   const path = activePath(getChatMessages(db, o.chatId), o.parentId);
   if (o.newMessage) {
@@ -53,9 +55,9 @@ export function contextOverflow(db: DB, o: {
   const out: ContextOverflow[] = [];
   for (const modelId of o.modelIds) {
     if (!isLocalModelId(modelId)) continue;
-    const window = modelContextLength(db, modelId);
+    const window = o.windows?.get(modelId) ?? modelContextLength(db, modelId);
     if (window === null) continue;
-    const { used } = estimatePath(db, { modelId, chatId: o.chatId, path });
+    const { used } = estimatePath(db, { modelId, chatId: o.chatId, path, windows: o.windows });
     if (used + OVERFLOW_MARGIN > window) out.push({ modelId, displayName: displayNameOf(db, modelId), window, estimate: used });
   }
   return out;

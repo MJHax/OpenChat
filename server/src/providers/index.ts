@@ -59,6 +59,23 @@ export function chatProvider(deps: Deps, modelId: string): ChatProvider {
   };
 }
 
+/**
+ * The window each of `modelIds` is loaded with right now, for models on LM Studio servers only: LM Studio keeps the
+ * window a model was loaded with, while Ollama takes it from each request and OpenAI-compatible servers can't say.
+ * Models that aren't loaded, unknown or unreachable are left out.
+ */
+export async function loadedWindows(deps: Deps, modelIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  await Promise.all(modelIds.map(async (id) => {
+    const local = parseLocalModelId(id);
+    const server = local && getServer(deps.db, local.serverId);
+    if (!local || !server || !server.enabled || server.type !== 'lmstudio') return;
+    const state = await localClientFor(server).loadState(local.name);
+    if (state?.loaded && state.contextWindow !== null) out.set(id, state.contextWindow);
+  }));
+  return out;
+}
+
 /** Like chatProvider, for routes that answer with an HttpError: a missing key is the caller's to fix (400). */
 export function chatProviderOrHttp(deps: Deps, modelId: string): ChatProvider {
   try {

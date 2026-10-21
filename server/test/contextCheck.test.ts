@@ -156,3 +156,54 @@ describe('the check before sending', () => {
     expect(((await res.json()) as any).error).toBe('allowOverflow must be true or false.');
   });
 });
+
+describe('the window LM Studio loaded', () => {
+  const BIG = 'x'.repeat(24_000); // ~6,000 estimated tokens
+
+  async function lmSetup(loadedWindow: number | undefined) {
+    fake = await startFakeLocalServer({ flavor: 'lmstudio', models: [{ name: 'qwen3-8b', contextLength: 32768, loadedWindow }] });
+    const app = makeApp();
+    const server = addServer(app.db, { type: 'lmstudio', name: 'LM Studio', baseUrl: fake.url, auto: false });
+    const id = localModelId(server.id, 'qwen3-8b');
+    addLocalModel(app.db, { id, serverId: server.id, sizeBytes: null, capsKnown: true, name: 'qwen3-8b', contextLength: 32768, inputModalities: ['text'], supportsTools: false, supportsReasoning: false });
+    setContextWindow(app.db, id, 16384);
+    const chat = (await (await app.call('POST', '/api/chats')).json()) as ChatSummary;
+    const u = insertMessage(app.db, { chatId: chat.id, parentId: null, role: 'user', content: BIG });
+    const a = insertMessage(app.db, { chatId: chat.id, parentId: u.id, role: 'assistant', content: 'ok', modelId: id });
+    setActiveLeaf(app.db, chat.id, a.id);
+    return { ...app, id, chatId: chat.id };
+  }
+
+  it('refuses against the loaded window, not My models', async () => {
+    const s = await lmSetup(4096);
+    const res = await s.call('POST', `/api/chats/${s.chatId}/messages`, { content: 'More', modelId: s.id });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as any).overflow[0]).toMatchObject({ modelId: s.id, window: 4096 });
+  });
+
+  it('uses the chosen window when the model is not loaded', async () => {
+    const s = await lmSetup(undefined);
+    const res = await s.call('POST', `/api/chats/${s.chatId}/messages`, { content: 'More', modelId: s.id });
+    expect(res.status).toBe(200);
+    await res.text();
+  });
+
+  it('shows the loaded window in the context ring', async () => {
+    const s = await lmSetup(4096);
+    const ctx = (await (await s.call('GET', `/api/context?model=${encodeURIComponent(s.id)}&chat=${s.chatId}`)).json()) as any;
+    expect(ctx.contextLength).toBe(4096);
+  });
+
+  it('checks continue against the loaded window', async () => {
+    const s = await lmSetup(4096);
+    const res = await s.call('POST', `/api/chats/${s.chatId}/continue`, { modelId: s.id });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as any).overflow[0].window).toBe(4096);
+  });
+
+  it('leaves Ollama to its own request window', async () => {
+    const s = await setup();
+    const res = await s.call('GET', `/api/context?model=${encodeURIComponent(s.ids.small)}&chat=${s.chatId}`);
+    expect(((await res.json()) as any).contextLength).toBe(2048);
+  });
+});
