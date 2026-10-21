@@ -18,8 +18,6 @@ interface Row {
 
 export interface DiscussionSetupProps {
   models: LibraryModel[];
-  /** No OpenRouter API key yet: say where to add one. */
-  noKey: boolean;
   onCreated(d: DiscussionDetail): void;
 }
 
@@ -27,7 +25,7 @@ let nextKey = 0;
 const row = (n: number, modelId: string): Row => ({ key: nextKey++, name: `Participant ${n}`, modelId, instructions: '', isModerator: false });
 
 /** The form a discussion starts from: a topic, 2–6 participants with their own instructions, and a turn limit. */
-export function DiscussionSetup({ models, noKey, onCreated }: DiscussionSetupProps) {
+export function DiscussionSetup({ models, onCreated }: DiscussionSetupProps) {
   const defaultModel = (models.find((m) => m.isDefault) ?? models[0])?.id ?? '';
   const [topic, setTopic] = useState('');
   const [turnLimit, setTurnLimit] = useState(String(DEFAULT_TURN_LIMIT));
@@ -64,11 +62,9 @@ export function DiscussionSetup({ models, noKey, onCreated }: DiscussionSetupPro
     }
   }
 
-  const keyHint = noKey && <div className="setup-hint">Add your OpenRouter API key in <a href="#/settings">Settings</a>.</div>;
   if (!models.length) {
     return (
       <div className="page"><div className="page-inner discussion-setup">
-        {keyHint}
         <div className="setup-hint">Add a model in the <a href="#/models">Model Library</a> to start a discussion.</div>
       </div></div>
     );
@@ -77,7 +73,6 @@ export function DiscussionSetup({ models, noKey, onCreated }: DiscussionSetupPro
   return (
     <div className="page">
       <div className="page-inner discussion-setup">
-        {keyHint}
         <h1>New discussion</h1>
         <label className="field">
           Topic

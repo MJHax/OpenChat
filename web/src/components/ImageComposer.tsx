@@ -99,7 +99,7 @@ export function ImageComposer(p: Props) {
             Generate{price?.cost != null ? ` · ${price.estimated ? '~' : ''}${money(price.cost)}` : ''}
           </button>
         </div>
-        {reason && <div className="composer-hint">{reason}</div>}
+        {reason && <div className="composer-hint">{reason === 'Needs an OpenRouter key.' ? <a href="#/settings">{reason}</a> : reason}</div>}
       </div>
     </div>
   );

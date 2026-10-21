@@ -152,7 +152,7 @@ export function VideoThread({ threadId, title, reloadToken, settings: appSetting
     if (threadId) setDetail(await api.selectMessage(threadId, id).catch(() => detail));
   };
   const nameOf = (id: string) => library.find((e) => e.id === id)?.displayName ?? id;
-  const blocked = appSettings && !appSettings.hasApiKey ? 'Add your OpenRouter API key in Settings first.'
+  const blocked = appSettings && !appSettings.hasApiKey ? 'Needs an OpenRouter key.'
     : rendering ? 'A clip is still rendering in this thread.' : sending ? '' : null;
 
   return (

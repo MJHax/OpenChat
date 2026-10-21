@@ -83,7 +83,7 @@ export function VideoComposer(p: Props) {
             {price.nextSteps.map((n) => ` · ${n.label === 'sound' ? 'sound' : n.label} would add ${usd(n.extra)}`).join('')}
           </div>
         )}
-        {reason && <div className="composer-hint">{reason}</div>}
+        {reason && <div className="composer-hint">{reason === 'Needs an OpenRouter key.' ? <a href="#/settings">{reason}</a> : reason}</div>}
       </div>
     </div>
   );

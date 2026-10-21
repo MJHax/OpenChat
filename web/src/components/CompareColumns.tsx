@@ -46,6 +46,7 @@ export function CompareColumns({ title, columns, onContinue, onClose }: Props) {
               {col.text && <div className="msg-body"><MessageBody text={col.text} messageId={m?.id ?? null} streaming={col.streaming} /></div>}
               {col.error && <div className="error-text small">{col.error}</div>}
               {m?.status === 'stopped' && !col.error && <div className="muted small">Response stopped</div>}
+              {m?.contextDropped && <div className="muted small">Earlier messages were dropped because the chat is longer than this model's memory.</div>}
               {m && (
                 <div className="msg-meta">
                   {tokens > 0 && <span>{formatTokens(tokens)} tok</span>}

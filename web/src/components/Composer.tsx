@@ -51,7 +51,7 @@ interface Props {
 }
 
 /** What a suggestion card or the Library drops into the composer; text is left alone when undefined. */
-export interface ComposerPrefill { text?: string; attachments?: Attachment[]; files?: File[]; nonce: number }
+export interface ComposerPrefill { text?: string; attachments?: Attachment[]; files?: File[]; /** Empty the message box and its attachments. */ clear?: boolean; nonce: number }
 
 export function Composer({
   disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, webSearch, onWebSearchChange, effort, onEffortChange, thinking, onThinkingChange,
@@ -71,6 +71,7 @@ export function Composer({
 
   useEffect(() => {
     if (!prefill) return;
+    if (prefill.clear) draft.clear();
     if (prefill.attachments?.length) draft.restore(prefill.attachments);
     if (prefill.files?.length) draft.add(prefill.files);
     const text = prefill.text;

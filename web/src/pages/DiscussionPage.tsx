@@ -15,7 +15,7 @@ export interface DiscussionPageProps {
 // A discussion created on this page starts running when its page opens; one opened later waits for Resume.
 const justCreated = new Map<string, DiscussionDetail>();
 
-export function DiscussionPage({ discussionId, models, settings, onDiscussionsChanged }: DiscussionPageProps) {
+export function DiscussionPage({ discussionId, models, onDiscussionsChanged }: DiscussionPageProps) {
   const [detail, setDetail] = useState<DiscussionDetail | null>(() => (discussionId ? justCreated.get(discussionId) ?? null : null));
   // Read here, forgotten in an effect: React may call state initializers twice in development.
   const [fresh] = useState(() => (discussionId ? justCreated.has(discussionId) : false));
@@ -31,7 +31,7 @@ export function DiscussionPage({ discussionId, models, settings, onDiscussionsCh
 
   if (!discussionId) {
     return (
-      <DiscussionSetup models={models} noKey={!!settings && !settings.hasApiKey} onCreated={(d) => {
+      <DiscussionSetup models={models} onCreated={(d) => {
         justCreated.set(d.chat.id, d);
         onDiscussionsChanged();
         navigate(`#/discussions/${d.chat.id}`);

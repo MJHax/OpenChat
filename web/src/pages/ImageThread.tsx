@@ -185,7 +185,7 @@ export function ImageThread({ threadId, title, reloadToken, settings: appSetting
   };
 
   const nameOf = (id: string) => library.find((e) => e.id === id)?.displayName ?? id;
-  const blocked = appSettings && !appSettings.hasApiKey ? 'Add your OpenRouter API key in Settings first.'
+  const blocked = appSettings && !appSettings.hasApiKey ? 'Needs an OpenRouter key.'
     : running ? 'An image is still being made in this thread.' : sending ? '' : null;
 
   return (

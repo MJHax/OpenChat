@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { Attachment, ChatDetail, Effort, LibraryModel, Message, SettingsView } from '../../../shared/types';
-import { api, streamComparison, streamGeneration } from '../api';
+import type { Attachment, ChatDetail, ContextOverflow, Effort, LibraryModel, LocalServerStatus, Message, SettingsView } from '../../../shared/types';
+import { ApiError, api, streamComparison, streamGeneration } from '../api';
+import { ContextOverflowDialog } from './ContextOverflowDialog';
 import { COMPARE_OFF, compareModels, loadCompare, saveCompare, type CompareState } from '../lib/compare';
 import { initialModelId } from '../lib/models';
 import { loadSearch, saveSearch } from '../lib/search';
@@ -97,6 +98,10 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   /** A continued chat's summary note as being edited; null when the chat has none. */
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
   const [continuing, setContinuing] = useState(false);
+  /** A send the server held back because the chat is longer than a model can remember; `opts` is null when the summary itself overflowed. */
+  const [overflowAsk, setOverflowAsk] = useState<{ opts: RunOptions | null; overflow: ContextOverflow[] } | null>(null);
+  /** The first local server that is online, for the no-models hint. */
+  const [localFound, setLocalFound] = useState<LocalServerStatus | null>(null);
   /** Text a suggestion card, or files the Library, drops into the composer. */
   const [prefill, setPrefill] = useState<ComposerPrefill | null>(null);
   useEffect(() => {
@@ -212,8 +217,9 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
   }
 
   /** Resolves false when the request failed before the server took it, so the caller can give the draft back. */
-  async function run(opts: RunOptions): Promise<boolean> {
+  async function run(opts: RunOptions, allowOverflow = false): Promise<boolean> {
     setError(null);
+    setOverflowAsk(null);
     setVersions(null);
     setFailedEdit(null);
     const sendSearch = webSearch && searchAllowed(models, opts.models);
@@ -241,14 +247,23 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     // Regenerate uses the effort picked now, so a reply can be retried at a different one.
     const modelField = { ...(opts.models.length === 1 ? { modelId: opts.models[0] } : { modelIds: opts.models }), ...(effort ? { effort } : {}),
       ...(!thinking ? { thinking: false } : {}) };
+    const overflowField = allowOverflow ? { allowOverflow: true } : {};
     const body =
-      opts.kind === 'send' ? { content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), webSearch: sendSearch, ...modelField }
-      : opts.kind === 'regenerate' ? { parentId: opts.parentId, ...modelField }
-      : { messageId: opts.messageId, content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), webSearch: sendSearch, ...modelField };
+      opts.kind === 'send' ? { content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), webSearch: sendSearch, ...modelField, ...overflowField }
+      : opts.kind === 'regenerate' ? { parentId: opts.parentId, ...modelField, ...overflowField }
+      : { messageId: opts.messageId, content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), webSearch: sendSearch, ...modelField, ...overflowField };
 
     let settled = false;
     // The server sends `start` before anything else, after the message is saved; an error before it means nothing was kept.
     let started = false;
+    /** Set when the server refused the request because the chat is too long for a model; nothing was saved. */
+    let overflowed: ContextOverflow[] | null = null;
+    const failed = (e: { message: string; overflow?: ContextOverflow[] }) => {
+      if (!started && e.overflow?.length) {
+        overflowed = e.overflow;
+        void finish(null);
+      } else void finish(e.message);
+    };
     const finish = async (message: string | null) => {
       if (settled) return;
       settled = true;
@@ -276,7 +291,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
               if (name && isShown()) setOpenFile({ name, messageId: e.message.id, adhoc: null });
             });
           },
-          onError: (e) => { void finish(e.message); },
+          onError: failed,
           onTitle: () => onChatsChanged(),
         }, controller.signal);
       } else {
@@ -291,11 +306,15 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
             updateSlot(e.slot, (s) => ({ ...s, error: e.message, message: e.partial, done: true }));
           },
           onDone: (e) => { void finish(e.compareParentId ? null : `None of the models replied. ${failures[0] ?? ''}`.trim()); },
-          onError: (e) => { void finish(e.message); },
+          onError: failed,
           onTitle: () => onChatsChanged(),
         }, controller.signal);
       }
       if (!settled) void finish(null); // stream closed without a final event
+      if (overflowed) {
+        if (isShown()) setOverflowAsk({ opts, overflow: overflowed });
+        return false;
+      }
       return started;
     } catch (e) {
       if ((e as Error).name === 'AbortError') {
@@ -336,18 +355,24 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     !!runModels && (await saveNote()) && run({ kind: 'send', text, attachments, baseLength: messages.length, models: runModels });
 
   /** "Summarize and continue" with the chat's current model; opens the new chat when the summary is ready. */
-  const summarize = async () => {
+  const summarize = async (allowOverflow = false) => {
     const model = modelId || runModels?.[0];
     if (!chatId || !model) return;
     setContinuing(true);
     setError(null);
     try {
-      const created = await api.continueChat(chatId, model);
+      const created = await api.continueChat(chatId, model, allowOverflow);
       continuedModels.set(created.id, model);
+      setOverflowAsk(null);
       onChatsChanged();
       navigate(`#/chat/${created.id}`);
     } catch (e) {
-      setError((e as Error).message);
+      const overflow = e instanceof ApiError ? (e.data.overflow as ContextOverflow[] | undefined) : undefined;
+      if (overflow?.length) setOverflowAsk({ opts: null, overflow });
+      else {
+        setOverflowAsk(null);
+        setError((e as Error).message);
+      }
     } finally {
       setContinuing(false);
     }
@@ -363,7 +388,16 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       setError((e as Error).message);
     }
   };
-  const canContinue =!!chatId && messages.some((m) => m.role === 'user') && !streaming && !(settings !== null && !settings.hasApiKey);
+  const canContinue = !!chatId && messages.some((m) => m.role === 'user') && !streaming;
+  /** The dialog's Send anyway: the same request again, and the draft it gave back is cleared. */
+  const sendAnyway = async () => {
+    const ask = overflowAsk;
+    if (!ask?.opts) return;
+    const opts = ask.opts;
+    setOverflowAsk(null);
+    if (opts.kind !== 'regenerate') setPrefill((p) => ({ nonce: (p?.nonce ?? 0) + 1, text: '', clear: true }));
+    if (!(await run(opts, true)) && opts.kind === 'edit') setFailedEdit({ messageId: opts.messageId, text: opts.text, attachments: opts.attachments });
+  };
   const regenerate = (index: number, model: string | null) => {
     const list = model ? [model] : compareList;
     if (list) run({ kind: 'regenerate', parentId: messages[index].parentId!, baseLength: index, models: list });
@@ -436,15 +470,19 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     replies.map((m) => ({ key: m.id, modelName: nameOf(m.modelId), text: m.content, reasoning: '', startedAt: 0, streaming: false, error: null, message: m }));
 
   const shown = pending ? messages.slice(0, pending.baseLength) : versions ? messages.slice(0, versions.index) : messages;
-  const noKey = settings !== null && !settings.hasApiKey;
   const noModels = models.length === 0;
+  useEffect(() => {
+    if (!noModels) return;
+    let live = true;
+    api.localServers().then((list) => { if (live) setLocalFound(list.find((s) => s.online) ?? null); }).catch(() => {});
+    return () => { live = false; };
+  }, [noModels]);
   // A user message at the end of the path means its reply was stopped or lost before any text arrived.
   const awaitingReply = !choosing && messages.length > 0 && messages[messages.length - 1].role === 'user';
-  const home = !chatId && !pending && !noKey && !noModels;
+  const home = !chatId && !pending && !noModels;
   const wide = (pending !== null && pending.slots.length > 1) || choosing !== null || versions !== null;
   const disabledReason =
     noModels ? 'Add a model in the Model Library first.'
-    : noKey ? 'Add your OpenRouter API key in Settings first.'
     : choosing ? 'Pick a reply to continue.'
     : compare.enabled && !compareList ? 'Choose 2 to 4 models to compare.'
     : null;
@@ -455,7 +493,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
         <header className="chat-header">
           <h1 className={chatId ? undefined : 'visually-hidden'}>{chatId ? title : 'New chat'}</h1>
           <div className="chat-header-tools">
-            <ContextPopover context={context} show={!!runModels?.length} nameOf={nameOf} onContinue={canContinue ? summarize : null} continuing={continuing} />
+            <ContextPopover context={context} show={!!runModels?.length} nameOf={nameOf} onContinue={canContinue ? () => { void summarize(); } : null} continuing={continuing} />
             <ChatStatsPopover chatId={chatId} totalCost={detail?.chat.totalCost ?? 0} refreshKey={detail} />
             <ChatMenu instructions={chatId ? detail?.chat.instructions ?? '' : draftInstructions} onSaveInstructions={saveInstructions}
               compare={compare} onCompareChange={setCompare} canCompare={models.length >= 2} />
@@ -464,10 +502,12 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
 
         <div className="messages" ref={listRef}>
           <div className={`messages-inner${wide ? ' wide' : ''}`}>
-            {(noKey || noModels) && (
+            {noModels && (
               <div className="setup-hint">
-                {noKey && <div>Add your OpenRouter API key in <a href="#/settings">Settings</a>.</div>}
-                {noModels && <div>Add a model in the <a href="#/models">Model Library</a> to start chatting.</div>}
+                <div>Add a model in the <a href="#/models">Model Library</a> to start chatting. You can use an OpenRouter key, or a local server like Ollama or LM Studio.</div>
+                {localFound && (
+                  <div><a href="#/models">{localFound.name} found with {localFound.modelCount ?? 0} {localFound.modelCount === 1 ? 'model' : 'models'}.</a></div>
+                )}
               </div>
             )}
             {home && <HomeGreeting />}
@@ -542,7 +582,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
                     ? `This chat has filled ${nameOf(context.fullest.modelId)}'s context window, so replies may fail or lose earlier messages.`
                     : `This chat is using ${percent(context.fill)} of ${nameOf(context.fullest.modelId)}'s context window.`}
                 </span>
-                <button onClick={summarize} disabled={continuing}>{continuing ? 'Summarizing…' : 'Summarize and continue'}</button>
+                <button onClick={() => { void summarize(); }} disabled={continuing}>{continuing ? 'Summarizing…' : 'Summarize and continue'}</button>
                 <button className="link" aria-label="Dismiss" title="Dismiss"
                   onClick={() => setWarningDismissed((s) => new Set(s).add(chatId))}><X size={16} /></button>
               </div>
@@ -550,6 +590,17 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
             <SpendNotice refreshKey={detail} />
           </div>
         </div>
+
+        {overflowAsk && (
+          <ContextOverflowDialog
+            overflow={overflowAsk.overflow}
+            retry={!overflowAsk.opts}
+            busy={continuing}
+            onSummarize={() => { void summarize(!overflowAsk.opts); }}
+            onSendAnyway={overflowAsk.opts ? () => { void sendAnyway(); } : undefined}
+            onCancel={() => setOverflowAsk(null)}
+          />
+        )}
 
         <Composer
           disabledReason={disabledReason}

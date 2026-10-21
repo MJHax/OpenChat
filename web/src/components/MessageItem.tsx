@@ -151,6 +151,7 @@ export function MessageItem({
         </div>
         <div className="msg-body" ref={bodyRef}><MessageBody text={message.content} messageId={message.id} streaming={false} /></div>
         {message.status === 'stopped' && <div className="muted small">Response stopped</div>}
+        {message.contextDropped && <div className="muted small">Earlier messages were dropped because the chat is longer than this model's memory.</div>}
         <Sources sources={message.sources} />
         <div className="msg-meta">
           {nav}

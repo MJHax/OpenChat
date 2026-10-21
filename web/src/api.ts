@@ -4,7 +4,7 @@ import type {
   Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle, StatsRange, StatsResponse, ChatStats, ContextUsage,
   GeneratedItems, MediaCatalog, MediaKind, MediaLibraryModel, MediaStatsResponse, MediaThreadStats, ThreadKind, StorageUsage, DeleteTarget, LimitStatus,
   DiscussionDetail, DiscussionState, DiscussionSummary, DiscussionTurnDone, DiscussionTurnError, DiscussionTurnStart, NewDiscussion,
-  LibraryResponse, LibrarySource, SavedPrompt, LocalServerStatus, LocalCatalog,
+  LibraryResponse, LibrarySource, SavedPrompt, LocalServerStatus, LocalCatalog, ContextOverflow,
 } from '../../shared/types';
 import type { LocalServerType } from '../../shared/localModels';
 import type { ImageSettings } from '../../shared/imageModels';
@@ -38,7 +38,8 @@ export const api = {
   setInstructions: (id: string, instructions: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { instructions }),
   setContextNote: (id: string, contextNote: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { contextNote }),
   /** "Summarize and continue": resolves with the new chat once the summary is written. */
-  continueChat: (id: string, modelId: string) => json<ChatSummary>('POST', `/api/chats/${id}/continue`, { modelId }),
+  continueChat: (id: string, modelId: string, allowOverflow = false) =>
+    json<ChatSummary>('POST', `/api/chats/${id}/continue`, { modelId, ...(allowOverflow ? { allowOverflow: true } : {}) }),
   forkChat: (id: string, messageId: string) => json<ChatSummary>('POST', `/api/chats/${id}/fork`, { messageId }),
   getChat: (id: string) => json<ChatDetail>('GET', `/api/chats/${id}`),
   renameChat: (id: string, title: string) => json<ChatDetail>('PATCH', `/api/chats/${id}`, { title }),
@@ -173,8 +174,8 @@ async function postStream(url: string, body: unknown, signal: AbortSignal, onErr
     signal,
   });
   if (!res.ok || !res.body) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
-    onError({ message: data.error ?? `Request failed (${res.status})`, partial: null });
+    const data = (await res.json().catch(() => ({}))) as { error?: string; overflow?: ContextOverflow[] };
+    onError({ message: data.error ?? `Request failed (${res.status})`, partial: null, ...(data.overflow ? { overflow: data.overflow } : {}) });
     return null;
   }
   return parseSSE(res.body);
