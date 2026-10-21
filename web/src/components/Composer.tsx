@@ -7,6 +7,7 @@ import { insertOnOwnLine } from '../lib/prompts';
 import { ModelPicker } from './ModelPicker';
 import { ChipPopover } from './ChipPopover';
 import { SEARCH_TOOLTIP } from '../lib/search';
+import { THINKING_TOOLTIP } from '../lib/thinking';
 import { EFFORT_HINTS, EFFORT_TOOLTIP, effortLabel } from '../lib/effort';
 import { AttachmentChips } from './AttachmentChips';
 import { AttachButton, useFileDrop } from './AttachButton';
@@ -26,6 +27,9 @@ interface Props {
   /** Reasoning effort; null leaves it to the model. */
   effort: Effort | null;
   onEffortChange(effort: Effort | null): void;
+  /** Whether local reasoning models think before answering. */
+  thinking: boolean;
+  onThinkingChange(on: boolean): void;
   /** The model(s) the next send goes to, for the image checks. */
   replyModels: LibraryModel[];
   /** The chat's messages so far, to warn when earlier images will be skipped. */
@@ -49,7 +53,7 @@ interface Props {
 export interface ComposerPrefill { text?: string; attachments?: Attachment[]; files?: File[]; nonce: number }
 
 export function Composer({
-  disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, webSearch, onWebSearchChange, effort, onEffortChange,
+  disabledReason, streaming, models, modelId, onModelChange, compare, onCompareChange, webSearch, onWebSearchChange, effort, onEffortChange, thinking, onThinkingChange,
   replyModels, path,
   onSend, onStop, showCompareToggle, prefill, insert, onInsertUsed, onOpenPrompts,
 }: Props) {
@@ -60,6 +64,9 @@ export function Composer({
   const rememberCaret = () => { if (ref.current) caretRef.current = ref.current.selectionEnd; };
 
   const draft = useAttachmentDraft();
+  /** Local models can't search the web yet, so the toggle is off when every model chosen is local. */
+  const searchBlocked = replyModels.length > 0 && replyModels.every((m) => m.source === 'local');
+  const localThinking = replyModels.some((m) => m.source === 'local' && m.supportsReasoning);
 
   useEffect(() => {
     if (!prefill) return;
@@ -136,7 +143,8 @@ export function Composer({
         <div className="composer-bar">
           <div className="composer-models">
             <AttachButton onFiles={draft.add} onAttachments={draft.restore} />
-            <button className="icon-btn" aria-pressed={webSearch} aria-label="Web search" title={`Web search: ${webSearch ? 'on' : 'off'}. ${SEARCH_TOOLTIP}`}
+            <button className="icon-btn" aria-pressed={webSearch && !searchBlocked} aria-label="Web search" disabled={searchBlocked}
+              title={searchBlocked ? 'Set up web search in Settings' : `Web search: ${webSearch ? 'on' : 'off'}. ${SEARCH_TOOLTIP}`}
               onClick={() => onWebSearchChange(!webSearch)}>
               <Globe size={15} />
             </button>
@@ -152,7 +160,13 @@ export function Composer({
               </button>
             )}
             <ModelPicker models={models} modelId={modelId} onModelChange={onModelChange} compare={compare} onCompareChange={onCompareChange} />
-            {replyModels.some((m) => m.supportsReasoning) && (
+            {localThinking && (
+              <button className={`chip ghost thinking-chip${thinking ? ' on' : ''}`} aria-pressed={thinking} title={THINKING_TOOLTIP}
+                onClick={() => onThinkingChange(!thinking)}>
+                <Brain size={13} />Thinking: {thinking ? 'On' : 'Off'}
+              </button>
+            )}
+            {!localThinking && replyModels.some((m) => m.supportsReasoning) && (
               <ChipPopover title={EFFORT_TOOLTIP} className={`ghost effort-chip${effort ? ' on' : ''}`} panelClassName="effort-panel"
                 icon={<Brain size={13} />} label={<>{effortLabel(effort)}<ChevronDown size={12} /></>}>
                 {(close) => (

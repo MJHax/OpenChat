@@ -207,3 +207,8 @@ button.chip.on { background: var(--accent-fill); color: var(--on-accent); border
 .frame-slot .frame-empty { border-radius: var(--radius-sm); }
 .svg-tag { display: inline-flex; align-items: center; margin-left: 6px; padding: 0 6px; border-radius: 5px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
   color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 10%, transparent); vertical-align: middle; flex-shrink: 0; }
+
+.local-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 4px; }
+.local-settings .error-text { flex-basis: 100%; margin: 0; }
+.window-input { width: 92px; padding: 2px 6px; }
+.local-cap { display: inline-flex; align-items: center; }

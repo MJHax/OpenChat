@@ -1,7 +1,7 @@
 import { Check, ChevronDown, X } from 'lucide-react';
 import type { LibraryModel } from '../../../shared/types';
 import { MAX_COMPARE, toggleModel, type CompareState } from '../lib/compare';
-import { formatContext, formatPricePerM } from '../lib/format';
+import { modelDetails } from '../lib/localModels';
 import { ChipPopover } from './ChipPopover';
 
 export interface ModelPickerProps {
@@ -11,10 +11,6 @@ export interface ModelPickerProps {
   compare: CompareState;
   onCompareChange(next: CompareState): void;
 }
-
-const details = (m: LibraryModel) =>
-  [m.promptPrice !== null && `${formatPricePerM(m.promptPrice)} in · ${formatPricePerM(m.completionPrice)} out`, formatContext(m.contextLength) && `${formatContext(m.contextLength)} context`]
-    .filter(Boolean).join(' · ');
 
 /** The composer's model chip: one model normally, several (with a way out) in compare mode. */
 export function ModelPicker({ models, modelId, onModelChange, compare, onCompareChange }: ModelPickerProps) {
@@ -34,7 +30,7 @@ export function ModelPicker({ models, modelId, onModelChange, compare, onCompare
                 return (
                   <button key={m.id} className={`pop-item${on ? ' sel' : ''}`} disabled={!on && compare.modelIds.length >= MAX_COMPARE}
                     aria-pressed={on} onClick={() => onCompareChange(toggleModel(compare, m.id))}>
-                    <span>{m.displayName}<small>{details(m)}</small></span>
+                    <span>{m.displayName}<small>{modelDetails(m)}</small></span>
                     {on && <Check size={15} className="check" />}
                   </button>
                 );
@@ -58,7 +54,7 @@ export function ModelPicker({ models, modelId, onModelChange, compare, onCompare
           {models.map((m) => (
             <button key={m.id} className={`pop-item${m.id === modelId ? ' sel' : ''}`} aria-current={m.id === modelId ? 'true' : undefined}
               onClick={() => { onModelChange(m.id); close(); }}>
-              <span>{m.displayName}<small>{details(m)}</small></span>
+              <span>{m.displayName}<small>{modelDetails(m)}</small></span>
               {m.id === modelId && <Check size={15} className="check" />}
             </button>
           ))}

@@ -228,7 +228,7 @@ export function App() {
           <DiscussionPage key={page.discussionId ?? 'new'} discussionId={page.discussionId} models={models} settings={settings}
             onDiscussionsChanged={refreshChats} />
         )}
-        {page.page === 'models' && <ModelLibrary models={models} onChanged={refreshModels} sort={librarySort} onSort={changeLibrarySort} />}
+        {page.page === 'models' && <ModelLibrary models={models} noKey={settings !== null && !settings.hasApiKey} onChanged={refreshModels} sort={librarySort} onSort={changeLibrarySort} />}
         {page.page === 'stats' && <Stats />}
         {page.page === 'library' && <Library onReuse={startChatWith} />}
         </div>

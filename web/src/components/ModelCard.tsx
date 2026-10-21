@@ -13,12 +13,14 @@ export interface ModelCardProps {
   onRemove(): void;
   /** Shelf variant: no description until expanded. */
   compact?: boolean;
+  /** OpenRouter models can't be added without an API key. */
+  needsKey?: boolean;
 }
 
 /** Free and long context already show in the price and context line, so they get no pill. */
 const PILLS = CAPABILITIES.filter((c) => c.id !== 'free' && c.id !== 'longContext');
 
-export function ModelCard({ model: m, added, busy, onAdd, onRemove, compact = false }: ModelCardProps) {
+export function ModelCard({ model: m, added, busy, onAdd, onRemove, compact = false, needsKey = false }: ModelCardProps) {
   const [open, setOpen] = useState(false);
   const caps = capabilitiesOf(m);
   const pills = PILLS.filter((c) => caps.includes(c.id));
@@ -57,8 +59,8 @@ export function ModelCard({ model: m, added, busy, onAdd, onRemove, compact = fa
         !compact && m.description && <p className="model-card-desc" title={m.description}>{m.description}</p>
       )}
       <div className="model-card-actions">
-        <button className="primary" disabled={added || busy} onClick={onAdd}>
-          {added ? 'Added' : 'Add'}
+        <button className="primary" disabled={added || busy || needsKey} onClick={onAdd}>
+          {added ? 'Added' : needsKey ? 'Needs key' : 'Add'}
         </button>
         {added && (
           <button className="link accent" disabled={busy} onClick={onRemove}>
