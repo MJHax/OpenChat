@@ -4,11 +4,12 @@ import { DEFAULT_TITLE, getChatRow, renameChat } from './chats';
 import { getChatMessages } from './messages';
 import { getSetting } from './settings';
 import { activePath, repliesTo } from './tree';
-import { now } from './db';
+import { now, type DB } from './db';
 import type { Usage } from './openrouter';
 import { chatProvider } from './providers';
 import { recordUsage, type UsageStatus } from './usage';
 import { spendBlock } from './limits';
+import { isLocalModelId } from '../../shared/localModels';
 
 export function cleanTitle(raw: string): string {
   const firstLine = raw.trim().split('\n')[0] ?? '';
@@ -16,6 +17,12 @@ export function cleanTitle(raw: string): string {
     .replace(/^["'`*#\s]+/, '')
     .replace(/["'`*.\s]+$/, '')
     .slice(0, 80);
+}
+
+/** True when the chat has at least one assistant reply and every one came from a local model. */
+export function isLocalOnlyChat(db: DB, chatId: string): boolean {
+  const rows = db.prepare("SELECT model_id FROM messages WHERE chat_id = ? AND role = 'assistant'").all(chatId) as { model_id: string | null }[];
+  return rows.length > 0 && rows.every((r) => !!r.model_id && isLocalModelId(r.model_id));
 }
 
 // Chats with a title request in flight; a slow title call must not be duplicated by the next reply.
@@ -59,7 +66,9 @@ async function generateTitle(deps: Deps, chatId: string, fallbackModel: string):
     .slice(0, 4000);
   // Over a spending limit the chat just keeps its default title.
   if (spendBlock(db)) return null;
-  const model = getSetting(db, 'title_model_id') || fallbackModel;
+  let model = getSetting(db, 'title_model_id') || fallbackModel;
+  // A chat that never left the local server isn't titled by OpenRouter, whatever the title setting says.
+  if (!isLocalModelId(model) && isLocalOnlyChat(db, chatId)) model = fallbackModel;
   const startedAt = now();
   const t0 = Date.now();
   let usage: Usage | null = null;
