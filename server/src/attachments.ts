@@ -10,6 +10,7 @@ import {
 import type { Attachment, AttachmentKind, GeneratedItems } from '../../shared/types';
 import { fileVersions, mimeFor, parseFileBlocks, safeFileName } from '../../shared/files';
 import { ATTACHMENT_LIMITS, tooLargeMessage } from '../../shared/attachments';
+import { isLocalModelId } from '../../shared/localModels';
 import { getChatMessages, getMessage } from './messages';
 import { activePath } from './tree';
 
@@ -125,8 +126,12 @@ export function attachToMessage(db: DB, messageId: string, list: AttachmentRow[]
   });
 }
 
-/** Rejects new images for any model that can't view them; older images are handled by the prompt builder. */
+/** Rejects new images for any model that can't view them, and PDFs for local models, which can't read them yet; older ones are handled by the prompt builder. */
 export function requireViewable(db: DB, modelIds: string[], list: Attachment[]): void {
+  if (list.some((a) => a.kind === 'pdf')) {
+    const local = modelIds.find(isLocalModelId);
+    if (local) throw new HttpError(400, `${displayNameOf(db, local)} can't read PDFs yet. Use an OpenRouter model for PDFs.`);
+  }
   if (!list.some((a) => a.kind === 'image')) return;
   const blind = modelIds.find((id) => !canViewImages(modelModalities(db, id)));
   if (blind) throw new HttpError(400, `${displayNameOf(db, blind)} can't view images.`);

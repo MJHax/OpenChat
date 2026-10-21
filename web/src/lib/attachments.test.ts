@@ -85,6 +85,13 @@ describe('sendBlockReason', () => {
     expect(sendBlockReason(['image'], [vision])).toBeNull();
     expect(sendBlockReason(['pdf', 'text'], [textOnly])).toBeNull();
   });
+
+  it('blocks PDFs for local models, which cannot read them yet', () => {
+    const local = { ...textOnly, id: 'local:abc:gemma3:1b', displayName: 'gemma3:1b' };
+    expect(sendBlockReason(['pdf'], [local])).toBe("gemma3:1b can't read PDFs yet. Use an OpenRouter model for PDFs.");
+    expect(sendBlockReason(['pdf'], [textOnly, local])).toBe("gemma3:1b can't read PDFs yet. Use an OpenRouter model for PDFs.");
+    expect(sendBlockReason(['text'], [local])).toBeNull();
+  });
 });
 
 describe('skippedImagesNotice', () => {

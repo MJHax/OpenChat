@@ -73,6 +73,15 @@ describe('local model routing', () => {
     expect(s.db.prepare('SELECT COUNT(*) AS n FROM usage_events WHERE web_search = 1').get()).toEqual({ n: 0 });
   });
 
+  it('refuses a PDF for a local model instead of dropping it silently', async () => {
+    const s = await setup();
+    const pdf = (await (await s.upload('%PDF-1.4\n', 'report.pdf')).json()) as { id: string };
+    const res = await send(s, { modelId: s.ids.gemma, attachmentIds: [pdf.id] });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as any).error).toBe("gemma3:1b can't read PDFs yet. Use an OpenRouter model for PDFs.");
+    expect(chatBodies(s.fake)).toHaveLength(0);
+  });
+
   it('regenerates and edits with a local model', async () => {
     const s = await setup();
     const sent = await readEvents(await send(s, { modelId: s.ids.gemma }));

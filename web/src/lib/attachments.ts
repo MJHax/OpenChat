@@ -2,6 +2,7 @@ import {
   ATTACHMENT_LIMITS, MAX_ATTACHMENTS, MAX_TOTAL_BYTES, MB, TOO_MANY_FILES, TOO_MUCH_TOTAL, UNSUPPORTED_TYPE, canViewImages, tooLargeMessage,
 } from '../../../shared/attachments';
 import type { Attachment, AttachmentKind, LibraryModel } from '../../../shared/types';
+import { isLocalModelId } from '../../../shared/localModels';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
@@ -57,6 +58,9 @@ export function withRestored<T extends { attachment: { id: string } | null }>(cu
 
 /** Why the draft can't be sent to `models` (the model or compare set that would reply), or null. */
 export function sendBlockReason(kinds: AttachmentKind[], models: LibraryModel[]): string | null {
+  // Local models can't read PDFs yet (the server drops them), so say so rather than send without the file.
+  const noPdf = kinds.includes('pdf') ? models.find((m) => isLocalModelId(m.id)) : undefined;
+  if (noPdf) return `${noPdf.displayName} can't read PDFs yet. Use an OpenRouter model for PDFs.`;
   if (!kinds.includes('image')) return null;
   const blind = models.filter((m) => !canViewImages(m.inputModalities));
   if (blind.length === 0) return null;
