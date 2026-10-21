@@ -32,7 +32,11 @@ export interface AttachmentOptions {
   /** What the model replying accepts, e.g. ['text', 'image']. */
   inputModalities: string[];
   loadData(id: string): Buffer;
+  /** Given for local models, which can't take a PDF file: each PDF is sent as this text instead. */
+  pdfText?: (id: string) => string | null;
 }
+
+export const NO_PDF_TEXT = 'This PDF has no readable text.';
 
 export function buildSystemPrompt(p: Persona): string | null {
   const sections: string[] = [];
@@ -84,6 +88,10 @@ function toParts(m: PathEntry, attachments: Attachment[], o: AttachmentOptions):
     parts.push(images ? { type: 'image_url', image_url: { url: imageDataUrl(a.mime, o.loadData(a.id)) } } : { type: 'text', text: imageSkippedNote(a.filename) });
   }
   for (const a of ofKind('pdf')) {
+    if (o.pdfText) {
+      parts.push({ type: 'text', text: `<file name="${attr(a.filename)}">\n${o.pdfText(a.id) || NO_PDF_TEXT}\n</file>` });
+      continue;
+    }
     parts.push({ type: 'file', file: { filename: a.filename, file_data: dataUrl(a.mime, o.loadData(a.id)) } });
   }
   return parts;

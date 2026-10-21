@@ -13,6 +13,8 @@ import { ATTACHMENT_LIMITS, tooLargeMessage } from '../../shared/attachments';
 import { isLocalModelId } from '../../shared/localModels';
 import { getChatMessages, getMessage } from './messages';
 import { activePath } from './tree';
+import { cachedPdfText } from './pdfText';
+import { NO_PDF_TEXT } from './prompt';
 
 export type AttachmentRow = Attachment & { messageId: string | null };
 
@@ -126,11 +128,14 @@ export function attachToMessage(db: DB, messageId: string, list: AttachmentRow[]
   });
 }
 
-/** Rejects new images for any model that can't view them, and PDFs for local models, which can't read them yet; older ones are handled by the prompt builder. */
+/**
+ * Rejects new images for any model that can't view them, and new PDFs without text for local models (their text must
+ * be extracted already); older ones are handled by the prompt builder.
+ */
 export function requireViewable(db: DB, modelIds: string[], list: Attachment[]): void {
-  if (list.some((a) => a.kind === 'pdf')) {
-    const local = modelIds.find(isLocalModelId);
-    if (local) throw new HttpError(400, `${displayNameOf(db, local)} can't read PDFs yet. Use an OpenRouter model for PDFs.`);
+  if (modelIds.some(isLocalModelId)) {
+    const empty = list.find((a) => a.kind === 'pdf' && cachedPdfText(db, a.id) === '');
+    if (empty) throw new HttpError(400, `${empty.filename}: ${NO_PDF_TEXT}`);
   }
   if (!list.some((a) => a.kind === 'image')) return;
   const blind = modelIds.find((id) => !canViewImages(modelModalities(db, id)));

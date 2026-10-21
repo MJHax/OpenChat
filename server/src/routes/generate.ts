@@ -13,6 +13,7 @@ import { checkSpend, spendBlock } from '../limits';
 import { isLocalModelId } from '../../../shared/localModels';
 import { contextOverflow, overflowMessage } from '../contextCheck';
 import { loadedWindows } from '../providers';
+import { ensurePdfText, pathPdfIds } from '../pdfText';
 
 const requireText = (value: unknown, error: string): string => {
   if (typeof value !== 'string' || !value.trim()) throw new HttpError(400, error);
@@ -120,6 +121,11 @@ export function generationRoutes(deps: Deps): Hono {
     }
   }
 
+  /** Local models are sent a PDF's text, so read the PDFs on the path and in the new message before anything checks or builds a prompt. */
+  async function readPdfs(modelIds: string[], chatId: string, parentId: string | null, attachments: AttachmentRow[] = []): Promise<void> {
+    if (modelIds.some(isLocalModelId)) await ensurePdfText(db, [...pathPdfIds(db, chatId, parentId), ...attachments.map((a) => a.id)]);
+  }
+
   /** Saves a user message and its attachments together. */
   const saveUserMessage = db.transaction((chatId: string, parentId: string | null, content: string, attachments: AttachmentRow[], webSearch: boolean) => {
     const user = insertMessage(db, { chatId, parentId, role: 'user', content, webSearch });
@@ -137,6 +143,7 @@ export function generationRoutes(deps: Deps): Hono {
     const attachments = resolveAttachmentIds(db, body.attachmentIds, { editedMessageId: null });
     const content = requireContent(body.content, attachments);
     const modelIds = requireModels(body);
+    await readPdfs(modelIds, chatId, chat.active_leaf_id, attachments);
     requireViewable(db, modelIds, attachments);
     const limitMessage = claim(chat, modelIds);
     const droppedModelIds = await checkOverflow(chatId, body.allowOverflow, { chatId, parentId: chat.active_leaf_id, newMessage: { content, attachments }, modelIds });
@@ -154,6 +161,7 @@ export function generationRoutes(deps: Deps): Hono {
     const thinking = requireThinking(body.thinking);
     const parent = requireUserMessage(db, chatId, body.parentId);
     const modelIds = requireModels(body);
+    await readPdfs(modelIds, chatId, parent.id);
     const limitMessage = claim(chat, modelIds);
     const droppedModelIds = await checkOverflow(chatId, body.allowOverflow, { chatId, parentId: parent.id, newMessage: null, modelIds });
     return reply(c, { chatId, parentId: parent.id, modelIds, userMessageId: null, kind: 'regenerate', attachments: 0, effort, thinking, droppedModelIds, limitMessage });
@@ -173,6 +181,7 @@ export function generationRoutes(deps: Deps): Hono {
     const content = requireContent(body.content, attachments);
     const modelIds = requireModels(body);
     // Only images added in this edit are blocked; kept ones reach a text-only model as a note, like any earlier image.
+    await readPdfs(modelIds, chatId, original.parentId, attachments);
     requireViewable(db, modelIds, attachments.filter((a) => a.messageId === null));
     const limitMessage = claim(chat, modelIds);
     const droppedModelIds = await checkOverflow(chatId, body.allowOverflow, { chatId, parentId: original.parentId, newMessage: { content, attachments }, modelIds });

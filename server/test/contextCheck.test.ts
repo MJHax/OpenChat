@@ -5,6 +5,7 @@ import { addServer } from '../src/localServers';
 import { addLocalModel, addModel, setContextWindow } from '../src/library';
 import { insertMessage } from '../src/messages';
 import { setActiveLeaf } from '../src/chats';
+import { pdfWithPages } from '../../test/helpers';
 import { localModelId } from '../../shared/localModels';
 import { withCatalogDefaults, type ChatDetail, type ChatSummary, type Message } from '../../shared/types';
 
@@ -45,6 +46,16 @@ const detail = async (s: S) => (await (await s.call('GET', `/api/chats/${s.chatI
 const send = (s: S, body: object) => s.call('POST', `/api/chats/${s.chatId}/messages`, { content: 'More', ...body });
 
 describe('the check before sending', () => {
+  it('counts a PDF at its extracted text for a local model, not its page estimate', async () => {
+    const s = await setup();
+    setContextWindow(s.db, s.ids.small, 4096);
+    const line = 'word '.repeat(80); // 400 characters
+    const pages = [0, 1].map(() => Array.from({ length: 30 }, () => line)); // ~6,000 tokens over 2 pages
+    const pdf = (await (await s.upload(pdfWithPages(pages, 2), 'big.pdf')).json()) as { id: string };
+    const res = await send(s, { modelId: s.ids.small, attachmentIds: [pdf.id] });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as any).overflow[0].estimate).toBeGreaterThan(4096);
+  });
   it('refuses a send that does not fit, saving nothing', async () => {
     const s = await setup();
     longChat(s);

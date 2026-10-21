@@ -7,6 +7,7 @@ import { getChatRow } from './chats';
 import { estimateContext } from './context';
 import type { DB } from './db';
 import { displayNameOf, modelContextLength, modelModalities } from './library';
+import { pdfTextFor } from './pdfText';
 import { getChatMessages } from './messages';
 import { replySystemPrompt } from './prompt';
 import { chatPersona } from './settings';
@@ -27,6 +28,7 @@ export function estimatePath(db: DB, o: { modelId: string; chatId: string | null
     path: o.path.map((m, i) => ({ ...m, content: sent[i] })),
     canViewImages: canViewImages(modelModalities(db, o.modelId)),
     loadData: (id: string) => getAttachmentData(db, id) ?? Buffer.alloc(0),
+    pdfText: pdfTextFor(db, o.modelId),
   };
   const anchored = estimateContext(input);
   if (!isLocalModelId(o.modelId)) return anchored;

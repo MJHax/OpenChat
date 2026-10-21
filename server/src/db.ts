@@ -32,6 +32,13 @@ CREATE TABLE IF NOT EXISTS local_servers (
   created_at INTEGER NOT NULL
 );
 
+-- Text pulled out of PDFs for local models; a cache, so it is wiped with the rest and never exported.
+-- key is the attachment's hash, or id:<attachment id> when it has none.
+CREATE TABLE IF NOT EXISTS pdf_text (
+  key TEXT PRIMARY KEY,
+  text TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS memories (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   content TEXT NOT NULL,

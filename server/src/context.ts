@@ -1,6 +1,6 @@
 import { imageSkippedNote } from '../../shared/attachments';
 import type { ContextParts, ContextUsage, Message } from '../../shared/types';
-import { noteMessage } from './prompt';
+import { NO_PDF_TEXT, noteMessage } from './prompt';
 
 // OpenRouter reports one prompt total per reply, so the split is estimated by counting each part ourselves and
 // scaling the counts to that total. A real tokenizer wouldn't buy much: the scaling absorbs most of the error.
@@ -28,6 +28,8 @@ export interface ContextInput {
   path: Message[];
   canViewImages: boolean;
   loadData(id: string): Buffer;
+  /** Given for local models, which are sent a PDF's text rather than the file. */
+  pdfText?: (id: string) => string | null;
 }
 
 const zero = (): ContextParts => ({ system: 0, user: 0, assistant: 0, attachments: 0, search: 0 });
@@ -37,7 +39,10 @@ function addMessage(parts: ContextParts, m: Message, o: ContextInput): void {
   parts[m.role] += textTokens(m.content);
   for (const a of m.attachments) {
     if (a.kind === 'text') parts.attachments += textTokens(o.loadData(a.id).toString('utf8'));
-    else if (a.kind === 'pdf') parts.attachments += pdfPages(o.loadData(a.id)) * PDF_PAGE_TOKENS;
+    else if (a.kind === 'pdf') {
+      const text = o.pdfText?.(a.id) ?? null;
+      parts.attachments += text === null ? pdfPages(o.loadData(a.id)) * PDF_PAGE_TOKENS : textTokens(text || NO_PDF_TEXT);
+    }
     else parts.attachments += o.canViewImages ? IMAGE_TOKENS : textTokens(imageSkippedNote(a.filename));
   }
 }

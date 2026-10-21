@@ -5,6 +5,7 @@ import { chatImageNames, getAttachmentData } from './attachments';
 import { contextOverflow, overflowMessage } from './contextCheck';
 import { createChat, requireChat, setActiveLeaf } from './chats';
 import { modelModalities } from './library';
+import { ensurePdfText, pathPdfIds, pdfTextFor } from './pdfText';
 import { getChatMessages, insertMessage } from './messages';
 import type { Usage } from './openrouter';
 import { chatProviderOrHttp, loadedWindows } from './providers';
@@ -14,6 +15,7 @@ import { chatPersona } from './settings';
 import { activePath } from './tree';
 import { recordUsage, type UsageStatus } from './usage';
 import { parseFileBlocks } from '../../shared/files';
+import { isLocalModelId } from '../../shared/localModels';
 import type { ChatSummary } from '../../shared/types';
 
 export const SUMMARY_PROMPT = [
@@ -51,6 +53,7 @@ export async function continueChat(deps: Deps, chatId: string, modelId: string, 
   const path = activePath(getChatMessages(db, chatId), chat.active_leaf_id);
   if (!path.some((m) => m.role === 'user')) throw new HttpError(400, 'There is nothing to summarize yet.');
   const provider = chatProviderOrHttp(deps, modelId);
+  if (isLocalModelId(modelId)) await ensurePdfText(db, pathPdfIds(db, chatId, chat.active_leaf_id));
   const overflow = contextOverflow(db, { chatId, parentId: chat.active_leaf_id, newMessage: null, modelIds: [modelId], windows: await loadedWindows(deps, [modelId]) });
   if (overflow.length && !allowOverflow) throw new HttpError(409, overflowMessage(overflow), { overflow });
 
@@ -59,7 +62,7 @@ export async function continueChat(deps: Deps, chatId: string, modelId: string, 
   const unanswered = path.at(-1)?.role === 'user' ? path.at(-1)! : null;
   const loadData = (id: string) => getAttachmentData(db, id) ?? Buffer.alloc(0);
   const history = buildMessages(chatPersona(db, chatId), unanswered ? path.slice(0, -1) : path,
-    { inputModalities: modelModalities(db, modelId), loadData }, { imageNames: chatImageNames(db, chatId) }, chat.context_note);
+    { inputModalities: modelModalities(db, modelId), loadData, pdfText: pdfTextFor(db, modelId) }, { imageNames: chatImageNames(db, chatId) }, chat.context_note);
   const request = unanswered
     ? `${SUMMARY_PROMPT}\n\nThe user's last message never got a reply; include it as an open question:\n\n${unanswered.content}`
     : SUMMARY_PROMPT;

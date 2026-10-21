@@ -9,6 +9,7 @@ import { chatProvider } from './providers';
 import { ProviderError } from './providers/types';
 import { isLocalModelId, statusMessage } from '../../shared/localModels';
 import { chatImageNames, getAttachmentData } from './attachments';
+import { pdfTextFor } from './pdfText';
 import { displayNameOf, modelModalities, modelSupportsReasoning, modelSupportsTools } from './library';
 import { buildMessages, pdfPlugins, withCacheMarkers, type ChatMessage, type Plugin } from './prompt';
 import { chatPersona } from './settings';
@@ -43,9 +44,9 @@ export function promptFor(deps: Deps, chatId: string, parentId: string, modelId:
   // Local models never search yet (local web search arrives in stage 3), even when the message asked for it.
   const webSearch = path.at(-1)?.webSearch && !isLocalModelId(modelId) ? (modelSupportsTools(db, modelId) ? 'tool' : 'plugin') : undefined;
   const note = getChatRow(db, chatId)?.context_note;
-  const messages = buildMessages(chatPersona(db, chatId), path, { inputModalities, loadData }, { imageNames: chatImageNames(db, chatId) }, note);
+  const messages = buildMessages(chatPersona(db, chatId), path, { inputModalities, loadData, pdfText: pdfTextFor(db, modelId) }, { imageNames: chatImageNames(db, chatId) }, note);
   return {
-    messages: withCacheMarkers(modelId, messages), plugins: pdfPlugins(path, inputModalities), webSearch,
+    messages: withCacheMarkers(modelId, messages), plugins: isLocalModelId(modelId) ? undefined : pdfPlugins(path, inputModalities), webSearch,
     effort: effort && !isLocalModelId(modelId) && modelSupportsReasoning(db, modelId) ? effort : undefined,
   };
 }

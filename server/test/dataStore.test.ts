@@ -42,4 +42,11 @@ describe('delete all my data', () => {
     deleteData(deps, 'all');
     expect(db.prepare('SELECT count(*) AS n FROM local_servers').get()).toEqual({ n: 0 });
   });
+
+  it('empties the extracted PDF text', () => {
+    const { db, deps } = makeApp();
+    db.prepare("INSERT INTO pdf_text (key, text) VALUES ('k', 'text')").run();
+    deleteData(deps, 'all');
+    expect(db.prepare('SELECT count(*) AS n FROM pdf_text').get()).toEqual({ n: 0 });
+  });
 });

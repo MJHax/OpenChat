@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { startFakeLocalServer, type FakeServer } from '../../test/fakeLocalServer';
+import { pdfWithoutText, pdfWithText } from '../../test/helpers';
 import { makeApp, readEvents } from './appHelpers';
+import { PNG } from './attachments.test';
 import { addServer, updateServer } from '../src/localServers';
 import { addModel } from '../src/library';
 import { chatProvider } from '../src/providers';
@@ -32,6 +34,7 @@ async function setup(openrouter: Parameters<typeof makeApp>[0] = {}, env: Parame
   const chatId = ((await (await app.call('POST', '/api/chats')).json()) as ChatSummary).id;
   return { ...app, server, ids, chatId, fake: fake! };
 }
+const KEYED = { OPENROUTER_API_KEY: 'sk-or-test-1234567890' };
 const chatBodies = (f: FakeServer) => f.requests.filter((r) => r.path === '/api/chat').map((r) => r.body);
 const send = (s: Awaited<ReturnType<typeof setup>>, body: object, chatId = s.chatId) => s.call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', ...body });
 
@@ -73,13 +76,89 @@ describe('local model routing', () => {
     expect(s.db.prepare('SELECT COUNT(*) AS n FROM usage_events WHERE web_search = 1').get()).toEqual({ n: 0 });
   });
 
-  it('refuses a PDF for a local model instead of dropping it silently', async () => {
+  it('sends a PDF to a local model as extracted text', async () => {
     const s = await setup();
-    const pdf = (await (await s.upload('%PDF-1.4\n', 'report.pdf')).json()) as { id: string };
+    const pdf = (await (await s.upload(pdfWithText('Quarterly revenue rose 12%'), 'report.pdf')).json()) as { id: string };
+    const events = await readEvents(await send(s, { modelId: s.ids.gemma, attachmentIds: [pdf.id] }));
+    expect(events.map((e) => e.event)).toContain('done');
+    const content = chatBodies(s.fake)[0].messages.find((m: any) => m.role === 'user').content as string;
+    expect(content).toContain('<file name="report.pdf">');
+    expect(content).toContain('Quarterly revenue rose 12%');
+  });
+
+  it('gives a local model a PDF attached earlier with an OpenRouter model', async () => {
+    const s = await setup({ streamChat: async function* () { yield { type: 'delta' as const, text: 'cloud' }; } }, KEYED);
+    addModel(s.db, withCatalogDefaults({ id: 'openai/gpt-4o', name: 'GPT-4o' }));
+    const pdf = (await (await s.upload(pdfWithText('Earlier sentence'), 'old.pdf')).json()) as { id: string };
+    await readEvents(await send(s, { modelId: 'openai/gpt-4o', attachmentIds: [pdf.id] }));
+    await readEvents(await send(s, { modelId: s.ids.gemma, content: 'And now?' }));
+    const first = chatBodies(s.fake)[0].messages.find((m: any) => m.content.includes('<file name="old.pdf">'));
+    expect(first.content).toContain('Earlier sentence');
+  });
+
+  it('refuses a new PDF without text for a local model, saving nothing', async () => {
+    const s = await setup();
+    const pdf = (await (await s.upload(pdfWithoutText(), 'scan.pdf')).json()) as { id: string };
     const res = await send(s, { modelId: s.ids.gemma, attachmentIds: [pdf.id] });
     expect(res.status).toBe(400);
-    expect(((await res.json()) as any).error).toBe("gemma3:1b can't read PDFs yet. Use an OpenRouter model for PDFs.");
+    expect(((await res.json()) as any).error).toBe('scan.pdf: This PDF has no readable text.');
     expect(chatBodies(s.fake)).toHaveLength(0);
+    expect(s.db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({ n: 0 });
+  });
+
+  it('notes an earlier PDF without text inside the prompt instead of refusing', async () => {
+    const s = await setup({ streamChat: async function* () { yield { type: 'delta' as const, text: 'cloud' }; } }, KEYED);
+    addModel(s.db, withCatalogDefaults({ id: 'openai/gpt-4o', name: 'GPT-4o' }));
+    const pdf = (await (await s.upload(pdfWithoutText(), 'scan.pdf')).json()) as { id: string };
+    await readEvents(await send(s, { modelId: 'openai/gpt-4o', attachmentIds: [pdf.id] }));
+    const res = await send(s, { modelId: s.ids.gemma, content: 'Again' });
+    expect(res.status).toBe(200);
+    await readEvents(res);
+    const note = chatBodies(s.fake)[0].messages.find((m: any) => m.content.includes('<file name="scan.pdf">'));
+    expect(note.content).toContain('This PDF has no readable text.');
+  });
+
+  it('still sends a PDF to an OpenRouter model as a file part with the plugin', async () => {
+    let seen: any;
+    const s = await setup({ streamChat: async function* (req: any) { seen = req; yield { type: 'delta' as const, text: 'cloud' }; } }, KEYED);
+    addModel(s.db, withCatalogDefaults({ id: 'openai/gpt-4o', name: 'GPT-4o' }));
+    const pdf = (await (await s.upload(pdfWithoutText(), 'scan.pdf')).json()) as { id: string };
+    await readEvents(await send(s, { modelId: 'openai/gpt-4o', attachmentIds: [pdf.id] }));
+    const user = seen.messages.find((m: any) => m.role === 'user');
+    expect(user.content.some((p: any) => p.type === 'file' && p.file.filename === 'scan.pdf')).toBe(true);
+    expect(seen.plugins).toEqual([{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }]);
+  });
+
+  it('sends an image to a local vision model, and refuses one for a model without vision', async () => {
+    const s = await setup({}, {}, [...MODELS, { name: 'llava', vision: true, contextLength: 8192 } as any]);
+    const llava = localModelId(s.server.id, 'llava');
+    addModel(s.db, withCatalogDefaults({ id: llava, name: 'llava', contextLength: 8192, inputModalities: ['text', 'image'] }));
+    const png = (await (await s.upload(PNG, 'pic.png')).json()) as { id: string };
+    const ok = await send(s, { modelId: llava, attachmentIds: [png.id] });
+    expect(ok.status).toBe(200);
+    await readEvents(ok);
+    const user = chatBodies(s.fake)[0].messages.find((m: any) => m.role === 'user');
+    expect(user.images).toHaveLength(1);
+    const png2 = (await (await s.upload(PNG, 'pic2.png')).json()) as { id: string };
+    const blind = await send(s, { modelId: s.ids.gemma, attachmentIds: [png2.id] });
+    expect(blind.status).toBe(400);
+    expect(((await blind.json()) as any).error).toBe("gemma3:1b can't view images.");
+  });
+
+  it('sends an image to an LM Studio vision model as an image_url part', async () => {
+    fake = await startFakeLocalServer({ flavor: 'lmstudio', models: [{ name: 'vl-model', vision: true, contextLength: 8192 }] });
+    const app = makeApp();
+    const server = addServer(app.db, { type: 'lmstudio', name: 'LM Studio', baseUrl: fake.url, auto: false });
+    const id = localModelId(server.id, 'vl-model');
+    addModel(app.db, withCatalogDefaults({ id, name: 'vl-model', contextLength: 8192, inputModalities: ['text', 'image'] }));
+    const chatId = ((await (await app.call('POST', '/api/chats')).json()) as ChatSummary).id;
+    const png = (await (await app.upload(PNG, 'pic.png')).json()) as { id: string };
+    const res = await app.call('POST', `/api/chats/${chatId}/messages`, { content: 'Look', modelId: id, attachmentIds: [png.id] });
+    expect(res.status).toBe(200);
+    await readEvents(res);
+    const body = fake.requests.find((r) => r.path === '/v1/chat/completions')!.body;
+    const user = body.messages.find((m: any) => m.role === 'user');
+    expect(user.content.some((p: any) => p.type === 'image_url')).toBe(true);
   });
 
   it('does not label a local reasoning reply with an effort', async () => {
