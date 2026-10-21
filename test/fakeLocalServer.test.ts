@@ -44,6 +44,21 @@ describe('fake local server: ollama', () => {
   });
 });
 
+describe('fake local server: ollama details', () => {
+  it('answers stream:false with one object and queues replies in order', async () => {
+    server = await startFakeLocalServer({ flavor: 'ollama', models: [{ name: 'a' }] });
+    server.reply({ text: ['one'] });
+    server.reply({ text: ['two ', 'parts'], thinking: ['hm'], promptTokens: 5, completionTokens: 3 });
+    const chat = (stream: boolean) => post(`${server!.url}/api/chat`, { model: 'a', stream });
+    const first = (await (await chat(false)).json()) as any;
+    expect(first.message.content).toBe('one');
+    const second = (await (await chat(false)).json()) as any;
+    expect(second).toMatchObject({ done: true, prompt_eval_count: 5, eval_count: 3, message: { content: 'two parts', thinking: 'hm' } });
+    const third = (await (await chat(false)).json()) as any;
+    expect(third.message.content).toBe('two parts');
+  });
+});
+
 describe('fake local server: lmstudio', () => {
   it('streams SSE chat ending in [DONE] with usage', async () => {
     server = await startFakeLocalServer({ flavor: 'lmstudio', models: [{ name: 'm' }] });

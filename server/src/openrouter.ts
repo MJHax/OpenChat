@@ -4,12 +4,13 @@ import type { ChatMessage, Plugin } from './prompt';
 import { parseImageModel, type ImageModel, type ImageSettings } from '../../shared/imageModels';
 import { parseVideoModel, type VideoModel } from '../../shared/videoModels';
 import { isSvg, SVG_MIME } from './svg';
+import { ProviderError } from './providers/types';
 
 export const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
-export class OpenRouterError extends Error {
-  constructor(message: string, public status: number) {
-    super(message);
+export class OpenRouterError extends ProviderError {
+  constructor(message: string, status: number) {
+    super(message, status);
     this.name = 'OpenRouterError';
   }
 }

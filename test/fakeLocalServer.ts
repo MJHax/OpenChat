@@ -56,12 +56,13 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
 
   const nextReply = (): FakeReply => {
     if (!replies.length) return { text: ['ok'] };
-    const r = replies[Math.min(replyIndex, replies.length - 1)];
-    replyIndex++;
+    const r = replies[replyIndex];
+    if (replyIndex < replies.length - 1) replyIndex++;
     return r;
   };
 
-  async function chatOllama(res: ServerResponse, r: FakeReply) {
+  async function chatOllama(res: ServerResponse, r: FakeReply, stream: boolean) {
+    if (!stream) return chatOllamaOnce(res, r);
     res.writeHead(200, { 'content-type': 'application/x-ndjson' });
     const line = (v: unknown) => res.write(JSON.stringify(v) + '\n');
     const created_at = new Date().toISOString();
@@ -93,6 +94,28 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
       eval_duration: 1_000_000,
     });
     res.end();
+  }
+
+  /** Real Ollama answers `stream: false` with one object: the whole message plus the final line's fields. */
+  async function chatOllamaOnce(res: ServerResponse, r: FakeReply) {
+    if (r.delayMs) await sleep(r.delayMs);
+    const message: Record<string, unknown> = { role: 'assistant', content: (r.text ?? []).join('') };
+    if (r.thinking?.length) message.thinking = r.thinking.join('');
+    if (r.toolCalls?.length) {
+      message.tool_calls = r.toolCalls.map((c) => ({ function: { name: c.name, arguments: c.arguments } }));
+    }
+    json(res, 200, {
+      model: 'fake',
+      created_at: new Date().toISOString(),
+      message,
+      done: true,
+      done_reason: 'stop',
+      total_duration: 2_000_000,
+      load_duration: 1_000_000,
+      prompt_eval_count: r.promptTokens ?? 1,
+      eval_count: r.completionTokens ?? 1,
+      eval_duration: 1_000_000,
+    });
   }
 
   async function chatOpenAI(res: ServerResponse, r: FakeReply) {
@@ -161,7 +184,7 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
         return sendError(res, f.status, f.error);
       }
       const r = nextReply();
-      return flavor === 'ollama' ? chatOllama(res, r) : chatOpenAI(res, r);
+      return flavor === 'ollama' ? chatOllama(res, r, body?.stream !== false) : chatOpenAI(res, r);
     }
 
     if (flavor === 'ollama') {
