@@ -7,6 +7,7 @@ import { insertOnOwnLine } from '../lib/prompts';
 import { ModelPicker } from './ModelPicker';
 import { ChipPopover } from './ChipPopover';
 import { SEARCH_TOOLTIP } from '../lib/search';
+import { searchAllowed } from '../lib/localModels';
 import { THINKING_TOOLTIP } from '../lib/thinking';
 import { EFFORT_HINTS, EFFORT_TOOLTIP, effortLabel } from '../lib/effort';
 import { AttachmentChips } from './AttachmentChips';
@@ -65,7 +66,7 @@ export function Composer({
 
   const draft = useAttachmentDraft();
   /** Local models can't search the web yet, so the toggle is off when every model chosen is local. */
-  const searchBlocked = replyModels.length > 0 && replyModels.every((m) => m.source === 'local');
+  const searchBlocked = !searchAllowed(replyModels, replyModels.map((m) => m.id));
   const localThinking = replyModels.some((m) => m.source === 'local' && m.supportsReasoning);
 
   useEffect(() => {

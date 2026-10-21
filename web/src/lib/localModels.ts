@@ -18,6 +18,12 @@ export function formatSize(bytes: number | null): string {
   return `${i >= 3 && value < 10 ? value.toFixed(1) : Math.round(value)} ${units[i]}`;
 }
 
+/** Web search needs OpenRouter, so it is off when every chosen model is local. */
+export function searchAllowed(models: LibraryModel[], chosenIds: string[]): boolean {
+  const chosen = chosenIds.map((id) => models.find((m) => m.id === id)).filter((m): m is LibraryModel => !!m);
+  return chosen.length === 0 || chosen.some((m) => m.source !== 'local');
+}
+
 /** The small print under a model's name in the picker. */
 export function modelDetails(m: LibraryModel): string {
   if (m.source === 'local') {

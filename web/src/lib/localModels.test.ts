@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { LibraryModel, LocalServerStatus } from '../../../shared/types';
-import { formatSize, modelDetails, sourceOptions } from './localModels';
+import { formatSize, modelDetails, searchAllowed, sourceOptions } from './localModels';
 
 const server = (id: string, name: string) => ({ id, name }) as LocalServerStatus;
 const model = (over: Partial<LibraryModel>) => ({
@@ -35,5 +35,15 @@ describe('modelDetails', () => {
   });
   it('keeps the OpenRouter line', () => {
     expect(modelDetails(model({ promptPrice: 0.000001, completionPrice: 0.000002, contextLength: 128000 }))).toBe('$1.00/M in · $2.00/M out · 128K context');
+  });
+});
+
+describe('searchAllowed', () => {
+  const models = [model({ id: 'l', source: 'local' }), model({ id: 'o' })];
+  it('is blocked only when every chosen model is local', () => {
+    expect(searchAllowed(models, ['l'])).toBe(false);
+    expect(searchAllowed(models, ['l', 'o'])).toBe(true);
+    expect(searchAllowed(models, ['o'])).toBe(true);
+    expect(searchAllowed(models, [])).toBe(true);
   });
 });

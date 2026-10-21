@@ -60,8 +60,10 @@ export function ModelLibrary({ models, noKey = false, onChanged, sort: librarySo
       .finally(() => { if (isCurrent()) setLoading(false); });
   };
   useEffect(() => load(), []);
+  const latestLocal = useRef(latestOnly());
   useEffect(() => {
-    api.localModels().then(setLocal).catch(() => setLocal(null));
+    const isCurrent = latestLocal.current();
+    api.localModels().then((c) => { if (isCurrent()) setLocal(c); }).catch(() => { /* keep the previous catalog */ });
   }, [models]);
   useEffect(() => setLimit(PAGE_SIZE), [filter, sort]);
 

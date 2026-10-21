@@ -5,6 +5,7 @@ import { COMPARE_OFF, compareModels, loadCompare, saveCompare, type CompareState
 import { initialModelId } from '../lib/models';
 import { loadSearch, saveSearch } from '../lib/search';
 import { loadEffort, saveEffort } from '../lib/effort';
+import { searchAllowed } from '../lib/localModels';
 import { loadThinking, saveThinking } from '../lib/thinking';
 import { navigate } from '../lib/route';
 import { AttachmentChips } from './AttachmentChips';
@@ -215,6 +216,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     setError(null);
     setVersions(null);
     setFailedEdit(null);
+    const sendSearch = webSearch && searchAllowed(models, opts.models);
     const streamChat = await ensureChat();
     if (!streamChat) return false;
     const isShown = () => viewChatRef.current === streamChat;
@@ -227,7 +229,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       userAttachments: opts.kind === 'regenerate' ? [] : opts.attachments,
       startedAt: Date.now(),
       // Regenerate searches again only if the message being answered asked for search.
-      webSearch: opts.kind === 'regenerate' ? messages.find((m) => m.id === opts.parentId)?.webSearch ?? false : webSearch,
+      webSearch: opts.kind === 'regenerate' ? messages.find((m) => m.id === opts.parentId)?.webSearch ?? false : sendSearch,
       slots: opts.models.map((id) => ({ modelId: id, text: '', reasoning: '', error: null, message: null, done: false })),
     });
     const updateSlot = (slot: number, change: (s: SlotState) => SlotState) => {
@@ -240,9 +242,9 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     const modelField = { ...(opts.models.length === 1 ? { modelId: opts.models[0] } : { modelIds: opts.models }), ...(effort ? { effort } : {}),
       ...(!thinking ? { thinking: false } : {}) };
     const body =
-      opts.kind === 'send' ? { content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), webSearch, ...modelField }
+      opts.kind === 'send' ? { content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), webSearch: sendSearch, ...modelField }
       : opts.kind === 'regenerate' ? { parentId: opts.parentId, ...modelField }
-      : { messageId: opts.messageId, content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), webSearch, ...modelField };
+      : { messageId: opts.messageId, content: opts.text, attachmentIds: opts.attachments.map((a) => a.id), webSearch: sendSearch, ...modelField };
 
     let settled = false;
     // The server sends `start` before anything else, after the message is saved; an error before it means nothing was kept.
