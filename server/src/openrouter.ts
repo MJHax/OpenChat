@@ -1,10 +1,12 @@
-import { parseSSE } from '../../shared/sse';
 import type { CatalogModel, Category, Effort, Source } from '../../shared/types';
 import type { ChatMessage, Plugin } from './prompt';
 import { parseImageModel, type ImageModel, type ImageSettings } from '../../shared/imageModels';
 import { parseVideoModel, type VideoModel } from '../../shared/videoModels';
 import { isSvg, SVG_MIME } from './svg';
 import { ProviderError } from './providers/types';
+import { readChatStream } from './providers/openaiStream';
+
+export { toSources } from './providers/openaiStream';
 
 export const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
@@ -96,25 +98,6 @@ export type StreamEvent =
   | { type: 'usage'; usage: Usage }
   /** A finished function call, emitted once the stream ends; `arguments` is the model's raw JSON text. */
   | { type: 'tool_call'; name: string; arguments: string };
-
-const isWebUrl = (url: string): boolean => {
-  try {
-    const { protocol } = new URL(url);
-    return protocol === 'http:' || protocol === 'https:';
-  } catch {
-    return false;
-  }
-};
-
-/** Streamed `url_citation` annotations as sources; anything that isn't an http(s) link is dropped, as are snippets. */
-export function toSources(annotations: unknown): Source[] {
-  if (!Array.isArray(annotations)) return [];
-  return annotations.flatMap((a) => {
-    const cite = a?.type === 'url_citation' ? a.url_citation : undefined;
-    if (typeof cite?.url !== 'string' || !isWebUrl(cite.url)) return [];
-    return [{ url: cite.url, title: typeof cite.title === 'string' ? cite.title : '' }];
-  });
-}
 
 /** Request fields for web search and function tools. The search tool's 3-call cap bounds the cost of one reply. */
 function toolFields(mode: WebSearchMode | undefined, plugins: Plugin[] | undefined, functions: FunctionTool[] | undefined): Record<string, unknown> {
@@ -332,44 +315,13 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
         }),
       });
       if (!res.body) throw new OpenRouterError('Empty response from OpenRouter.', 502);
-      // Function calls stream in pieces by index: the name once, the arguments as text fragments.
-      const calls: { name: string; arguments: string }[] = [];
-      const finishedCalls = function* (): Generator<StreamEvent> {
-        for (const call of calls) if (call?.name) yield { type: 'tool_call', name: call.name, arguments: call.arguments };
-      };
-      for await (const { data } of parseSSE(res.body)) {
-        if (data === '[DONE]') {
-          yield* finishedCalls();
-          return;
-        }
-        let chunk: any;
-        try {
-          chunk = JSON.parse(data);
-        } catch {
-          continue;
-        }
-        if (chunk.error) {
-          const status = Number(chunk.error.code) || 502;
-          throw new OpenRouterError(friendlyError(status, chunk.error.message), status);
-        }
-        const delta = chunk.choices?.[0]?.delta;
-        if (delta?.reasoning) yield { type: 'reasoning', text: delta.reasoning };
-        if (delta?.content) yield { type: 'delta', text: delta.content };
-        if (delta?.annotations) {
-          const sources = toSources(delta.annotations);
-          if (sources.length) yield { type: 'sources', sources };
-        }
-        if (Array.isArray(delta?.tool_calls)) {
-          for (const part of delta.tool_calls) {
-            const i = typeof part?.index === 'number' ? part.index : 0;
-            calls[i] ??= { name: '', arguments: '' };
-            if (typeof part.function?.name === 'string') calls[i].name += part.function.name;
-            if (typeof part.function?.arguments === 'string') calls[i].arguments += part.function.arguments;
-          }
-        }
-        if (chunk.usage) yield { type: 'usage', usage: parseUsage(chunk.usage) };
-      }
-      yield* finishedCalls();
+      yield* readChatStream(
+        res.body,
+        (status, message) => {
+          throw new OpenRouterError(friendlyError(status, message), status);
+        },
+        parseUsage,
+      );
     },
   };
 }

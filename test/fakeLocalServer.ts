@@ -226,14 +226,13 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
             models: models.map((m) => {
               const win = loadedWindow.get(m.name) ?? (m.loaded ? ctx(m) : undefined);
               return {
-                type: m.vision ? 'vlm' : 'llm',
+                type: 'llm',
                 key: m.name,
-                id: m.name,
                 display_name: m.name,
                 size_bytes: m.sizeBytes ?? 1_000_000_000,
                 max_context_length: ctx(m),
                 loaded_instances: win === undefined ? [] : [{ id: m.name, config: { context_length: win } }],
-                capabilities: m.tools ? ['tool_use'] : [],
+                capabilities: { vision: !!m.vision, trained_for_tool_use: !!m.tools },
               };
             }),
           });
@@ -242,7 +241,7 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
           const m = find(body?.model);
           if (!m) return sendError(res, 404, `model '${body?.model}' not found`);
           loadedWindow.set(m.name, body?.context_length ?? ctx(m));
-          return json(res, 200, { type: 'llm', instance_id: m.name, status: 'loaded' });
+          return json(res, 200, { type: 'llm', instance_id: m.name, load_time_seconds: 0.1, status: 'loaded' });
         }
       }
     }

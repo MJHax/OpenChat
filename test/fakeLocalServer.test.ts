@@ -76,7 +76,7 @@ describe('fake local server: lmstudio', () => {
     const before = await (await fetch(`${server.url}/api/v1/models`)).json();
     expect(before.models[0].max_context_length).toBe(8192);
     expect(before.models[0].loaded_instances).toEqual([]);
-    expect(before.models[0].capabilities).toContain('tool_use');
+    expect(before.models[0].capabilities).toEqual({ vision: false, trained_for_tool_use: true });
     await post(`${server.url}/api/v1/models/load`, { model: 'm', context_length: 4096 });
     const after = await (await fetch(`${server.url}/api/v1/models`)).json();
     expect(after.models[0].loaded_instances[0].config.context_length).toBe(4096);
