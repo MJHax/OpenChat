@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pdfWithoutText, pdfWithText } from '../../test/helpers';
 import { insertPending } from '../src/attachments';
+import { cleanupPending } from '../src/attachments';
 import { cachedPdfText, ensurePdfText, extractPdfText } from '../src/pdfText';
 import { makeApp } from './appHelpers';
 
@@ -46,6 +47,18 @@ describe('ensurePdfText', () => {
     const { db } = makeApp();
     const text = insertPending(db, { filename: 't.txt', kind: 'text', mime: 'text/plain', data: new TextEncoder().encode('hi') }).id;
     await ensurePdfText(db, [text, 'missing']);
+    expect(rows(db)).toBe(0);
+  });
+});
+
+describe('cleanupPending', () => {
+  it('removes the text of an expired pending PDF, keeping a PDF that is still attached', async () => {
+    const { db } = makeApp();
+    const id = addPdf(db, pdfWithText('Never sent'));
+    await ensurePdfText(db, [id]);
+    expect(rows(db)).toBe(1);
+    db.prepare('UPDATE attachments SET created_at = 0').run();
+    expect(cleanupPending(db)).toBe(1);
     expect(rows(db)).toBe(0);
   });
 });

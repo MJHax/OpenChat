@@ -4,7 +4,7 @@ import { MAX_COMPARE, toggleModel, type CompareState } from '../lib/compare';
 import { modelDetails } from '../lib/localModels';
 import { ChipPopover } from './ChipPopover';
 import { useAvailability } from './AvailabilityContext';
-import { availabilityLabel } from '../lib/availability';
+import { availabilityLabel, compareItemDisabled } from '../lib/availability';
 
 export interface ModelPickerProps {
   models: LibraryModel[];
@@ -33,7 +33,7 @@ export function ModelPicker({ models, modelId, onModelChange, compare, onCompare
               {models.map((m) => {
                 const on = compare.modelIds.includes(m.id);
                 return (
-                  <button key={m.id} className={`pop-item${on ? ' sel' : ''}`} disabled={(!on && compare.modelIds.length >= MAX_COMPARE) || !!availabilityLabel(availability[m.id])}
+                  <button key={m.id} className={`pop-item${on ? ' sel' : ''}`} disabled={compareItemDisabled(on, compare.modelIds.length, MAX_COMPARE, availability[m.id])}
                     aria-pressed={on} onClick={() => onCompareChange(toggleModel(compare, m.id))}>
                     <span>{m.displayName}<small>{detail(m)}</small></span>
                     {on && <Check size={15} className="check" />}

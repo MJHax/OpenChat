@@ -8,8 +8,12 @@ import { activePath } from './tree';
 export async function extractPdfText(data: Buffer): Promise<string> {
   try {
     const pdf = await getDocumentProxy(new Uint8Array(data));
-    const { text } = await extractText(pdf, { mergePages: true });
-    return text.trim();
+    try {
+      const { text } = await extractText(pdf, { mergePages: true });
+      return text.trim();
+    } finally {
+      await pdf.loadingTask.destroy();
+    }
   } catch {
     return '';
   }

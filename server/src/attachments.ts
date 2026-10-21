@@ -84,17 +84,25 @@ export function getAttachmentData(db: DB, id: string): Buffer | undefined {
   return (db.prepare('SELECT data FROM attachments WHERE id = ?').get(id) as { data: Buffer } | undefined)?.data;
 }
 
+/** Drops extracted PDF text that no attachment refers to any more (the key matches `pdfText.ts`). */
+export function dropOrphanPdfText(db: DB): void {
+  db.prepare("DELETE FROM pdf_text WHERE key NOT IN (SELECT COALESCE(hash, 'id:' || id) FROM attachments)").run();
+}
+
 export function deletePending(db: DB, id: string): 'deleted' | 'sent' | 'missing' {
   const row = getAttachmentRow(db, id);
   if (!row) return 'missing';
   if (row.messageId) return 'sent';
   db.prepare('DELETE FROM attachments WHERE id = ?').run(id);
+  dropOrphanPdfText(db);
   return 'deleted';
 }
 
 /** Deletes uploads that were never sent; returns how many were removed. */
 export function cleanupPending(db: DB, olderThanMs = PENDING_TTL_MS): number {
-  return db.prepare('DELETE FROM attachments WHERE message_id IS NULL AND created_at < ?').run(now() - olderThanMs).changes;
+  const removed = db.prepare('DELETE FROM attachments WHERE message_id IS NULL AND created_at < ?').run(now() - olderThanMs).changes;
+  if (removed > 0) dropOrphanPdfText(db);
+  return removed;
 }
 
 /**

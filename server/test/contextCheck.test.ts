@@ -218,3 +218,17 @@ describe('the window LM Studio loaded', () => {
     expect(((await res.json()) as any).contextLength).toBe(2048);
   });
 });
+
+
+describe('GET /api/context', () => {
+  it('counts an earlier PDF at its extracted text for a local model on the first call', async () => {
+    const s = await setup();
+    const line = 'word '.repeat(80);
+    const pages = [0, 1].map(() => Array.from({ length: 30 }, () => line)); // ~6,000 tokens over 2 pages
+    const pdf = (await (await s.upload(pdfWithPages(pages, 2), 'big.pdf')).json()) as { id: string };
+    // Sent with an OpenRouter model, so nothing has extracted its text yet.
+    await readEvents(await send(s, { modelId: s.ids.cloud, attachmentIds: [pdf.id] }));
+    const res = await s.call('GET', `/api/context?model=${encodeURIComponent(s.ids.small)}&chat=${s.chatId}`);
+    expect(((await res.json()) as any).parts.attachments).toBeGreaterThan(3000);
+  });
+});

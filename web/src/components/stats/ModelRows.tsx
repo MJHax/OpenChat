@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ModelStats } from '../../../../shared/types';
 import { formatCost } from '../../lib/format';
-import { compactNumber, formatPercent, formatSeconds } from '../../lib/stats';
+import { compactNumber, formatPercent, formatSeconds, formatSpeed } from '../../lib/stats';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 const money = (usd: number | null) => (usd === null ? '—' : usd === 0 ? '$0.00' : formatCost(usd));
@@ -24,7 +24,7 @@ function ModelRow({ m, top }: { m: ModelStats; top: number }) {
           <Detail label="Tokens" value={compactNumber(m.tokens)} />
           <Detail label="Cache hit" value={formatPercent(m.cacheHitRate)} />
           <Detail label="First token" value={formatSeconds(m.avgFirstTokenMs)} />
-          <Detail label="Output speed" value={m.outputTokensPerSec === null ? '—' : `${Math.round(m.outputTokensPerSec)} tok/s`} />
+          <Detail label="Output speed" value={formatSpeed(m.outputTokensPerSec)} />
           {m.local && <Detail label="Load time" value={formatSeconds(m.avgLoadMs)} />}
           <Detail label="Avg cost/reply" value={money(m.avgCostPerReply)} />
           <Detail label="Reasoning tokens" value={m.reasoningTokens === null ? '—' : compactNumber(m.reasoningTokens)} />

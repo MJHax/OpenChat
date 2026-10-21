@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { Deps } from './app';
 import type { DB } from './db';
 import { HttpError } from './http';
+import { dropOrphanPdfText } from './attachments';
 import { deleteThreadClips } from './videoJobs';
 import type { DeleteTarget, StorageUsage, ThreadKind } from '../../shared/types';
 
@@ -17,6 +18,7 @@ const THREAD_KIND: Record<Exclude<DeleteTarget, 'all'>, ThreadKind> = {
  * segments until they are merged, and the WAL keeps old page versions until a checkpoint copies them back.
  */
 export function purgeDeleted(db: DB): void {
+  dropOrphanPdfText(db);
   db.prepare("INSERT INTO messages_fts(messages_fts) VALUES ('optimize')").run();
   db.pragma('wal_checkpoint(TRUNCATE)');
 }

@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { makeApp } from './appHelpers';
 import { insertMessage } from '../src/messages';
-import { insertGenerated } from '../src/attachments';
+import { attachToMessage, getAttachmentRow, insertGenerated, insertPending } from '../src/attachments';
+import { ensurePdfText } from '../src/pdfText';
+import { pdfWithText } from '../../test/helpers';
 import { addServer } from '../src/localServers';
 import { deleteData } from '../src/dataStore';
 import type { ChatSummary } from '../../shared/types';
@@ -48,5 +50,39 @@ describe('delete all my data', () => {
     db.prepare("INSERT INTO pdf_text (key, text) VALUES ('k', 'text')").run();
     deleteData(deps, 'all');
     expect(db.prepare('SELECT count(*) AS n FROM pdf_text').get()).toEqual({ n: 0 });
+  });
+});
+
+describe('extracted PDF text', () => {
+  const pdfCount = (db: ReturnType<typeof makeApp>['db']) => (db.prepare('SELECT count(*) AS n FROM pdf_text').get() as { n: number }).n;
+
+  it('goes with the last chat that holds the PDF, not the first', async () => {
+    const { db, call } = makeApp();
+    const data = pdfWithText('Shared contract text');
+    const chats: ChatSummary[] = [];
+    for (let i = 0; i < 2; i++) {
+      const chat = (await (await call('POST', '/api/chats')).json()) as ChatSummary;
+      const msg = insertMessage(db, { chatId: chat.id, parentId: null, role: 'user', content: 'see file' });
+      const pdf = insertPending(db, { filename: 'a.pdf', kind: 'pdf', mime: 'application/pdf', data });
+      attachToMessage(db, msg.id, [getAttachmentRow(db, pdf.id)!]);
+      await ensurePdfText(db, [pdf.id]);
+      chats.push(chat);
+    }
+    expect(pdfCount(db)).toBe(1);
+    expect((await call('DELETE', `/api/chats/${chats[0].id}`)).status).toBe(200);
+    expect(pdfCount(db)).toBe(1);
+    expect((await call('DELETE', `/api/chats/${chats[1].id}`)).status).toBe(200);
+    expect(pdfCount(db)).toBe(0);
+  });
+
+  it('goes when a kind of thread is deleted', async () => {
+    const { db, deps, call } = makeApp();
+    const chat = (await (await call('POST', '/api/chats')).json()) as ChatSummary;
+    const msg = insertMessage(db, { chatId: chat.id, parentId: null, role: 'user', content: 'see file' });
+    const pdf = insertPending(db, { filename: 'a.pdf', kind: 'pdf', mime: 'application/pdf', data: pdfWithText('Gone soon') });
+    attachToMessage(db, msg.id, [getAttachmentRow(db, pdf.id)!]);
+    await ensurePdfText(db, [pdf.id]);
+    deleteData(deps, 'chats');
+    expect(pdfCount(db)).toBe(0);
   });
 });
