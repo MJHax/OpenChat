@@ -8,11 +8,12 @@ import { recordUsage, type ReplyKind, type UsageStatus } from './usage';
 import { insertMessage } from './messages';
 import type { Usage } from './openrouter';
 import { chatProvider } from './providers';
-import { isLocalModelId } from '../../shared/localModels';
+import { isLocalModelId, statusMessage } from '../../shared/localModels';
+import { displayNameOf } from './library';
 import { maybeGenerateTitle } from './title';
 import type {
   Effort,
-  CompareDone, CompareSlot, CompareSlotDone, CompareSlotError, CompareSlotText, CompareStart, Message, MessageStatus, Source, StreamTitle,
+  CompareDone, CompareSlot, CompareSlotDone, CompareSlotError, CompareSlotStatus, CompareSlotText, CompareStart, Message, MessageStatus, Source, StreamTitle,
 } from '../../shared/types';
 
 interface CompareOptions {
@@ -144,6 +145,8 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
         } else if (event.type === 'reasoning') {
           timer.token();
           await send('reasoning', { slot: i, text: event.text } satisfies CompareSlotText);
+        } else if (event.type === 'status') {
+          await send('status', { slot: i, message: statusMessage(event.status, displayNameOf(db, slot.modelId)) } satisfies CompareSlotStatus);
         } else if (event.type === 'sources') {
           sources = mergeSources(sources, event.sources);
         } else if (event.type === 'usage') {

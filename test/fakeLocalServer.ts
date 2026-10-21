@@ -68,9 +68,9 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
     if (flavor === 'ollama') {
       const win = window ?? ctx(m);
       const warm = ollamaLoaded.get(m.name) === win;
-      ollamaLoaded.set(m.name, win);
       if (warm) return 0;
       if (m.loadMs) await sleep(m.loadMs);
+      ollamaLoaded.set(m.name, win); // reported by /api/ps only once loading has finished
       return m.loadMs ?? 0;
     }
     if (loadedWindow.has(m.name) || m.loaded) return 0;

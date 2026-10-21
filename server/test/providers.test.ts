@@ -265,3 +265,16 @@ describe('titling local chats', () => {
     expect(complete).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('loading status', () => {
+  it('says the model is loading before its first token, and only the first time', async () => {
+    const s = await setup({}, {}, [{ ...MODELS[0], loadMs: 2600 }, MODELS[1]] as typeof MODELS);
+    const first = await readEvents(await send(s, { modelId: s.ids.qwen }));
+    const names = first.map((e) => e.event);
+    expect(names.indexOf('status')).toBeGreaterThan(0);
+    expect(names.indexOf('status')).toBeLessThan(names.indexOf('delta'));
+    expect(first.find((e) => e.event === 'status')!.data).toEqual({ message: 'Loading qwen3:1.7b into memory…' });
+    const second = await readEvents(await send(s, { modelId: s.ids.qwen }));
+    expect(second.map((e) => e.event)).not.toContain('status');
+  }, 15000);
+});

@@ -4,6 +4,7 @@ import { getServer } from '../localServers';
 import { resolveApiKey } from '../settings';
 import { createLmStudioClient } from './lmstudio';
 import { createOllamaClient } from './ollama';
+import { withLoadingStatus } from './loadingStatus';
 import { createOpenAICompatClient } from './openaiCompat';
 import { LocalServerError, ProviderError, type ChatProvider, type LocalClient } from './types';
 import { defaultContextWindow, parseLocalModelId } from '../../../shared/localModels';
@@ -45,7 +46,8 @@ export function chatProvider(deps: Deps, modelId: string): ChatProvider {
     // Helper calls (titles, summaries, suggestions) must not spend their small budget on thinking.
     const helperThink = supportsReasoning(deps, modelId) ? false : undefined;
     return {
-      streamChat: (o) => client.streamChat({ ...o, model: local.name, contextWindow }),
+      streamChat: (o) =>
+        withLoadingStatus(client.streamChat({ ...o, model: local.name, contextWindow }), () => client.loadState(local.name, contextWindow)),
       complete: (o) => client.complete({ ...o, model: local.name, contextWindow, think: o.think ?? helperThink }),
     };
   }

@@ -7,11 +7,13 @@ import { getChatMessages, insertMessage } from '../messages';
 import type { Usage } from '../openrouter';
 import { chatProvider } from '../providers';
 import { recordUsage, type UsageStatus } from '../usage';
+import { displayNameOf } from '../library';
+import { statusMessage } from '../../../shared/localModels';
 import { callTimer, failureStatus, timingFields, replyErrorMessage, saveIfChatExists } from '../generate';
 import { buildDiscussionPrompt, cleanReply, moderatorTools, nextSpeaker, readToolCall, turnsTaken } from './engine';
 import { discussionState, getDiscussionRow, getParticipants, setStatus } from './store';
 import type {
-  DiscussionParticipant, DiscussionState, DiscussionTurnDone, DiscussionTurnError, DiscussionTurnStart, Message, MessageStatus,
+  DiscussionParticipant, DiscussionState, DiscussionTurnDone, DiscussionTurnError, DiscussionTurnStart, Message, MessageStatus, StreamStatus,
 } from '../../../shared/types';
 
 /** The participant who speaks next: the choice `streamTurn` makes, shared so the route can check the limit against its model. */
@@ -96,6 +98,8 @@ export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () 
         } else if (event.type === 'reasoning') {
           timer.token();
           await send('reasoning', { text: event.text });
+        } else if (event.type === 'status') {
+          await send('status', { message: statusMessage(event.status, displayNameOf(db, speaker.modelId)) } satisfies StreamStatus);
         } else if (event.type === 'usage') {
           usage = event.usage;
         } else if (event.type === 'tool_call') {

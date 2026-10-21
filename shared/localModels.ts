@@ -17,6 +17,11 @@ export const DEFAULT_LOCAL_WINDOW = 16_384;
 /** A local model's load time shows on a reply and counts in Stats only from here up; less means it was already in memory. */
 export const COLD_LOAD_MS = 1_000;
 
+/** What a reply shows while a local model hasn't started answering. */
+export function statusMessage(status: 'loading' | 'waiting', model: string): string {
+  return status === 'loading' ? `Loading ${model} into memory…` : 'Waiting for the model…';
+}
+
 const PREFIX = 'local:';
 
 /** Local model ids are `local:<serverId>:<name>`; server ids never contain a colon, names may. */

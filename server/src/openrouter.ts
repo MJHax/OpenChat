@@ -102,6 +102,8 @@ export type StreamEvent =
   | { type: 'reasoning'; text: string }
   | { type: 'sources'; sources: Source[] }
   | { type: 'usage'; usage: Usage }
+  /** Added by withLoadingStatus while a local model hasn't produced anything yet; never saved. */
+  | { type: 'status'; status: 'loading' | 'waiting' }
   /** A finished function call, emitted once the stream ends; `arguments` is the model's raw JSON text. */
   | { type: 'tool_call'; name: string; arguments: string };
 

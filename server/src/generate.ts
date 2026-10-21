@@ -7,15 +7,15 @@ import { getChatMessages, insertMessage } from './messages';
 import { type Usage, type WebSearchMode } from './openrouter';
 import { chatProvider } from './providers';
 import { ProviderError } from './providers/types';
-import { isLocalModelId } from '../../shared/localModels';
+import { isLocalModelId, statusMessage } from '../../shared/localModels';
 import { chatImageNames, getAttachmentData } from './attachments';
-import { modelModalities, modelSupportsReasoning, modelSupportsTools } from './library';
+import { displayNameOf, modelModalities, modelSupportsReasoning, modelSupportsTools } from './library';
 import { buildMessages, pdfPlugins, withCacheMarkers, type ChatMessage, type Plugin } from './prompt';
 import { chatPersona } from './settings';
 import { maybeGenerateTitle } from './title';
 import { activePath } from './tree';
 import { generationMsFor, recordUsage, type ReplyKind, type UsageStatus } from './usage';
-import type { Effort, Message, MessageStatus, Source, StreamDone, StreamError, StreamStart, StreamTitle } from '../../shared/types';
+import type { Effort, Message, MessageStatus, Source, StreamDone, StreamError, StreamStart, StreamStatus, StreamTitle } from '../../shared/types';
 
 export function replyErrorMessage(err: unknown): string {
   if (err instanceof ProviderError) return err.message;
@@ -203,6 +203,8 @@ export function streamReply(c: Context, deps: Deps, o: ReplyOptions): Response {
         } else if (event.type === 'reasoning') {
           timer.token();
           await send('reasoning', { text: event.text });
+        } else if (event.type === 'status') {
+          await send('status', { message: statusMessage(event.status, displayNameOf(db, o.modelId)) } satisfies StreamStatus);
         } else if (event.type === 'sources') {
           sources = mergeSources(sources, event.sources);
         } else if (event.type === 'usage') {
