@@ -4,7 +4,7 @@ import type {
   Message, SearchHit, SettingsUpdate, SettingsView, StreamDone, StreamError, StreamStart, StreamTitle, StatsRange, StatsResponse, ChatStats, ContextUsage,
   GeneratedItems, MediaCatalog, MediaKind, MediaLibraryModel, MediaStatsResponse, MediaThreadStats, ThreadKind, StorageUsage, DeleteTarget, LimitStatus,
   DiscussionDetail, DiscussionState, DiscussionSummary, DiscussionTurnDone, DiscussionTurnError, DiscussionTurnStart, NewDiscussion,
-  LibraryResponse, LibrarySource, SavedPrompt, LocalServerStatus, LocalCatalog, ContextOverflow,
+  LibraryResponse, LibrarySource, SavedPrompt, LocalServerStatus, LocalCatalog, ContextOverflow, LocalAvailability,
 } from '../../shared/types';
 import type { LocalServerType } from '../../shared/localModels';
 import type { ImageSettings } from '../../shared/imageModels';
@@ -68,6 +68,7 @@ export const api = {
   removeLocalServer: (id: string) => json<LocalServerStatus[]>('DELETE', `/api/local-servers/${encodeURIComponent(id)}`),
   detectLocalServers: () => json<LocalServerStatus[]>('POST', '/api/local-servers/detect'),
   localModels: () => json<LocalCatalog>('GET', '/api/local-servers/models'),
+  modelAvailability: () => json<Record<string, LocalAvailability>>('GET', '/api/local-servers/availability'),
   removeModel: (id: string) => json<LibraryModel[]>('DELETE', `/api/models?id=${encodeURIComponent(id)}`),
 
   generateImage: (threadId: string, body: {

@@ -15,6 +15,8 @@ import {
 import type { LibrarySort } from '../lib/models';
 import { sourceOptions, type SourceFilter } from '../lib/localModels';
 import { LibraryHeading } from '../components/LibraryHeading';
+import { useAvailability } from '../components/AvailabilityContext';
+import { availabilityLabel } from '../lib/availability';
 
 export interface ModelLibraryProps {
   /** Already in the user's chosen order. */
@@ -33,6 +35,7 @@ const PAGE_SIZE = 60;
 const TOP_PROVIDERS = 8;
 
 export function ModelLibrary({ models, noKey = false, onChanged, sort: librarySort, onSort: onLibrarySort }: ModelLibraryProps) {
+  const availability = useAvailability();
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -179,6 +182,7 @@ export function ModelLibrary({ models, noKey = false, onChanged, sort: librarySo
                 </div>
                 <div className="model-side">
                   <span className="badge">{m.source === 'local' ? m.serverName ?? 'Local' : 'OpenRouter'}</span>
+                  {availabilityLabel(availability[m.id]) && <span className="badge">{availabilityLabel(availability[m.id])}</span>}
                   {m.isDefault ? (
                     <span className="badge">Default</span>
                   ) : (

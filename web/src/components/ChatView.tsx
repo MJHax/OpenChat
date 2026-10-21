@@ -8,6 +8,8 @@ import { initialModelId } from '../lib/models';
 import { loadSearch, saveSearch } from '../lib/search';
 import { loadEffort, saveEffort } from '../lib/effort';
 import { searchAllowed } from '../lib/localModels';
+import { unavailableReason } from '../lib/availability';
+import { useAvailability } from './AvailabilityContext';
 import { loadThinking, saveThinking } from '../lib/thinking';
 import { navigate } from '../lib/route';
 import { AttachmentChips } from './AttachmentChips';
@@ -86,6 +88,7 @@ type RunOptions =
 const continuedModels = new Map<string, string>();
 
 export function ChatView({ chatId, title, reloadToken, models, settings, onChatsChanged, startDraft, onStartDraftUsed, insert, onInsertUsed, onOpenPrompts }: ChatViewProps) {
+  const availability = useAvailability();
   const [detail, setDetail] = useState<ChatDetail | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -494,7 +497,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     noModels ? 'Add a model in the Model Library first.'
     : choosing ? 'Pick a reply to continue.'
     : compare.enabled && !compareList ? 'Choose 2 to 4 models to compare.'
-    : null;
+    : unavailableReason(models, runModels ?? [], availability);
 
   return (
     <FilePanelContext.Provider value={filePanel}>

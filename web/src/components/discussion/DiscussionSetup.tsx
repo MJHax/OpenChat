@@ -4,6 +4,8 @@ import {
   DEFAULT_TURN_LIMIT, INSTRUCTIONS_MAX, MAX_PARTICIPANTS, MAX_TURN_LIMIT, MIN_PARTICIPANTS, participantColor, validateNewDiscussion,
 } from '../../../../shared/discussion';
 import { api } from '../../api';
+import { useAvailability } from '../AvailabilityContext';
+import { availabilityLabel } from '../../lib/availability';
 import { ErrorText } from '../ErrorText';
 import { initials } from '../../lib/discussion';
 import { X } from 'lucide-react';
@@ -26,6 +28,7 @@ const row = (n: number, modelId: string): Row => ({ key: nextKey++, name: `Parti
 
 /** The form a discussion starts from: a topic, 2–6 participants with their own instructions, and a turn limit. */
 export function DiscussionSetup({ models, onCreated }: DiscussionSetupProps) {
+  const availability = useAvailability();
   const defaultModel = (models.find((m) => m.isDefault) ?? models[0])?.id ?? '';
   const [topic, setTopic] = useState('');
   const [turnLimit, setTurnLimit] = useState(String(DEFAULT_TURN_LIMIT));
@@ -89,7 +92,10 @@ export function DiscussionSetup({ models, onCreated }: DiscussionSetupProps) {
                   <span className="avatar" style={{ background: color.bg, color: color.fg }} aria-hidden="true">{initials(r.name)}</span>
                   <input aria-label="Name" value={r.name} onChange={(e) => update(r.key, { name: e.target.value })} />
                   <select aria-label="Model" value={modelOf(r)} onChange={(e) => update(r.key, { modelId: e.target.value })}>
-                    {models.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
+                    {models.map((m) => {
+                      const label = availabilityLabel(availability[m.id]);
+                      return <option key={m.id} value={m.id} disabled={!!label}>{label ? `${m.displayName} (${label})` : m.displayName}</option>;
+                    })}
                   </select>
                   {supportsTools(modelOf(r)) && (
                     <label className="moderator-toggle" title="Picks who speaks next and can end the discussion">

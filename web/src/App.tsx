@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Accent, ChatSummary, ColorStyle, LibraryModel, SettingsView, ThreadKind } from '../../shared/types';
+import type { Accent, ChatSummary, ColorStyle, LibraryModel, LocalAvailability, SettingsView, ThreadKind } from '../../shared/types';
 import { api } from './api';
 import { navigate, replaceHash, routeHash, settingsBackdrop, settingsCloseAction, threadHref, useRoute, type Route } from './lib/route';
 import { IconRail, type RailItem } from './components/shell/IconRail';
@@ -19,6 +19,7 @@ import { Library } from './pages/Library';
 import { PromptsWindow } from './components/PromptsWindow';
 import type { ReuseDraft } from './lib/reuse';
 import { useAppearance } from './components/useAppearance';
+import { AvailabilityContext } from './components/AvailabilityContext';
 import { Clapperboard, X } from 'lucide-react';
 
 const NARROW = '(max-width: 899px)';
@@ -113,6 +114,17 @@ export function App() {
   useEffect(() => refreshChats(), [refreshChats]);
   useEffect(() => refreshModels(), [refreshModels]);
 
+  // Which local models can reply right now: checked when My models changes and when the window regains focus. A failed check keeps the last answer.
+  const [availability, setAvailability] = useState<Record<string, LocalAvailability>>({});
+  const hasLocal = libraryModels.some((m) => m.source === 'local');
+  useEffect(() => {
+    if (!hasLocal) { setAvailability({}); return; }
+    const check = () => { api.modelAvailability().then(setAvailability).catch(() => {}); };
+    check();
+    window.addEventListener('focus', check);
+    return () => window.removeEventListener('focus', check);
+  }, [hasLocal, libraryModels]);
+
   // While an image is being made somewhere, keep the list fresh so its spinner and thumbnail update.
   const anyBusy = chats.some((c) => c.busy);
   useEffect(() => {
@@ -198,6 +210,7 @@ export function App() {
   const shownTheme = resolvedTheme(appearance.theme, systemDark);
 
   return (
+    <AvailabilityContext.Provider value={availability}>
     <div className={`app${panelOpen ? '' : ' panel-closed'}${narrow ? ' narrow' : ''}`}>
       {/* While Settings or the palette is open, everything behind it is inert, so focus and screen readers stay in the dialog. */}
       <div className="rail-slot" inert={overlayOpen}>
@@ -257,5 +270,6 @@ export function App() {
         </div>
       )}
     </div>
+    </AvailabilityContext.Provider>
   );
 }
