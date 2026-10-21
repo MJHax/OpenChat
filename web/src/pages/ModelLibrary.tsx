@@ -154,7 +154,7 @@ export function ModelLibrary({ models, noKey = false, onChanged, sort: librarySo
                         <input
                           type="number"
                           className="window-input"
-                          min={1}
+                          min={1024}
                           defaultValue={m.contextWindow ?? undefined}
                           aria-label={`Context window for ${m.id}`}
                           onBlur={(e) => {

@@ -7,6 +7,11 @@ export function overflowTitle(overflow: ContextOverflow[]): string {
   return `This chat is longer than ${joined} can remember.`;
 }
 
+/** Shown when the summary itself overflowed: the summary runs on the same model, so it can't see the whole chat either. */
+export function summaryNote(overflow: ContextOverflow[]): string {
+  return `The summary will only cover the part of the chat ${overflow[0]?.displayName ?? 'the model'} can hold.`;
+}
+
 /** What goes back into the message box when a "Send anyway" send fails before the server took it; null when there is no draft. */
 export function draftAfterFailedSend<A>(opts: { kind: string; text?: string; attachments?: A[] }): { text: string; attachments: A[] } | null {
   return opts.kind === 'send' ? { text: opts.text ?? '', attachments: opts.attachments ?? [] } : null;

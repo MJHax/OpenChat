@@ -1,5 +1,5 @@
 import type { ContextOverflow } from '../../../shared/types';
-import { overflowTitle } from '../lib/overflow';
+import { overflowTitle, summaryNote } from '../lib/overflow';
 
 interface ContextOverflowDialogProps {
   overflow: ContextOverflow[];
@@ -17,6 +17,7 @@ export function ContextOverflowDialog({ overflow, onSummarize, onSendAnyway, onC
     <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget && !busy) onCancel(); }}>
       <div className="modal card" role="dialog" aria-modal="true" aria-labelledby="overflow-title">
         <h3 id="overflow-title">{overflowTitle(overflow)}</h3>
+        {retry && <p className="muted">{summaryNote(overflow)}</p>}
         <div className="row">
           <button onClick={onCancel} disabled={busy}>Cancel</button>
           {onSendAnyway && <button onClick={onSendAnyway} disabled={busy}>Send anyway</button>}

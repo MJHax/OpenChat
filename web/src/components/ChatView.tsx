@@ -396,7 +396,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
     if (!ask?.opts) return;
     const opts = ask.opts;
     setOverflowAsk(null);
-    if (opts.kind !== 'regenerate') setPrefill((p) => ({ nonce: (p?.nonce ?? 0) + 1, text: '', clear: true }));
+    if (opts.kind === 'send') setPrefill((p) => ({ nonce: (p?.nonce ?? 0) + 1, text: '', clear: true }));
     if (await run(opts, true)) return;
     // Nothing was saved: give the draft back.
     if (opts.kind === 'edit') setFailedEdit({ messageId: opts.messageId, text: opts.text, attachments: opts.attachments });

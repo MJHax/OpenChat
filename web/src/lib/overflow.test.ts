@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ContextOverflow } from '../../../shared/types';
-import { draftAfterFailedSend, overflowTitle } from './overflow';
+import { draftAfterFailedSend, overflowTitle, summaryNote } from './overflow';
 
 const o = (displayName: string): ContextOverflow => ({ modelId: displayName, displayName, window: 1024, estimate: 2000 });
 
@@ -23,5 +23,11 @@ describe('draftAfterFailedSend', () => {
   it('has nothing to give back for regenerate or edit', () => {
     expect(draftAfterFailedSend({ kind: 'regenerate' })).toBeNull();
     expect(draftAfterFailedSend({ kind: 'edit', text: 'x', attachments: [] })).toBeNull();
+  });
+});
+
+describe('summaryNote', () => {
+  it('says the summary only covers what the model can hold', () => {
+    expect(summaryNote([o('Gemma')])).toBe('The summary will only cover the part of the chat Gemma can hold.');
   });
 });
