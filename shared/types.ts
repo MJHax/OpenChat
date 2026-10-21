@@ -646,6 +646,9 @@ export interface LocalModel {
   capsKnown: boolean;
 }
 
+/** Whether a local model in My models can reply right now. */
+export type LocalAvailability = 'ready' | 'offline' | 'missing' | 'off';
+
 export interface LocalCatalog {
   servers: LocalServerStatus[];
   models: LocalModel[];

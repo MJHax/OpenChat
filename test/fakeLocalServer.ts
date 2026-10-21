@@ -24,6 +24,8 @@ export interface FakeReply {
   completionTokens?: number;
   /** Generation time the server reports, in ms (default 100). */
   evalMs?: number;
+  /** Destroys the socket after this many text, thinking or tool-call chunks, as a server that died mid-reply. */
+  cutAfter?: number;
 }
 export interface FakeServer {
   url: string;
@@ -38,6 +40,14 @@ export interface FakeServer {
 type Flavor = 'ollama' | 'lmstudio' | 'openai';
 const DEFAULT_CONTEXT = 4096;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Writes a chunk, and when it was the last one the reply allows, flushes it and kills the connection. */
+async function cutIfDue(res: ServerResponse, sent: number, r: FakeReply): Promise<boolean> {
+  if (r.cutAfter === undefined || sent < r.cutAfter) return false;
+  await sleep(30);
+  res.socket?.destroy();
+  return true;
+}
 
 export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeModel[]; port?: number; listDelayMs?: number }): Promise<FakeServer> {
   const { flavor } = o;
@@ -104,9 +114,11 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
         tool_calls: r.toolCalls.map((c) => ({ function: { name: c.name, arguments: c.arguments } })),
       });
     }
+    let sent = 0;
     for (const message of pieces) {
       if (r.delayMs) await sleep(r.delayMs);
       line({ model: 'fake', created_at, message, done: false });
+      if (await cutIfDue(res, ++sent, r)) return;
     }
     line({
       model: 'fake',
@@ -151,13 +163,16 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
     const send = (choice: object, extra: object = {}) =>
       res.write(`data: ${JSON.stringify({ ...base, choices: [choice], ...extra })}\n\n`);
     send({ index: 0, delta: { role: 'assistant', content: '' }, finish_reason: null });
+    let sent = 0;
     for (const t of r.thinking ?? []) {
       if (r.delayMs) await sleep(r.delayMs);
       send({ index: 0, delta: { reasoning_content: t }, finish_reason: null });
+      if (await cutIfDue(res, ++sent, r)) return;
     }
     for (const t of r.text ?? []) {
       if (r.delayMs) await sleep(r.delayMs);
       send({ index: 0, delta: { content: t }, finish_reason: null });
+      if (await cutIfDue(res, ++sent, r)) return;
     }
     if (r.toolCalls?.length) {
       if (r.delayMs) await sleep(r.delayMs);
@@ -210,6 +225,8 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
         failure = undefined;
         return sendError(res, f.status, f.error);
       }
+      // Real Ollama answers an unknown model with 404 before it replies.
+      if (flavor === 'ollama' && !find(body?.model)) return sendError(res, 404, `model '${body?.model}' not found`);
       const r = nextReply();
       const loadMs = await useModel(body?.model, body?.options?.num_ctx);
       return flavor === 'ollama' ? chatOllama(res, r, body?.stream !== false, loadMs) : chatOpenAI(res, r);

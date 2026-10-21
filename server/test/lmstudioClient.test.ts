@@ -183,9 +183,45 @@ describe('LM Studio client', () => {
     const err = await gen.next().catch((e) => e);
     expect(err.name).toBe('AbortError');
   });
+
+  it('says the connection was lost when the server drops mid-reply', async () => {
+    const client = await startLm();
+    server!.reply({ text: ['a', 'b', 'c'], cutAfter: 1 });
+    const err = await collect(client.streamChat({ model: 'vision-model', messages: hello })).catch((e) => e);
+    expect(err).toBeInstanceOf(LocalServerError);
+    expect(err.message).toBe(`Lost the connection to LM Studio at ${new URL(server!.url).host}.`);
+  });
+
+  it('says a model is not installed when the listing no longer has it', async () => {
+    const client = await startLm();
+    server!.setModels([]);
+    const err = await collect(client.streamChat({ model: QWEN, messages: hello, contextWindow: 4096 })).catch((e) => e);
+    expect(err).toBeInstanceOf(LocalServerError);
+    expect(err.message).toBe(`${QWEN} isn't installed on LM Studio any more.`);
+    expect(err.status).toBe(404);
+  });
 });
 
 describe('OpenAI-compatible client', () => {
+  it('says the connection was lost when the server drops mid-reply', async () => {
+    const client = await startOpenAI();
+    server!.reply({ text: ['a', 'b', 'c'], cutAfter: 1 });
+    const err = await collect(client.streamChat({ model: 'gpt-local', messages: hello })).catch((e) => e);
+    expect(err).toBeInstanceOf(LocalServerError);
+    expect(err.message).toBe(`Lost the connection to My server at ${new URL(server!.url).host}.`);
+  });
+
+  it('still rejects with an AbortError when aborted mid-stream', async () => {
+    const client = await startOpenAI();
+    server!.reply({ text: ['a', 'b', 'c', 'd'], delayMs: 100 });
+    const ac = new AbortController();
+    const gen = client.streamChat({ model: 'gpt-local', messages: hello, signal: ac.signal });
+    expect((await gen.next()).value).toMatchObject({ type: 'delta' });
+    ac.abort();
+    const err = await gen.next().catch((e) => e);
+    expect(err.name).toBe('AbortError');
+  });
+
   it('lists models with unknown capabilities', async () => {
     const client = await startOpenAI();
     expect(await client.listModels()).toEqual([

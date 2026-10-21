@@ -1,6 +1,6 @@
 import { LIST_TIMEOUT_MS, createOpenAIChat } from './openaiCompat';
 import { localFetch, readListing } from './localHttp';
-import type { LoadState, LocalClient, LocalModelInfo } from './types';
+import { LocalServerError, type LoadState, type LocalClient, type LocalModelInfo } from './types';
 
 /** The pre-chat listing runs while LM Studio may be busy loading another model, so it gets longer than a settings-page listing. */
 const PREPARE_TIMEOUT_MS = 10_000;
@@ -48,8 +48,9 @@ export function createLmStudioClient(server: { name: string; baseUrl: string }, 
       } catch {
         return null;
       }
-      // A loaded model keeps the window it was loaded with; an unknown one is left for LM Studio to report on chat.
-      if (!info || (info.loaded_instances ?? []).length > 0) return null;
+      // A loaded model keeps the window it was loaded with. A listing that answers without the model means it was removed.
+      if (!info) throw new LocalServerError(`${model} isn't installed on ${server.name} any more.`, 404);
+      if ((info.loaded_instances ?? []).length > 0) return null;
       const started = Date.now();
       const res = await localFetch(
         server,

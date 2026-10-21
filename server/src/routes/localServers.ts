@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Deps } from '../app';
 import { HttpError, readJson } from '../http';
-import { detectLocalServers, probeServers, serverStatuses } from '../localDetect';
+import { detectLocalServers, modelAvailability, probeServers, serverStatuses } from '../localDetect';
 import { addServer, findServer, getServer, removeServer, updateServer } from '../localServers';
 import { localClientFor } from '../providers';
 import type { LocalModelInfo } from '../providers/types';
@@ -97,6 +97,8 @@ export function localServerRoutes(deps: Deps): Hono {
     const catalog: LocalCatalog = { servers: probes.map((p) => p.status), models };
     return c.json(catalog);
   });
+
+  r.get('/availability', async (c) => c.json(await modelAvailability(db)));
 
   r.post('/', async (c) => {
     const body = await readJson<{ type?: unknown; name?: unknown; baseUrl?: unknown }>(c);

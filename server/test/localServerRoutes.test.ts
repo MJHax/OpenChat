@@ -2,6 +2,10 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { makeApp } from './appHelpers';
 import { startFakeLocalServer, type FakeServer } from '../../test/fakeLocalServer';
 import { now } from '../src/db';
+import { addServer, updateServer } from '../src/localServers';
+import { addModel } from '../src/library';
+import { localModelId } from '../../shared/localModels';
+import { withCatalogDefaults } from '../../shared/types';
 
 const fakes: FakeServer[] = [];
 afterEach(async () => {
@@ -181,5 +185,31 @@ describe('local server routes', () => {
     }
     const row = db.prepare('SELECT context_length, supports_tools, supports_reasoning FROM models WHERE id = ?').get(stored);
     expect(row).toEqual({ context_length: 40960, supports_tools: 1, supports_reasoning: 1 });
+  });
+});
+
+describe('model availability', () => {
+  it('says which library models can reply', async () => {
+    const running = await fake('ollama');
+    const closed = await fake('ollama');
+    const { call, db } = makeApp();
+    const mk = (name: string, baseUrl: string) => addServer(db, { type: 'ollama', name, baseUrl, auto: false });
+    const up = mk('Up', running.url);
+    const down = mk('Down', closed.url);
+    const off = mk('Off', 'http://127.0.0.1:9');
+    updateServer(db, off.id, { enabled: false });
+    const ids = {
+      ready: localModelId(up.id, 'qwen3:1.7b'),
+      missing: localModelId(up.id, 'gemma3:1b'),
+      offline: localModelId(down.id, 'qwen3:1.7b'),
+      off: localModelId(off.id, 'qwen3:1.7b'),
+    };
+    for (const id of Object.values(ids)) addModel(db, withCatalogDefaults({ id, name: id }));
+    addModel(db, withCatalogDefaults({ id: 'openai/gpt-4o', name: 'GPT-4o' }));
+    running.setModels([{ name: 'qwen3:1.7b' }]);
+    await closed.close();
+    const res = await call('GET', '/api/local-servers/availability');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ [ids.ready]: 'ready', [ids.missing]: 'missing', [ids.offline]: 'offline', [ids.off]: 'off' });
   });
 });

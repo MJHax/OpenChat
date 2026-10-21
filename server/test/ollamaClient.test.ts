@@ -160,6 +160,23 @@ describe('ollama client', () => {
     expect(err.name).toBe('AbortError');
   });
 
+  it('says the connection was lost when the server drops mid-reply', async () => {
+    const client = await start();
+    server!.reply({ text: ['a', 'b', 'c'], cutAfter: 1 });
+    const err = await collect(client.streamChat({ model: 'gemma3:1b', messages: hello })).catch((e) => e);
+    expect(err).toBeInstanceOf(LocalServerError);
+    expect(err.message).toBe(`Lost the connection to Ollama at ${new URL(server!.url).host}.`);
+  });
+
+  it('says a model is not installed when the server answers 404', async () => {
+    const client = await start();
+    server!.setModels([]);
+    const err = await collect(client.streamChat({ model: 'qwen3:1.7b', messages: hello })).catch((e) => e);
+    expect(err).toBeInstanceOf(LocalServerError);
+    expect(err.message).toBe("qwen3:1.7b isn't installed on Ollama any more.");
+    expect(err.status).toBe(404);
+  });
+
   it('OpenRouterError is a ProviderError', () => {
     const e = new OpenRouterError('x', 401);
     expect(e).toBeInstanceOf(ProviderError);

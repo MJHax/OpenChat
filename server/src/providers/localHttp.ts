@@ -24,6 +24,31 @@ export async function readListing(res: Response, server: { name: string; baseUrl
   }
 }
 
+/**
+ * A response body that fails with a plain LocalServerError when the server goes away mid-reply. A read error caused by
+ * the caller's own abort passes through unchanged.
+ */
+export function guardBody(
+  body: ReadableStream<Uint8Array>,
+  server: { name: string; baseUrl: string },
+  signal?: AbortSignal,
+): ReadableStream<Uint8Array> {
+  const reader = body.getReader();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) controller.close();
+        else controller.enqueue(value);
+      } catch (e) {
+        if (signal?.aborted || isAbort(e)) controller.error(e);
+        else controller.error(new LocalServerError(`Lost the connection to ${server.name} at ${hostOf(server.baseUrl)}.`, 0));
+      }
+    },
+    cancel: (reason) => reader.cancel(reason),
+  });
+}
+
 /** fetch for a local server: unreachable or slow servers and non-2xx answers become LocalServerError. */
 export async function localFetch(
   server: { name: string; baseUrl: string },

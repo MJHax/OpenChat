@@ -1,6 +1,6 @@
 import type { StreamEvent, Usage } from '../openrouter';
 import type { ChatMessage } from '../prompt';
-import { localFetch, readListing } from './localHttp';
+import { guardBody, localFetch, readListing } from './localHttp';
 import { readChatStream } from './openaiStream';
 import { LocalServerError, type ChatRequest, type CompleteRequest, type LocalClient, type LocalModelInfo } from './types';
 
@@ -67,7 +67,7 @@ export function createOpenAIChat(
     );
     if (!res.body) throw failure('empty response');
     yield* readChatStream(
-      res.body,
+      guardBody(res.body, server, o.signal),
       (_status, message) => {
         throw failure(typeof message === 'string' && message ? message : 'unknown error');
       },

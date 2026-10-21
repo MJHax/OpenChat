@@ -2,8 +2,8 @@ import type { DB } from './db';
 import { addServer, findServer, listServers } from './localServers';
 import { localClientFor } from './providers';
 import type { LocalModelInfo } from './providers/types';
-import { DETECT_CANDIDATES, SERVER_TYPE_NAMES } from '../../shared/localModels';
-import type { LocalServerStatus } from '../../shared/types';
+import { DETECT_CANDIDATES, SERVER_TYPE_NAMES, localModelId, parseLocalModelId } from '../../shared/localModels';
+import type { LocalAvailability, LocalServerStatus } from '../../shared/types';
 
 /**
  * Looks for servers already running on this machine and lists the ones that answer. A server the user removed is only
@@ -47,6 +47,19 @@ export async function probeServers(db: DB): Promise<ServerProbe[]> {
       }
     }),
   );
+}
+
+/** Every local model in My models, by whether its server is turned off, silent, or answering without it. One probe, no detection. */
+export async function modelAvailability(db: DB): Promise<Record<string, LocalAvailability>> {
+  const probes = new Map((await probeServers(db)).map((p) => [p.status.id, p]));
+  const out: Record<string, LocalAvailability> = {};
+  for (const { id } of db.prepare("SELECT id FROM models WHERE id LIKE 'local:%'").all() as { id: string }[]) {
+    const parsed = parseLocalModelId(id);
+    const probe = parsed && probes.get(parsed.serverId);
+    if (!parsed || !probe) continue;
+    out[id] = !probe.status.enabled ? 'off' : !probe.status.online ? 'offline' : probe.models.some((m) => localModelId(parsed.serverId, m.name) === id) ? 'ready' : 'missing';
+  }
+  return out;
 }
 
 export async function serverStatuses(db: DB): Promise<LocalServerStatus[]> {

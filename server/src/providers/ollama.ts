@@ -1,6 +1,6 @@
 import type { StreamEvent, Usage } from '../openrouter';
 import type { ChatMessage } from '../prompt';
-import { localFetch, readListing } from './localHttp';
+import { guardBody, localFetch, readListing } from './localHttp';
 import { LocalServerError, type ChatRequest, type CompleteRequest, type LocalClient, type LocalModelInfo } from './types';
 
 const LIST_TIMEOUT_MS = 1_500;
@@ -52,6 +52,10 @@ export function createOllamaClient(server: { name: string; baseUrl: string }, fe
       fetchImpl,
     );
   const failure = (detail: unknown) => new LocalServerError(`${server.name} couldn't run this model: ${String(detail)}`, 500);
+
+  /** Ollama answers an unknown model on /api/chat with 404. */
+  const notInstalled = (e: unknown, model: string) =>
+    e instanceof LocalServerError && e.status === 404 ? new LocalServerError(`${model} isn't installed on ${server.name} any more.`, 404) : e;
 
   function chatBody(o: ChatRequest & { contextWindow?: number; maxTokens?: number }, stream: boolean) {
     const options: Record<string, number> = {};
@@ -127,7 +131,9 @@ export function createOllamaClient(server: { name: string; baseUrl: string }, fe
     },
 
     async *streamChat(o) {
-      const res = await post('/api/chat', chatBody(o, true), o.signal);
+      const res = await post('/api/chat', chatBody(o, true), o.signal).catch((e) => {
+        throw notInstalled(e, o.model);
+      });
       const decoder = new TextDecoder();
       const calls: StreamEvent[] = [];
       let buffer = '';
@@ -145,7 +151,7 @@ export function createOllamaClient(server: { name: string; baseUrl: string }, fe
         for (const call of line.message?.tool_calls ?? []) calls.push(toolCallEvent(call));
         if (line.done) yield { type: 'usage', usage: usageOf(line) };
       };
-      for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
+      for await (const chunk of guardBody(res.body!, server, o.signal) as unknown as AsyncIterable<Uint8Array>) {
         buffer += decoder.decode(chunk, { stream: true });
         let nl: number;
         while ((nl = buffer.indexOf('\n')) >= 0) {
@@ -159,7 +165,9 @@ export function createOllamaClient(server: { name: string; baseUrl: string }, fe
     },
 
     async complete(o: CompleteRequest & { contextWindow?: number }) {
-      const res = await post('/api/chat', chatBody(o, false));
+      const res = await post('/api/chat', chatBody(o, false)).catch((e) => {
+        throw notInstalled(e, o.model);
+      });
       const body: any = await res.json();
       if (body.error) throw failure(body.error);
       if (body.done) o.onUsage?.(usageOf(body));

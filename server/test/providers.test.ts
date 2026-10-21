@@ -278,3 +278,35 @@ describe('loading status', () => {
     expect(second.map((e) => e.event)).not.toContain('status');
   }, 15000);
 });
+
+describe('plain errors', () => {
+  it('says the connection was lost mid-reply and keeps the partial text', async () => {
+    const s = await setup();
+    s.fake.reply({ text: ['a', 'b', 'c'], cutAfter: 1 });
+    const events = await readEvents(await send(s, { modelId: s.ids.gemma }));
+    const frame = events.find((e) => e.event === 'error')!;
+    expect(frame.data.message).toBe(`Lost the connection to Ollama at ${new URL(s.fake.url).host}.`);
+    expect(frame.data.partial.status).toBe('stopped');
+    expect(frame.data.partial.content).toBe('a');
+    expect(JSON.stringify(frame)).not.toMatch(/terminated|fetch failed|ECONNRESET/);
+  });
+
+  it('says an Ollama model is gone from its server', async () => {
+    const s = await setup();
+    s.fake.setModels([]);
+    const events = await readEvents(await send(s, { modelId: s.ids.qwen }));
+    expect(events.find((e) => e.event === 'error')!.data.message).toBe("qwen3:1.7b isn't installed on Ollama any more.");
+  });
+
+  it('says an LM Studio model is gone from its server', async () => {
+    fake = await startFakeLocalServer({ flavor: 'lmstudio', models: [{ name: 'qwen3:1.7b', contextLength: 8192 }] });
+    const app = makeApp({}, {});
+    const server = addServer(app.db, { type: 'lmstudio', name: 'LM Studio', baseUrl: fake.url, auto: false });
+    const id = localModelId(server.id, 'qwen3:1.7b');
+    addModel(app.db, withCatalogDefaults({ id, name: 'qwen3:1.7b', contextLength: 8192 }));
+    const chatId = ((await (await app.call('POST', '/api/chats')).json()) as ChatSummary).id;
+    fake.setModels([]);
+    const events = await readEvents(await app.call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelId: id }));
+    expect(events.find((e) => e.event === 'error')!.data.message).toBe("qwen3:1.7b isn't installed on LM Studio any more.");
+  });
+});
