@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Attachment, LibraryModel, PathMessage } from '../../../shared/types';
 import { sendBlockReason } from '../lib/attachments';
 import { formatCost, formatTokens } from '../lib/format';
+import { timingParts } from '../lib/timing';
 import { AttachButton, useFileDrop } from './AttachButton';
 import { AttachmentChips } from './AttachmentChips';
 import { toDraft, useAttachmentDraft } from './useAttachmentDraft';
@@ -145,6 +146,7 @@ export function MessageItem({
         <div className="msg-head">
           <span className="model-tag">{modelName}</span>
           {tokens > 0 && <span>· {formatTokens(tokens)} tok</span>}
+          {timingParts(message.timing).map((part) => <span key={part}>· {part}</span>)}
           {message.cost !== null && <span>· {formatCost(message.cost)}</span>}
           {message.effort && <span>· {message.effort} effort</span>}
           {(message.webSearches ?? 0) > 0 && <span>· searched {message.webSearches}×</span>}

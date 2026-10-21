@@ -56,6 +56,8 @@ interface SlotState {
   text: string;
   /** Live reasoning from models that think before answering; shown while pending, not saved. */
   reasoning: string;
+  /** What the server is waiting on (e.g. a model loading); cleared once the reply starts. */
+  status: string | null;
   error: string | null;
   message: Message | null;
   done: boolean;
@@ -237,7 +239,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       startedAt: Date.now(),
       // Regenerate searches again only if the message being answered asked for search.
       webSearch: opts.kind === 'regenerate' ? messages.find((m) => m.id === opts.parentId)?.webSearch && searchAllowed(models, opts.models) || false : sendSearch,
-      slots: opts.models.map((id) => ({ modelId: id, text: '', reasoning: '', error: null, message: null, done: false })),
+      slots: opts.models.map((id) => ({ modelId: id, text: '', reasoning: '', status: null, error: null, message: null, done: false })),
     });
     const updateSlot = (slot: number, change: (s: SlotState) => SlotState) => {
       if (!isShown()) return;
@@ -280,8 +282,9 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
       if (opts.models.length === 1) {
         await streamGeneration(url, body, {
           onStart: () => { started = true; },
-          onDelta: (text) => updateSlot(0, (s) => ({ ...s, text: s.text + text })),
-          onReasoning: (text) => updateSlot(0, (s) => ({ ...s, reasoning: s.reasoning + text })),
+          onDelta: (text) => updateSlot(0, (s) => ({ ...s, text: s.text + text, status: null })),
+          onReasoning: (text) => updateSlot(0, (s) => ({ ...s, reasoning: s.reasoning + text, status: null })),
+          onStatus: (message) => updateSlot(0, (s) => ({ ...s, status: message })),
           onDone: (e) => {
             void finish(null).then(() => {
               // A finished reply that made files opens its last complete one when no file is open, and moves an open
@@ -299,8 +302,9 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
         const failures: string[] = [];
         await streamComparison(url, body, {
           onStart: () => { started = true; },
-          onDelta: (slot, text) => updateSlot(slot, (s) => ({ ...s, text: s.text + text })),
-          onReasoning: (slot, text) => updateSlot(slot, (s) => ({ ...s, reasoning: s.reasoning + text })),
+          onDelta: (slot, text) => updateSlot(slot, (s) => ({ ...s, text: s.text + text, status: null })),
+          onReasoning: (slot, text) => updateSlot(slot, (s) => ({ ...s, reasoning: s.reasoning + text, status: null })),
+          onStatus: (slot, message) => updateSlot(slot, (s) => ({ ...s, status: message })),
           onSlotDone: (e) => updateSlot(e.slot, (s) => ({ ...s, message: e.message, done: true })),
           onSlotError: (e) => {
             failures.push(e.message);
@@ -472,7 +476,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
 
   const nameOf = (id: string | null) => models.find((m) => m.id === id)?.displayName ?? id ?? '';
   const savedColumns = (replies: Message[]): Column[] =>
-    replies.map((m) => ({ key: m.id, modelName: nameOf(m.modelId), text: m.content, reasoning: '', startedAt: 0, streaming: false, error: null, message: m }));
+    replies.map((m) => ({ key: m.id, modelName: nameOf(m.modelId), text: m.content, reasoning: '', status: null, startedAt: 0, streaming: false, error: null, message: m }));
 
   const shown = pending ? messages.slice(0, pending.baseLength) : versions ? messages.slice(0, versions.index) : messages;
   const noModels = models.length === 0;
@@ -550,7 +554,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
                 <ModelMark name={nameOf(pending.slots[0].modelId)} />
                 <div className="msg-col">
                   <div className="msg-head"><span className="model-tag">{nameOf(pending.slots[0].modelId)}</span></div>
-                  {!pending.slots[0].text && <ThinkingIndicator startedAt={pending.startedAt} reasoning={pending.slots[0].reasoning} webSearch={pending.webSearch} />}
+                  {!pending.slots[0].text && <ThinkingIndicator startedAt={pending.startedAt} reasoning={pending.slots[0].reasoning} webSearch={pending.webSearch} status={pending.slots[0].status ?? undefined} />}
                   {pending.slots[0].text && <div className="msg-body streaming"><MessageBody text={pending.slots[0].text} messageId={null} streaming /></div>}
                 </div>
               </div>
@@ -558,7 +562,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
             {pending && pending.slots.length > 1 && (
               <CompareColumns
                 columns={pending.slots.map((s, i) => ({
-                  key: String(i), modelName: nameOf(s.modelId), text: s.text, reasoning: s.reasoning,
+                  key: String(i), modelName: nameOf(s.modelId), text: s.text, reasoning: s.reasoning, status: s.status,
                   startedAt: pending.startedAt, streaming: !s.done, error: s.error, message: s.message, webSearch: pending.webSearch,
                 }))}
               />

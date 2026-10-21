@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { Message } from '../../../shared/types';
 import { formatCost, formatTokens } from '../lib/format';
+import { timingParts } from '../lib/timing';
 import { MessageBody } from './MessageBody';
 import { Sources } from './Sources';
 import { ThinkingIndicator } from './ThinkingIndicator';
@@ -10,6 +11,8 @@ export interface Column {
   modelName: string;
   text: string;
   reasoning: string;
+  /** What the server is waiting on, if it said (e.g. a model loading). */
+  status: string | null;
   startedAt: number;
   streaming: boolean;
   error: string | null;
@@ -42,7 +45,7 @@ export function CompareColumns({ title, columns, onContinue, onClose }: Props) {
           return (
             <div key={col.key} className="compare-col">
               <div className="compare-model">{col.modelName}</div>
-              {col.streaming && !col.text && <ThinkingIndicator startedAt={col.startedAt} reasoning={col.reasoning} webSearch={col.webSearch} />}
+              {col.streaming && !col.text && <ThinkingIndicator startedAt={col.startedAt} reasoning={col.reasoning} webSearch={col.webSearch} status={col.status ?? undefined} />}
               {col.text && <div className="msg-body"><MessageBody text={col.text} messageId={m?.id ?? null} streaming={col.streaming} /></div>}
               {col.error && <div className="error-text small">{col.error}</div>}
               {m?.status === 'stopped' && !col.error && <div className="muted small">Response stopped</div>}
@@ -50,6 +53,7 @@ export function CompareColumns({ title, columns, onContinue, onClose }: Props) {
               {m && (
                 <div className="msg-meta">
                   {tokens > 0 && <span>{formatTokens(tokens)} tok</span>}
+                  {timingParts(m.timing).map((part) => <span key={part}>· {part}</span>)}
                   {m.cost !== null && <span>· {formatCost(m.cost)}</span>}
                   {(m.webSearches ?? 0) > 0 && <span>· searched {m.webSearches}×</span>}
                 </div>

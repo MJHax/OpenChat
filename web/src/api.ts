@@ -160,6 +160,8 @@ export interface StreamHandlers {
   onStart(e: StreamStart): void;
   onDelta(text: string): void;
   onReasoning(text: string): void;
+  /** The server is waiting on the model (loading it, or no first token yet). */
+  onStatus(message: string): void;
   onDone(e: StreamDone): void;
   onError(e: StreamError): void;
   onTitle(e: StreamTitle): void;
@@ -190,6 +192,7 @@ export async function streamGeneration(url: string, body: unknown, h: StreamHand
     if (ev.event === 'start') h.onStart(data);
     else if (ev.event === 'delta') h.onDelta(data.text);
     else if (ev.event === 'reasoning') h.onReasoning(data.text);
+    else if (ev.event === 'status') h.onStatus(data.message);
     else if (ev.event === 'done') h.onDone(data);
     else if (ev.event === 'error') h.onError(data);
     else if (ev.event === 'title') h.onTitle(data);
@@ -200,6 +203,7 @@ export interface CompareHandlers {
   onStart(e: CompareStart): void;
   onDelta(slot: number, text: string): void;
   onReasoning(slot: number, text: string): void;
+  onStatus(slot: number, message: string): void;
   onSlotDone(e: CompareSlotDone): void;
   onSlotError(e: CompareSlotError): void;
   onDone(e: CompareDone): void;
@@ -216,6 +220,7 @@ export async function streamComparison(url: string, body: unknown, h: CompareHan
     if (ev.event === 'start') h.onStart(data);
     else if (ev.event === 'delta') h.onDelta(data.slot, data.text);
     else if (ev.event === 'reasoning') h.onReasoning(data.slot, data.text);
+    else if (ev.event === 'status') h.onStatus(data.slot, data.message);
     else if (ev.event === 'slot-done') h.onSlotDone(data);
     else if (ev.event === 'slot-error') h.onSlotError(data);
     else if (ev.event === 'done') h.onDone(data);
@@ -227,6 +232,7 @@ export interface DiscussionTurnHandlers {
   onStart(e: DiscussionTurnStart): void;
   onDelta(text: string): void;
   onReasoning(text: string): void;
+  onStatus(message: string): void;
   onDone(e: DiscussionTurnDone): void;
   /** A failed turn, or a refused request (`status` is its HTTP status; 402 is a spending limit). */
   onError(e: DiscussionTurnError | { message: string; status: number }): void;
@@ -245,6 +251,7 @@ export async function streamDiscussionTurn(id: string, h: DiscussionTurnHandlers
     if (ev.event === 'start') h.onStart(data);
     else if (ev.event === 'delta') h.onDelta(data.text);
     else if (ev.event === 'reasoning') h.onReasoning(data.text);
+    else if (ev.event === 'status') h.onStatus(data.message);
     else if (ev.event === 'done') h.onDone(data);
     else if (ev.event === 'error') h.onError(data);
   }

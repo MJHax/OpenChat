@@ -47,8 +47,9 @@ export function DiscussionView({ initial, justCreated, models, onChanged }: Disc
     try {
       await streamDiscussionTurn(id, {
         onStart: (e) => setLive({ participantId: e.participantId, text: '' }),
-        onDelta: (text) => setLive((l) => (l ? { ...l, text: l.text + text } : l)),
+        onDelta: (text) => setLive((l) => (l ? { ...l, text: l.text + text, status: undefined } : l)),
         onReasoning: () => {},
+        onStatus: (message) => setLive((l) => (l ? { ...l, status: message } : l)),
         onDone: (e) => {
           append(e.message);
           setState(e.state);

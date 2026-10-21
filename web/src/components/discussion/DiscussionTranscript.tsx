@@ -7,6 +7,8 @@ import { Avatar } from './ParticipantsPopover';
 export interface LiveTurn {
   participantId: string;
   text: string;
+  /** What the server is waiting on (e.g. a model loading); cleared once the turn starts writing. */
+  status?: string;
 }
 
 export interface DiscussionTranscriptProps {
@@ -56,7 +58,7 @@ export function DiscussionTranscript({ detail, live, queued, nameOf }: Discussio
         <div className="turn">
           <Avatar name={speaker.name} position={speaker.position} />
           <div className="turn-main">
-            <div className="turn-name">{speaker.name} <span className="muted">· {nameOf(speaker.modelId)} · writing…</span></div>
+            <div className="turn-name">{speaker.name} <span className="muted">· {nameOf(speaker.modelId)} · {live.status && !live.text ? live.status : 'writing…'}</span></div>
             {live.text && <div className="msg-body"><Markdown text={live.text} /></div>}
           </div>
         </div>
