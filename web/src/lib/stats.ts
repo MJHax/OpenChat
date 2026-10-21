@@ -1,4 +1,4 @@
-import type { ChatStats, HeatDay, StatsRange } from '../../../shared/types';
+import type { ChatStats, HeatDay, SourceTotals, StatsRange } from '../../../shared/types';
 
 export const RANGES: { id: StatsRange; label: string }[] = [
   { id: 'all', label: 'All time' },
@@ -38,6 +38,16 @@ export function compactNumber(n: number): string {
 export const formatPercent = (rate: number | null): string => (rate === null ? '—' : `${Math.round(rate * 100)}%`);
 
 export const formatSeconds = (ms: number | null): string => (ms === null ? '—' : `${(ms / 1000).toFixed(1)}s`);
+
+/** '42 tok/s' / '7.5 tok/s' (one decimal under 10); '—' when unmeasured. */
+export function formatSpeed(tokPerSec: number | null): string {
+  if (tokPerSec === null) return '—';
+  return `${tokPerSec < 10 ? tokPerSec.toFixed(1) : Math.round(tokPerSec)} tok/s`;
+}
+
+/** '12 replies · 34k tokens' for one source's share of the range. */
+export const sourceLine = (t: SourceTotals): string =>
+  `${t.replies} repl${t.replies === 1 ? 'y' : 'ies'} · ${compactNumber(t.tokens)} tokens`;
 
 /** '▲ 12%' / '▼ 12%' against the previous period; null when there's nothing to compare with. */
 export function formatChange(current: number, previous: number | null): string | null {

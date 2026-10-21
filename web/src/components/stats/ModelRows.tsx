@@ -25,6 +25,7 @@ function ModelRow({ m, top }: { m: ModelStats; top: number }) {
           <Detail label="Cache hit" value={formatPercent(m.cacheHitRate)} />
           <Detail label="First token" value={formatSeconds(m.avgFirstTokenMs)} />
           <Detail label="Output speed" value={m.outputTokensPerSec === null ? '—' : `${Math.round(m.outputTokensPerSec)} tok/s`} />
+          {m.local && <Detail label="Load time" value={formatSeconds(m.avgLoadMs)} />}
           <Detail label="Avg cost/reply" value={money(m.avgCostPerReply)} />
           <Detail label="Reasoning tokens" value={m.reasoningTokens === null ? '—' : compactNumber(m.reasoningTokens)} />
           <Detail label="Errors / stopped" value={`${formatPercent(m.errorRate)} / ${formatPercent(m.stoppedRate)}`} />

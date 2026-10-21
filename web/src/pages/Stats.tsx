@@ -7,6 +7,7 @@ import { Segmented } from '../components/stats/Segmented';
 import { StatTiles } from '../components/stats/StatTiles';
 import { Heatmap } from '../components/stats/Heatmap';
 import { UsageChart } from '../components/stats/UsageChart';
+import { LocalStats } from '../components/stats/LocalStats';
 import { ModelRows } from '../components/stats/ModelRows';
 import { FeaturePanels } from '../components/stats/FeaturePanels';
 import { MediaStats } from '../components/stats/MediaStats';
@@ -58,6 +59,7 @@ export function Stats() {
             <StatTiles tiles={stats.tiles} range={stats.range} />
             <Heatmap days={stats.heatmap} range={stats.range} />
             <UsageChart buckets={stats.buckets} />
+            <LocalStats stats={stats} />
             <ModelRows models={stats.models} />
             <FeaturePanels features={stats.features} byCost={stats.biggestByCost} byLength={stats.biggestByLength} />
             <p className="muted small">{trackingNote(stats.trackingSince)}</p>

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { compactNumber, emptyChatStats, formatChange, formatPercent, formatSeconds, heatColumns, heatLevel, loadRange, RANGES, saveRange, trackingNote } from './stats';
+import { compactNumber, emptyChatStats, formatChange, formatPercent, formatSeconds, formatSpeed, heatColumns, heatLevel, loadRange, RANGES, saveRange, sourceLine, trackingNote } from './stats';
 import type { HeatDay } from '../../../shared/types';
 
 describe('formatting', () => {
@@ -20,6 +20,19 @@ describe('formatting', () => {
     expect(formatChange(88, 100)).toBe('▼ 12%');
     expect(formatChange(5, 0)).toBeNull();
     expect(formatChange(5, null)).toBeNull();
+  });
+});
+
+describe('local stats formatting', () => {
+  it('summarises a source', () => {
+    expect(sourceLine({ replies: 1, tokens: 950 })).toBe('1 reply · 950 tokens');
+    expect(sourceLine({ replies: 12, tokens: 34_000 })).toBe('12 replies · 34k tokens');
+  });
+
+  it('formats speed', () => {
+    expect(formatSpeed(42.4)).toBe('42 tok/s');
+    expect(formatSpeed(7.46)).toBe('7.5 tok/s');
+    expect(formatSpeed(null)).toBe('—');
   });
 });
 
