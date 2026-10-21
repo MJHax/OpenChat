@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb } from '../src/db';
-import { createApp } from '../src/app';
+import { createApp, type Deps } from '../src/app';
 import type { OpenRouterClient } from '../src/openrouter';
 import type { Env } from '../src/settings';
 import { parseSSE } from '../../shared/sse';
@@ -23,7 +23,7 @@ export function makeApp(openrouter: Partial<OpenRouterClient> = {}, env: Env = {
     downloadVideo: async () => { throw new Error('downloadVideo is not scripted in this test'); },
     ...openrouter,
   };
-  const deps = { db, openrouter: client, env, mediaDir: mkdtempSync(join(tmpdir(), 'openchat-media-')) };
+  const deps: Deps = { db, openrouter: client, env, mediaDir: mkdtempSync(join(tmpdir(), 'openchat-media-')), localCandidates: [] };
   const app = createApp(deps);
   const call = (method: string, path: string, body?: unknown) =>
     app.request(path, {

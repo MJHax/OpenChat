@@ -3,6 +3,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { DB } from './db';
 import type { OpenRouterClient } from './openrouter';
 import type { Env } from './settings';
+import type { DETECT_CANDIDATES } from '../../shared/localModels';
 import { HttpError } from './http';
 import { settingsRoutes } from './routes/settings';
 import { memoryRoutes } from './routes/memories';
@@ -20,6 +21,7 @@ import { statsRoutes } from './routes/stats';
 import { contextRoutes } from './routes/context';
 import { dataRoutes } from './routes/data';
 import { discussionRoutes } from './routes/discussions';
+import { localServerRoutes } from './routes/localServers';
 
 export interface Deps {
   db: DB;
@@ -27,6 +29,8 @@ export interface Deps {
   env: Env;
   /** Where finished video clips are stored (`<id>.mp4`). */
   mediaDir: string;
+  /** Addresses probed for local servers; tests set this so they never touch the real ports. */
+  localCandidates?: typeof DETECT_CANDIDATES;
 }
 
 /** localhost, 127.0.0.1, [::1] and *.localhost: names that can only ever mean this machine. */
@@ -74,6 +78,7 @@ export function createApp(deps: Deps): Hono {
   app.route('/api/context', contextRoutes(deps));
   app.route('/api/data', dataRoutes(deps));
   app.route('/api/discussions', discussionRoutes(deps));
+  app.route('/api/local-servers', localServerRoutes(deps));
 
   return app;
 }

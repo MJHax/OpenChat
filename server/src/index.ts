@@ -8,6 +8,7 @@ import { cleanupPending } from './attachments';
 import { failInterruptedGenerations } from './imageGen';
 import { createVideoPoller } from './videoJobs';
 import { dirname, join } from 'node:path';
+import { detectLocalServers } from './localDetect';
 
 try {
   process.loadEnvFile('.env');
@@ -23,6 +24,8 @@ const deps = { db, openrouter: createOpenRouterClient(), env: process.env, media
 const app = createApp(deps);
 // Video jobs keep running on OpenRouter while OpenChat is off; this checks them at once, then every 15 s.
 createVideoPoller(deps).start();
+// Find Ollama / LM Studio already running; not awaited, so a slow or silent port never delays startup.
+void detectLocalServers(db).catch(() => {});
 
 // In `npm start`, serve the built frontend. In `npm run dev`, Vite serves it instead.
 if (existsSync('dist')) app.use('/*', serveStatic({ root: './dist' }));
