@@ -90,11 +90,15 @@ async function* searchLoop(run: Run, req: ChatRequest, service: SearchService): 
     cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null,
   };
 
+  let wroteText = false;
+  const snapshot = (): StreamEvent => ({ type: 'usage', usage: { ...total, webSearches: searches } });
+
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const withTools = round < MAX_ROUNDS - 1 && searches < MAX_SEARCHES;
     const roundReq: ChatRequest = { ...req, messages: messages.slice() };
     if (withTools) roundReq.tools = [WEB_SEARCH_TOOL];
     let text = '';
+    let roundHasText = false;
     const pending: { name: string; arguments: string }[] = [];
     for await (const e of run(roundReq)) {
       if (e.type === 'tool_call') pending.push({ name: e.name, arguments: e.arguments });
@@ -106,7 +110,12 @@ async function* searchLoop(run: Run, req: ChatRequest, service: SearchService): 
         total.generationMs = sum(total.generationMs, u.generationMs);
         if (round === 0) total.loadMs = u.loadMs;
       } else {
-        if (e.type === 'delta') text += e.text;
+        if (e.type === 'delta') {
+          if (!roundHasText && wroteText) yield { type: 'delta', text: '\n\n' };
+          roundHasText = true;
+          wroteText = true;
+          text += e.text;
+        }
         yield e;
       }
     }
@@ -135,9 +144,9 @@ async function* searchLoop(run: Run, req: ChatRequest, service: SearchService): 
       }
       messages.push({ role: 'tool', content, toolCallId: tc.id, toolName: tc.name });
     }
+    if (searches > 0) yield snapshot();
   }
-  total.webSearches = searches;
-  yield { type: 'usage', usage: total };
+  yield snapshot();
 }
 
 function parseQuery(args: string): string {

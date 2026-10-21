@@ -58,7 +58,7 @@ describe('withLocalSearch tool mode', () => {
     ]);
     const events = await collect(withLocalSearch(run, base(), service));
     expect(queries).toEqual(['cats']);
-    expect(events.map((e) => e.type)).toEqual(['sources', 'delta', 'delta', 'usage']);
+    expect(events.map((e) => e.type)).toEqual(['sources', 'usage', 'delta', 'delta', 'usage']);
     expect(events[0]).toEqual({ type: 'sources', sources: [{ url: 'https://cats.example/a', title: 'Cats' }, { url: 'https://cats.example/b', title: 'More cats' }] });
     const second = requests[1].messages;
     expect(second[1].role).toBe('assistant');
@@ -67,10 +67,36 @@ describe('withLocalSearch tool mode', () => {
     expect(second[2]).toEqual({ role: 'tool', content: formatResults(RESULTS), toolCallId: 'call_1', toolName: 'web_search' });
     expect(requests[0].tools?.[0].name).toBe('web_search');
     expect(requests[0].webSearch).toBeUndefined();
-    const u = usageOf(events)[0];
+    const u = usageOf(events).at(-1)!;
     expect(u.webSearches).toBe(1);
     expect(u.cost).toBe(0);
     expect(u.cachedTokens).toBeNull();
+  });
+
+  it('reports the searches so far when a later round throws', async () => {
+    const { service } = stub();
+    let n = 0;
+    const run = async function* (): AsyncGenerator<StreamEvent> {
+      if (++n === 1) { yield call('{"query":"cats"}'); yield { type: 'usage', usage: usage({ promptTokens: 10, completionTokens: 2 }) }; return; }
+      throw new ProviderError('boom', 502);
+    };
+    const events: StreamEvent[] = [];
+    await expect((async () => { for await (const e of withLocalSearch(run, base(), service)) events.push(e); })()).rejects.toThrow('boom');
+    const u = usageOf(events);
+    expect(u).toHaveLength(1);
+    expect(u[0].webSearches).toBe(1);
+    expect(u[0].completionTokens).toBe(2);
+  });
+
+  it('separates text from different rounds with a blank line', async () => {
+    const { service } = stub();
+    const { run } = scripted([
+      [delta('Let me check.'), call('{"query":"cats"}')],
+      [delta('Cats purr.')],
+    ]);
+    const events = await collect(withLocalSearch(run, base(), service));
+    const texts = events.filter((e) => e.type === 'delta').map((e) => (e as { text: string }).text);
+    expect(texts).toEqual(['Let me check.', '\n\n', 'Cats purr.']);
   });
 
   it('caps a model that always searches at 3 searches and 4 rounds', async () => {
@@ -80,7 +106,7 @@ describe('withLocalSearch tool mode', () => {
     expect(queries).toHaveLength(3);
     expect(requests).toHaveLength(4);
     expect(requests[3].tools).toBeUndefined();
-    expect(usageOf(events)[0].webSearches).toBe(3);
+    expect(usageOf(events).at(-1)!.webSearches).toBe(3);
   });
 
   it('refuses searches over the cap within one round', async () => {
@@ -93,7 +119,7 @@ describe('withLocalSearch tool mode', () => {
     expect(queries).toEqual(['a', 'b', 'c']);
     expect(lastOf(requests[1]).content).toBe('Search limit reached. Answer with what you have.');
     expect(requests[1].tools).toBeUndefined();
-    expect(usageOf(events)[0].webSearches).toBe(3);
+    expect(usageOf(events).at(-1)!.webSearches).toBe(3);
   });
 
   it('counts two calls in one round as two searches', async () => {
@@ -102,7 +128,7 @@ describe('withLocalSearch tool mode', () => {
     const events = await collect(withLocalSearch(run, base(), service));
     expect(queries).toEqual(['a', 'b']);
     expect(requests[1].messages.filter((m) => m.role === 'tool').map((m) => m.toolCallId)).toEqual(['call_1', 'call_2']);
-    expect(usageOf(events)[0].webSearches).toBe(2);
+    expect(usageOf(events).at(-1)!.webSearches).toBe(2);
   });
 
   it('ends after 4 rounds when the model keeps calling with no query', async () => {
@@ -113,7 +139,7 @@ describe('withLocalSearch tool mode', () => {
     expect(requests).toHaveLength(4);
     expect(requests[3].tools).toBeUndefined();
     expect(lastOf(requests[1]).content).toBe('The search needs a "query" string.');
-    expect(usageOf(events)[0].webSearches).toBe(0);
+    expect(usageOf(events).at(-1)!.webSearches).toBe(0);
   });
 
   it('treats unparseable arguments as a bad query and unknown names as unknown', async () => {
@@ -131,8 +157,8 @@ describe('withLocalSearch tool mode', () => {
     const { run, requests } = scripted([[call('{"query":"cats"}')], [delta('Sorry.')]]);
     const events = await collect(withLocalSearch(run, base(), service));
     expect(lastOf(requests[1]).content).toBe("Search failed: Can't reach SearXNG at localhost:8080. Is it running?");
-    expect(events.map((e) => e.type)).toEqual(['delta', 'usage']);
-    expect(usageOf(events)[0].webSearches).toBe(1);
+    expect(events.map((e) => e.type)).toEqual(['usage', 'delta', 'usage']);
+    expect(usageOf(events).at(-1)!.webSearches).toBe(1);
   });
 
   it('rethrows an aborted search', async () => {
@@ -160,9 +186,9 @@ describe('withLocalSearch tool mode', () => {
       [delta('Answer'), { type: 'usage', usage: usage({ promptTokens: 300, completionTokens: 50, generationMs: 500, loadMs: 10 }) }],
     ]);
     const events = await collect(withLocalSearch(run, base(), service));
-    expect(events.map((e) => e.type)).toEqual(['status', 'reasoning', 'delta', 'sources', 'delta', 'usage']);
+    expect(events.map((e) => e.type)).toEqual(['status', 'reasoning', 'delta', 'sources', 'usage', 'delta', 'delta', 'usage']);
     expect(requests[1].messages[1].content).toBe('Let me check. ');
-    expect(usageOf(events)[0]).toEqual(usage({
+    expect(usageOf(events).at(-1)!).toEqual(usage({
       promptTokens: 300, completionTokens: 70, generationMs: 700, loadMs: 900, reasoningTokens: 5, cost: 0, webSearches: 1,
     }));
   });

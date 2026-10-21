@@ -6,7 +6,7 @@ import { addLocalModel, addModel, setContextWindow } from '../src/library';
 import { insertMessage } from '../src/messages';
 import { setActiveLeaf } from '../src/chats';
 import { pdfWithPages } from '../../test/helpers';
-import { startFakeSearchServer, type FakeSearch } from '../../test/fakeSearchServer'
+import { startFakeSearchServer, type FakeSearch } from '../../test/fakeSearchServer';
 import { setSetting } from '../src/settings';
 import { localModelId } from '../../shared/localModels';
 import { withCatalogDefaults, type ChatDetail, type ChatSummary, type Message } from '../../shared/types';

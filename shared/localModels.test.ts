@@ -29,5 +29,6 @@ describe('local model helpers', () => {
       expect(() => normalizeBaseUrl(withLogin)).toThrow('Enter an address without a username or password.');
     }
     expect(hostOf('http://192.168.1.50:11434')).toBe('192.168.1.50:11434');
+    expect(hostOf('http://me:pw@searx.lan:8080/x')).toBe('searx.lan:8080');
   });
 });

@@ -114,6 +114,12 @@ export function updateSettings(db: DB, update: SettingsUpdate): void {
   if (searxngUrl !== undefined && searxngUrl !== '' && !/^https?:\/\/\S+$/i.test(searxngUrl)) {
     throw new HttpError(400, 'SearXNG address must start with http:// or https://.');
   }
+  if (searxngUrl && /^https?:\/\/[^/]*@/i.test(searxngUrl)) {
+    throw new HttpError(400, "SearXNG address can't include a user name or password.");
+  }
+  if (searxngUrl && /[?#]/.test(searxngUrl)) {
+    throw new HttpError(400, `SearXNG address can't include "?" or "#".`);
+  }
   const flags = Object.keys(FLAGS) as FlagField[];
   for (const field of flags) {
     const value = update[field];

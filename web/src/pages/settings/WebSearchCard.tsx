@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SEARCH_SERVICES, type SearchServiceId, type SettingsUpdate, type SettingsView } from '../../../../shared/types';
 import { api } from '../../api';
 
@@ -13,6 +13,9 @@ export function WebSearchCard({ view, update }: WebSearchCardProps) {
   const [address, setAddress] = useState(view.searxngUrl);
   const [keyDraft, setKeyDraft] = useState('');
   const [status, setStatus] = useState<string | null>(null);
+
+  // After a save the server hands back the normalized address; show it so Save disables.
+  useEffect(() => { setAddress(view.searxngUrl); }, [view.searxngUrl]);
 
   async function pick(service: SearchServiceId) {
     setStatus(null);

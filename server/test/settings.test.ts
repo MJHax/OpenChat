@@ -97,5 +97,8 @@ describe('web search settings', () => {
     const db = openDb(':memory:');
     expect(() => updateSettings(db, { searchService: 'brave' as never })).toThrow('Web search service must be none, searxng, or tavily.');
     expect(() => updateSettings(db, { searxngUrl: 'ftp://x' })).toThrow('SearXNG address must start with http:// or https://.');
+    expect(() => updateSettings(db, { searxngUrl: 'http://me:pw@localhost:8080' })).toThrow("SearXNG address can't include a user name or password.");
+    expect(() => updateSettings(db, { searxngUrl: 'http://localhost:8080/?a=1' })).toThrow(`SearXNG address can't include "?" or "#".`);
+    expect(() => updateSettings(db, { searxngUrl: 'http://localhost:8080/#x' })).toThrow(`SearXNG address can't include "?" or "#".`);
   });
 });

@@ -30,7 +30,8 @@ export interface FakeReply {
 export interface FakeServer {
   url: string;
   requests: { method: string; path: string; body: any }[];
-  reply(r: FakeReply): void;
+  /** Queues a reply; with `model` it is served only to that model's requests, which otherwise share the main queue. */
+  reply(r: FakeReply, o?: { model?: string }): void;
   setModels(models: FakeModel[]): void;
   failNext(status: number, error: string): void;
   hang(on: boolean): void;
@@ -58,6 +59,7 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
   for (const m of models) if (flavor === 'ollama' && m.loaded) ollamaLoaded.set(m.name, DEFAULT_CONTEXT);
   let replies: FakeReply[] = [];
   let replyIndex = 0;
+  const modelReplies = new Map<string, { queue: FakeReply[]; index: number }>();
   let failure: { status: number; error: string } | undefined;
   let hanging = false;
   const requests: FakeServer['requests'] = [];
@@ -91,7 +93,13 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
     return m.loadMs ?? 0;
   }
 
-  const nextReply = (): FakeReply => {
+  const nextReply = (model?: unknown): FakeReply => {
+    const own = typeof model === 'string' ? modelReplies.get(model) : undefined;
+    if (own) {
+      const r = own.queue[own.index];
+      if (own.index < own.queue.length - 1) own.index++;
+      return r;
+    }
     if (!replies.length) return { text: ['ok'] };
     const r = replies[replyIndex];
     if (replyIndex < replies.length - 1) replyIndex++;
@@ -227,7 +235,7 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
       }
       // Real Ollama answers an unknown model with 404 before it replies.
       if (flavor === 'ollama' && !find(body?.model)) return sendError(res, 404, `model '${body?.model}' not found`);
-      const r = nextReply();
+      const r = nextReply(body?.model);
       const loadMs = await useModel(body?.model, body?.options?.num_ctx);
       return flavor === 'ollama' ? chatOllama(res, r, body?.stream !== false, loadMs) : chatOpenAI(res, r);
     }
@@ -321,9 +329,13 @@ export async function startFakeLocalServer(o: { flavor: Flavor; models: FakeMode
   return {
     url: `http://127.0.0.1:${port}`,
     requests,
-    reply(r) {
+    reply(r, opts) {
       // Queue the reply: each chat request consumes the next one, the last repeats.
-      replies.push(r);
+      if (opts?.model) {
+        const own = modelReplies.get(opts.model) ?? { queue: [], index: 0 };
+        own.queue.push(r);
+        modelReplies.set(opts.model, own);
+      } else replies.push(r);
     },
     setModels(next) {
       models = next.map((m) => ({ ...m }));

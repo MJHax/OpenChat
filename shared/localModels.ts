@@ -64,5 +64,9 @@ export function normalizeBaseUrl(input: string): string {
 }
 
 export function hostOf(baseUrl: string): string {
-  return baseUrl.replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+  try {
+    return new URL(baseUrl).host;
+  } catch {
+    return baseUrl.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/^.*@/, '');
+  }
 }

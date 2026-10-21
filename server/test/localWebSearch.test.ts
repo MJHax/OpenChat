@@ -73,13 +73,17 @@ describe('local models search the web', () => {
 
   it('searches for both slots of a comparison', async () => {
     const s = await setup();
-    // The tool-calling slot asks first; the plugin slot waits on its search before calling the model.
-    s.fake.reply({ toolCalls: [{ name: 'web_search', arguments: { query: 'cats' } }] });
-    s.fake.reply({ text: ['Answer'] });
+    s.fake.reply({ toolCalls: [{ name: 'web_search', arguments: { query: 'cats' } }] }, { model: 'qwen3:1.7b' });
+    s.fake.reply({ text: ['Answer'] }, { model: 'qwen3:1.7b' });
+    s.fake.reply({ text: ['Gemma answer'] }, { model: 'gemma3:1b' });
     const events = await readEvents(await send(s, { modelIds: [s.ids.qwen, s.ids.gemma], webSearch: true }));
     const done = events.filter((e) => e.event === 'slot-done');
     expect(done).toHaveLength(2);
-    for (const e of done) expect(e.data.message.sources.length).toBeGreaterThan(0);
+    const byModel = (id: string) => done.find((e) => e.data.message.modelId === id)!.data.message;
+    expect(byModel(s.ids.qwen).webSearches).toBe(1);
+    expect(byModel(s.ids.qwen).sources.length).toBeGreaterThan(0);
+    expect(byModel(s.ids.gemma).sources.length).toBeGreaterThan(0);
+    expect(byModel(s.ids.gemma).webSearches).toBe(1);
   });
 
   it('ends the reply with the error when the search before it fails, and logs it as an error', async () => {
