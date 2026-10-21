@@ -8,6 +8,7 @@ import { attachToMessage, insertGenerated, insertPending } from '../src/attachme
 import { renameChat, setActiveLeaf } from '../src/chats';
 import { setSetting } from '../src/settings';
 import { safeName } from '../src/exportData';
+import { addServer } from '../src/localServers';
 import type { ChatSummary, ThreadKind } from '../../shared/types';
 
 async function seed() {
@@ -98,5 +99,16 @@ describe('GET /api/data/export', () => {
     db.prepare('UPDATE chats SET instructions = ?').run('be brief');
     const files = readZip(Buffer.from(await (await call('GET', '/api/data/export')).arrayBuffer()));
     expect(JSON.parse(files.get('openchat-export/data.json')!.toString()).chats[0].instructions).toBe('be brief');
+  });
+});
+
+describe('local servers in the export', () => {
+  it('lists the servers the user added', async () => {
+    const { call, db } = makeApp();
+    addServer(db, { type: 'ollama', name: 'Ollama', baseUrl: 'http://localhost:11434', auto: false });
+    const files = readZip(Buffer.from(await (await call('GET', '/api/data/export')).arrayBuffer()));
+    const data = JSON.parse(files.get('openchat-export/data.json')!.toString());
+    expect(data.localServers).toHaveLength(1);
+    expect(data.localServers[0]).toMatchObject({ type: 'ollama', name: 'Ollama', base_url: 'http://localhost:11434' });
   });
 });

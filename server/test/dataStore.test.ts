@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { makeApp } from './appHelpers';
 import { insertMessage } from '../src/messages';
 import { insertGenerated } from '../src/attachments';
+import { addServer } from '../src/localServers';
+import { deleteData } from '../src/dataStore';
 import type { ChatSummary } from '../../shared/types';
 
 const MARKER = 'qzxmarker7731';
@@ -29,5 +31,15 @@ describe('real deletion', () => {
     expect(fileHas(file, MARKER)).toBe(false);
     expect(fileHas(`${file}-wal`, MARKER)).toBe(false);
     db.close();
+  });
+});
+
+describe('delete all my data', () => {
+  it('removes the local servers too', () => {
+    const { db, deps } = makeApp();
+    addServer(db, { type: 'ollama', name: 'Ollama', baseUrl: 'http://localhost:11434', auto: false });
+    expect(db.prepare('SELECT count(*) AS n FROM local_servers').get()).toEqual({ n: 1 });
+    deleteData(deps, 'all');
+    expect(db.prepare('SELECT count(*) AS n FROM local_servers').get()).toEqual({ n: 0 });
   });
 });

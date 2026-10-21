@@ -79,6 +79,7 @@ export async function* exportEntries(deps: Deps): AsyncGenerator<ZipEntry> {
     discussionParticipants: db.prepare('SELECT * FROM discussion_participants ORDER BY chat_id, position').all(),
     memories: db.prepare('SELECT * FROM memories ORDER BY created_at, id').all(),
     prompts: db.prepare('SELECT * FROM saved_prompts ORDER BY created_at, id').all(),
+    localServers: db.prepare('SELECT * FROM local_servers ORDER BY created_at').all(),
     // Personalization (about_me, custom_instructions) and every other setting, but never the API key.
     settings: Object.fromEntries((db.prepare("SELECT key, value FROM settings WHERE key != 'api_key'").all() as { key: string; value: string }[]).map((r) => [r.key, r.value])),
   };
