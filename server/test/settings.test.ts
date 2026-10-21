@@ -60,6 +60,12 @@ describe('appearance settings', () => {
     updateSettings(db, { accent: 'rainbow', colorStyle: 'flat', animations: false, tiltCards: false });
     expect(getSettingsView(db, {})).toMatchObject({ accent: 'rainbow', colorStyle: 'flat', animations: false, tiltCards: false });
   });
+  it('removes the saved Tavily key when saved empty', () => {
+    const db = openDb(':memory:');
+    updateSettings(db, { searchService: 'tavily', tavilyKey: 'tvly-abcdefghijkl' });
+    updateSettings(db, { tavilyKey: '' });
+    expect(getSettingsView(db, {})).toMatchObject({ hasTavilyKey: false, tavilyKeyMasked: '', searchReady: false });
+  });
   it('rejects bad values', () => {
     const db = openDb(':memory:');
     expect(() => updateSettings(db, { accent: 'pink' as never })).toThrow(HttpError);
