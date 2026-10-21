@@ -1,8 +1,9 @@
 import type { DB } from './db';
 import { cachedCatalogNames } from './catalog';
 import type { UsageRow } from './usage';
+import { COLD_LOAD_MS, isLocalModelId } from '../../shared/localModels';
 import { bucketKeys, dayKey, heatKey, heatmapKeys, hourKey, monthKey, rangeWindow, streaks } from './statsTime';
-import type { BigChat, ChatStats, FeatureStats, ModelStats, StatsRange, StatsResponse, UsageBucket } from '../../shared/types';
+import type { BigChat, ChatStats, FeatureStats, ModelStats, SourceTotals, StatsRange, StatsResponse, UsageBucket } from '../../shared/types';
 
 export interface StatsInput {
   /** Every logged call, lifetime: streaks, tracking-since and All time need all of it. */
@@ -38,11 +39,26 @@ function avgFirstTokenMs(rows: UsageRow[]): number | null {
   return ratio(sum(timed, (r) => r.firstTokenMs), timed.length);
 }
 
-/** Completion tokens per second of streaming, from the first token to the end, over complete replies with timing. */
+/** A row's streaming time in ms: the server-reported generation time when set, else first token to end. */
+function streamMs(r: UsageRow): number | null {
+  if (r.generationMs !== null) return r.generationMs;
+  return r.firstTokenMs !== null && r.durationMs !== null ? r.durationMs - r.firstTokenMs : null;
+}
+
+/** Completion tokens per second of streaming, over complete replies with timing. */
 function outputTokensPerSec(rows: UsageRow[]): number | null {
-  const timed = rows.filter((r) => r.purpose === 'reply' && r.status === 'complete' && r.completionTokens !== null
-    && r.firstTokenMs !== null && r.durationMs !== null && r.durationMs > r.firstTokenMs);
-  return ratio(sum(timed, (r) => r.completionTokens), sum(timed, (r) => (r.durationMs! - r.firstTokenMs!) / 1000));
+  const timed = rows.filter((r) => r.purpose === 'reply' && r.status === 'complete' && r.completionTokens !== null && (streamMs(r) ?? 0) > 0);
+  return ratio(sum(timed, (r) => r.completionTokens), sum(timed, (r) => streamMs(r)! / 1000));
+}
+
+/** Mean model load time over replies that really loaded the model; shorter loads mean it was already in memory. */
+function avgLoadMs(rows: UsageRow[]): number | null {
+  const cold = rows.filter((r) => r.purpose === 'reply' && r.loadMs !== null && r.loadMs >= COLD_LOAD_MS);
+  return ratio(sum(cold, (r) => r.loadMs), cold.length);
+}
+
+function sourceTotals(rows: UsageRow[]): SourceTotals {
+  return { replies: rows.filter(counted).length, tokens: sum(rows, tokens) };
 }
 
 /** Earliest call time, or null; a loop rather than Math.min(...) so a long history can't overflow the stack. */
@@ -73,6 +89,8 @@ function modelStats(id: string, name: string, rows: UsageRow[]): ModelStats {
     cacheHitRate: cacheHitRate(rows),
     avgFirstTokenMs: avgFirstTokenMs(rows),
     outputTokensPerSec: outputTokensPerSec(rows),
+    local: isLocalModelId(id),
+    avgLoadMs: avgLoadMs(rows),
     avgCostPerReply: ratio(sum(replyCalls, (r) => r.cost), replies),
     reasoningTokens: reasoning.length ? sum(reasoning, (r) => r.reasoningTokens) : null,
     errorRate: ratio(tracked.filter((r) => r.status === 'error').length, tracked.length),
@@ -167,6 +185,7 @@ export function computeStats({ rows, range, now, tz, chatTitles, modelNames }: S
     heatmap,
     buckets,
     models,
+    sources: { local: sourceTotals(inRange.filter((r) => isLocalModelId(r.modelId))), openrouter: sourceTotals(inRange.filter((r) => !isLocalModelId(r.modelId))) },
     features: features(inRange),
     biggestByCost: biggest.byCost,
     biggestByLength: biggest.byLength,

@@ -468,12 +468,18 @@ export interface ModelStats {
   cacheHitRate: number | null;
   avgFirstTokenMs: number | null;
   outputTokensPerSec: number | null;
+  /** Runs on a local server rather than OpenRouter. */
+  local: boolean;
+  /** Mean load time over replies that loaded the model (at least COLD_LOAD_MS); null when none did. */
+  avgLoadMs: number | null;
   avgCostPerReply: number | null;
   reasoningTokens: number | null;
   errorRate: number | null;
   stoppedRate: number | null;
   webSearches: number;
 }
+
+export interface SourceTotals { replies: number; tokens: number }
 
 export interface FeatureStats {
   compareRuns: number;
@@ -491,6 +497,8 @@ export interface StatsResponse {
   heatmap: HeatDay[];
   buckets: UsageBucket[];
   models: ModelStats[];
+  /** Replies and tokens over the range, split by where the model runs. */
+  sources: { local: SourceTotals; openrouter: SourceTotals };
   features: FeatureStats;
   biggestByCost: BigChat[];
   biggestByLength: BigChat[];

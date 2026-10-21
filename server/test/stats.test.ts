@@ -200,3 +200,37 @@ describe('computeChatStats', () => {
     expect(s.cacheHitRate).toBeCloseTo(0.5);
   });
 });
+
+describe('local vs OpenRouter', () => {
+  const LOCAL = 'local:ab12cd34:qwen3:1.7b';
+  const local = (over: Partial<UsageRow>) => row({ modelId: LOCAL, completionTokens: 100, cost: null, firstTokenMs: 100, durationMs: 9_000, ...over });
+
+  it('splits replies and tokens by source and times local models from generationMs and loadMs', () => {
+    const s = stats([
+      local({ generationMs: 1000, loadMs: 3000 }),
+      local({ generationMs: 4000, loadMs: 200 }),
+      row({ promptTokens: 10, completionTokens: 5 }),
+      local({ purpose: 'title', messageId: null, runId: null, kind: null, promptTokens: 7, completionTokens: 3 }),
+    ]);
+    expect(s.sources.local).toEqual({ replies: 2, tokens: 200 + 200 + 10 });
+    expect(s.sources.openrouter).toEqual({ replies: 1, tokens: 15 });
+    const m = s.models.find((x) => x.id === LOCAL)!;
+    expect(m.local).toBe(true);
+    expect(m.outputTokensPerSec).toBeCloseTo(40);
+    expect(m.avgLoadMs).toBe(3000);
+    const or = s.models.find((x) => x.id === 'a/one')!;
+    expect(or.local).toBe(false);
+    expect(or.avgLoadMs).toBeNull();
+  });
+
+  it('leaves the local source empty for an OpenRouter-only fixture', () => {
+    const s = stats([row(), row()]);
+    expect(s.sources.local).toEqual({ replies: 0, tokens: 0 });
+    expect(s.sources.openrouter).toEqual({ replies: 2, tokens: 240 });
+  });
+
+  it('has no average load time when every load was warm', () => {
+    const s = stats([local({ loadMs: 999, generationMs: 1000 })]);
+    expect(s.models[0].avgLoadMs).toBeNull();
+  });
+});
