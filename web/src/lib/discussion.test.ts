@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cheapestModel, discussionOverflowBody, discussionOverflowTitle, endText, initials, turnLabel } from './discussion';
+import { cheapestModel, discussionOverflowBody, discussionOverflowTitle, endText, initials, setupNotes, turnLabel } from './discussion';
 import type { LibraryModel } from '../../../shared/types';
 
 const model = (id: string, completionPrice: number | null, promptPrice: number | null = 0): LibraryModel => ({
@@ -55,5 +55,17 @@ describe('discussion overflow copy', () => {
   it('names the model and the next speaker', () => {
     expect(discussionOverflowTitle([{ modelId: 'x', displayName: 'qwen3:1.7b', window: 1, estimate: 2 }])).toBe('This discussion is longer than qwen3:1.7b can remember.');
     expect(discussionOverflowBody('Egg-Defender')).toBe("It's Egg-Defender's turn next, so the discussion is paused.");
+  });
+});
+
+describe('setupNotes', () => {
+  it('says nothing for OpenRouter models', () => {
+    expect(setupNotes(['or/a', 'or/b'])).toEqual({ tip: false, sharedServer: false });
+  });
+
+  it('gives the tip when a participant is local, and warns only when two different local models share a server', () => {
+    expect(setupNotes(['local:s:qwen3:1.7b', 'local:s:qwen3:1.7b'])).toEqual({ tip: true, sharedServer: false });
+    expect(setupNotes(['local:s:qwen3:1.7b', 'local:s:gemma3:1b'])).toEqual({ tip: true, sharedServer: true });
+    expect(setupNotes(['local:s:qwen3:1.7b', 'local:t:gemma3:1b'])).toEqual({ tip: true, sharedServer: false });
   });
 });

@@ -27,14 +27,17 @@ interface Props {
   columns: Column[];
   onContinue?(messageId: string): void;
   onClose?(): void;
+  /** A note shown in the head above the columns, e.g. that local models on one server take turns. */
+  note?: string;
 }
 
-export function CompareColumns({ title, columns, onContinue, onClose }: Props) {
+export function CompareColumns({ title, columns, onContinue, onClose, note }: Props) {
   return (
     <div className="compare">
-      {(title || onClose) && (
+      {(title || onClose || note) && (
         <div className="compare-head">
           <span className="muted small">{title}</span>
+          {note && <span className="muted small">{note}</span>}
           {onClose && <button className="link" onClick={onClose}>Close</button>}
         </div>
       )}

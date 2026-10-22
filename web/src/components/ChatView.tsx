@@ -8,6 +8,7 @@ import { initialModelId } from '../lib/models';
 import { loadSearch, saveSearch } from '../lib/search';
 import { loadEffort, saveEffort } from '../lib/effort';
 import { searchAllowed } from '../lib/localModels';
+import { sharesServer } from '../../../shared/localModels';
 import { unavailableReason } from '../lib/availability';
 import { useAvailability } from './AvailabilityContext';
 import { loadThinking, saveThinking } from '../lib/thinking';
@@ -564,6 +565,7 @@ export function ChatView({ chatId, title, reloadToken, models, settings, onChats
             )}
             {pending && pending.slots.length > 1 && (
               <CompareColumns
+                note={sharesServer(pending.slots.map((s) => s.modelId)) ? 'Local models on the same server reply one at a time.' : undefined}
                 columns={pending.slots.map((s, i) => ({
                   key: String(i), modelName: nameOf(s.modelId), text: s.text, reasoning: s.reasoning, status: s.status,
                   startedAt: pending.startedAt, streaming: !s.done, error: s.error, message: s.message, webSearch: pending.webSearch,

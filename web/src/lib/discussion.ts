@@ -1,4 +1,5 @@
 import { overflowTitle } from './overflow';
+import { isLocalModelId, sharesServer } from '../../../shared/localModels';
 import type { ContextOverflow, DiscussionState, LibraryModel } from '../../../shared/types';
 
 /** A price we can compare: known and not "varies" (negative). */
@@ -38,3 +39,8 @@ export function discussionOverflowTitle(overflow: ContextOverflow[]): string {
 }
 
 export const discussionOverflowBody = (participantName: string) => `It's ${participantName}'s turn next, so the discussion is paused.`;
+
+/** The setup-form notes for a discussion's participant models: a tip when any is local, and a warning when two local models share a server. */
+export function setupNotes(modelIds: string[]): { tip: boolean; sharedServer: boolean } {
+  return { tip: modelIds.some(isLocalModelId), sharedServer: sharesServer(modelIds) };
+}

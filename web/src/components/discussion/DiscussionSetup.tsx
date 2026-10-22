@@ -7,7 +7,7 @@ import { api } from '../../api';
 import { useAvailability } from '../AvailabilityContext';
 import { availabilityLabel } from '../../lib/availability';
 import { ErrorText } from '../ErrorText';
-import { initials } from '../../lib/discussion';
+import { initials, setupNotes } from '../../lib/discussion';
 import { X } from 'lucide-react';
 
 interface Row {
@@ -39,6 +39,7 @@ export function DiscussionSetup({ models, onCreated }: DiscussionSetupProps) {
   // Rows made before the library loaded (or whose model was removed since) use the default model.
   const modelOf = (r: Row) => (models.some((m) => m.id === r.modelId) ? r.modelId : defaultModel);
   const moderator = rows.find((r) => r.isModerator && supportsTools(modelOf(r)));
+  const notes = setupNotes(rows.map(modelOf));
 
   const update = (key: number, patch: Partial<Row>) => {
     setError(null);
@@ -115,6 +116,8 @@ export function DiscussionSetup({ models, onCreated }: DiscussionSetupProps) {
         {rows.length < MAX_PARTICIPANTS && (
           <button onClick={() => setRows((rs) => [...rs, row(rs.length + 1, defaultModel)])}>+ Add participant</button>
         )}
+        {notes.sharedServer && <p className="muted small">These models share one server, so each turn may wait while the next model loads.</p>}
+        {notes.tip && <p className="muted small">Tip: one local model can play every participant. Give each one different instructions.</p>}
         <p className="muted small">
           {moderator ? `Order: ${moderator.name.trim() || 'The moderator'} picks who speaks` : 'Order: rotation, in the order above'}.
           {' '}Each participant only sees its own instructions.
