@@ -92,6 +92,8 @@ export interface DiscussionState {
   endNote: string | null;
   turnLimit: number;
   turnsTaken: number;
+  /** The message after which to note that the moderator isn't choosing speakers; null before that happens. */
+  moderatorNoteAfter: string | null;
 }
 
 export interface DiscussionSummary {

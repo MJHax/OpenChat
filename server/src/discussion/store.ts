@@ -21,7 +21,7 @@ export interface DiscussionRow {
 
 interface RawDiscussion {
   chat_id: string; topic: string; turn_limit: number; status: DiscussionStatus; end_reason: DiscussionEndReason | null; end_note: string | null;
-  summary: string | null; summary_model_id: string | null; summary_cost: number | null; summary_at: number | null;
+  moderator_note_after: string | null; summary: string | null; summary_model_id: string | null; summary_cost: number | null; summary_at: number | null;
 }
 
 const raw = (db: DB, chatId: string) => db.prepare('SELECT * FROM discussions WHERE chat_id = ?').get(chatId) as RawDiscussion | undefined;
@@ -45,7 +45,22 @@ export function discussionState(db: DB, chatId: string): DiscussionState {
   return {
     status: d.status, endReason: d.endReason, endNote: d.endNote, turnLimit: d.turnLimit,
     turnsTaken: turnsTaken(getParticipants(db, chatId), getChatMessages(db, chatId)),
+    moderatorNoteAfter: raw(db, chatId)?.moderator_note_after ?? null,
   };
+}
+
+/**
+ * Tracks the moderator's misses: a valid tool call resets the count; a miss adds one, and the second in a row
+ * marks `messageId` as the message the "not steering" note follows (once; it never moves).
+ */
+export function recordModeratorTurn(db: DB, chatId: string, messageId: string, valid: boolean): void {
+  if (valid) {
+    db.prepare('UPDATE discussions SET moderator_misses = 0 WHERE chat_id = ?').run(chatId);
+    return;
+  }
+  db.prepare('UPDATE discussions SET moderator_misses = moderator_misses + 1 WHERE chat_id = ?').run(chatId);
+  db.prepare('UPDATE discussions SET moderator_note_after = ? WHERE chat_id = ? AND moderator_misses >= 2 AND moderator_note_after IS NULL')
+    .run(messageId, chatId);
 }
 
 export function setStatus(db: DB, chatId: string, status: DiscussionStatus, endReason: DiscussionEndReason | null, endNote: string | null = null): void {

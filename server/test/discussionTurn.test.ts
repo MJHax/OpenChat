@@ -143,7 +143,7 @@ describe('discussion turns', () => {
     const stopped = await (await s.call('POST', `/api/discussions/${s.id}/stop`)).json();
     expect(stopped).toMatchObject({ status: 'ended', endReason: 'stopped' });
     const more = await (await s.call('POST', `/api/discussions/${s.id}/more-turns`)).json();
-    expect(more).toEqual({ status: 'active', endReason: null, endNote: null, turnLimit: 3, turnsTaken: 1 });
+    expect(more).toEqual({ status: 'active', endReason: null, endNote: null, turnLimit: 3, turnsTaken: 1, moderatorNoteAfter: null });
   });
 
   it('more-turns while active adds two to the limit', async () => {
@@ -244,5 +244,63 @@ describe('discussion turns', () => {
     expect(rows).toEqual([expect.objectContaining({
       purpose: 'reply', kind: 'send', threadKind: 'discussion', messageId: ev(events, 'done').message.id, status: 'complete', cost: 0.002,
     })]);
+  });
+
+  describe("moderator note", () => {
+    const PASS = { name: "pass_to", arguments: "{\"name\":\"Chicken-Defender\"}" };
+    const BAD = { name: "pass_to", arguments: "{\"name\":\"Nobody\"}" };
+    const END = { name: "end_discussion", arguments: "{\"reason\":\"Done.\"}" };
+    const MISS: Turn = { text: ["Hmm."] };
+    const OTHER: Turn = { text: ["A point."] };
+
+    /** Runs `n` turns and returns each done frame. */
+    async function run(s: Awaited<ReturnType<typeof setup>>, n: number) {
+      const done = [];
+      for (let i = 0; i < n; i++) done.push(ev((await s.turn()).events, "done"));
+      return done;
+    }
+
+    it("notes the moderator turn that made two misses in a row", async () => {
+      const s = await setup([MISS, OTHER, MISS], withModerator());
+      const [first, , second] = await run(s, 3);
+      expect(first.state.moderatorNoteAfter).toBeNull();
+      expect(second.state.moderatorNoteAfter).toBe(second.message.id);
+      expect((await s.detail()).state.moderatorNoteAfter).toBe(second.message.id);
+    });
+
+    it("counts a pass_to with an unknown name as a miss", async () => {
+      const s = await setup([{ text: ["x"], tool: BAD }, OTHER, { text: ["y"], tool: BAD }], withModerator());
+      const done = await run(s, 3);
+      expect(done[2].state.moderatorNoteAfter).toBe(done[2].message.id);
+    });
+
+    it("a valid pass_to between two misses means no note", async () => {
+      const s = await setup([MISS, OTHER, { text: ["go"], tool: PASS }, OTHER, MISS], withModerator());
+      const done = await run(s, 5);
+      expect(done[4].state.moderatorNoteAfter).toBeNull();
+    });
+
+    it("end_discussion resets the count, and more-turns does not bring it back", async () => {
+      const s = await setup([MISS, OTHER, { text: ["done"], tool: END }, OTHER, MISS], withModerator());
+      await run(s, 3);
+      await s.call("POST", `/api/discussions/${s.id}/more-turns`);
+      const done = await run(s, 2);
+      expect(done[1].state.moderatorNoteAfter).toBeNull();
+    });
+
+    it("keeps the note on the second miss when a third follows", async () => {
+      const s = await setup([MISS, OTHER, MISS, OTHER, MISS], withModerator());
+      const done = await run(s, 5);
+      expect(done[4].state.moderatorNoteAfter).toBe(done[2].message.id);
+    });
+
+    it("a moderator turn that fails mid-stream leaves the count alone", async () => {
+      const s = await setup([MISS, OTHER, { text: ["The"], fail: new OpenRouterError("Bad.", 502) }, OTHER, MISS], withModerator());
+      await run(s, 2);
+      const failed = ev((await s.turn()).events, "error");
+      expect(failed.state.moderatorNoteAfter).toBeNull();
+      const done = await run(s, 2);
+      expect(done[1].state.moderatorNoteAfter).toBe(done[1].message.id);
+    });
   });
 });

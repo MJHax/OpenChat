@@ -272,6 +272,9 @@ function migrate(db: DB): void {
   if (!chatColumns.includes('instructions')) db.exec("ALTER TABLE chats ADD COLUMN instructions TEXT NOT NULL DEFAULT ''");
   if (!chatColumns.includes('context_note')) db.exec('ALTER TABLE chats ADD COLUMN context_note TEXT');
   if (!chatColumns.includes('continued_from')) db.exec('ALTER TABLE chats ADD COLUMN continued_from TEXT');
+  const discussionColumns = (db.prepare('PRAGMA table_info(discussions)').all() as { name: string }[]).map((c) => c.name);
+  if (!discussionColumns.includes('moderator_misses')) db.exec('ALTER TABLE discussions ADD COLUMN moderator_misses INTEGER NOT NULL DEFAULT 0');
+  if (!discussionColumns.includes('moderator_note_after')) db.exec('ALTER TABLE discussions ADD COLUMN moderator_note_after TEXT');
   allowSummaryUsage(db);
   const usageColumns = (db.prepare('PRAGMA table_info(usage_events)').all() as { name: string }[]).map((c) => c.name);
   if (!usageColumns.includes('thread_kind')) db.exec("ALTER TABLE usage_events ADD COLUMN thread_kind TEXT NOT NULL DEFAULT 'chat'");

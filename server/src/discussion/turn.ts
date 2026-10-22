@@ -11,7 +11,7 @@ import { displayNameOf } from '../library';
 import { statusMessage } from '../../../shared/localModels';
 import { callTimer, failureStatus, timingFields, replyErrorMessage, saveIfChatExists } from '../generate';
 import { buildDiscussionPrompt, cleanReply, moderatorTools, nextSpeaker, readToolCall, turnsTaken } from './engine';
-import { discussionState, getDiscussionRow, getParticipants, setStatus } from './store';
+import { discussionState, getDiscussionRow, getParticipants, recordModeratorTurn, setStatus } from './store';
 import type {
   DiscussionParticipant, DiscussionState, DiscussionTurnDone, DiscussionTurnError, DiscussionTurnStart, Message, MessageStatus, StreamStatus,
 } from '../../../shared/types';
@@ -110,6 +110,7 @@ export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () 
       const handoffTo = decision && 'handoffTo' in decision ? decision.handoffTo : null;
       const message = save('complete', cleanReply(text, speaker.name, others), handoffTo);
       log('complete', message.id);
+      if (speaker.isModerator) recordModeratorTurn(db, chatId, message.id, decision !== null);
       settle(decision && 'end' in decision ? decision.end : null);
       await send('done', { message, state: discussionState(db, chatId) } satisfies DiscussionTurnDone);
     } catch (err) {

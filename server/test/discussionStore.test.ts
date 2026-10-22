@@ -4,6 +4,11 @@ import { createChat } from '../src/chats';
 import { insertMessage } from '../src/messages';
 import { createDiscussion, getDiscussionDetail } from '../src/discussion/store';
 import { makeApp } from './appHelpers';
+import { startFakeLocalServer, type FakeServer } from "../../test/fakeLocalServer";
+import { addServer } from "../src/localServers";
+import { addModel } from "../src/library";
+import { localModelId } from "../../shared/localModels";
+import { withCatalogDefaults } from "../../shared/types";
 import { logReply } from './usageHelpers';
 import { newDiscussion, seedModel, withModerator } from './discussionHelpers';
 
@@ -28,7 +33,7 @@ describe('discussion store', () => {
     expect(d.chat.title).toBe('Which came first, the chicken or the egg?');
     expect(d.topic).toBe('Which came first, the chicken or the egg?');
     expect(db.prepare('SELECT kind FROM chats WHERE id = ?').get(d.chat.id)).toEqual({ kind: 'discussion' });
-    expect(d.state).toEqual({ status: 'active', endReason: null, endNote: null, turnLimit: 10, turnsTaken: 0 });
+    expect(d.state).toEqual({ status: 'active', endReason: null, endNote: null, turnLimit: 10, turnsTaken: 0, moderatorNoteAfter: null });
     expect(d.participants.map((p) => [p.position, p.name, p.instructions, p.isModerator, p.turns, p.cost])).toEqual([
       [0, 'Egg-Defender', 'Argue the egg.', false, 0, 0],
       [1, 'Chicken-Defender', 'Argue the chicken.', false, 0, 0],
@@ -107,5 +112,33 @@ describe('discussion routes', () => {
     const res = await call('POST', '/api/chats', { kind: 'discussion' });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'Create discussions from the Discussion tab.' });
+  });
+
+});
+
+describe("local moderators", () => {
+  it("needs a local model that can use tools, but any local model can take part", async () => {
+    const fake: FakeServer = await startFakeLocalServer({ flavor: "ollama", models: [{ name: "qwen3:1.7b", tools: true }, { name: "gemma3:1b" }] });
+    try {
+      const { db, call } = makeApp();
+      const server = addServer(db, { type: "ollama", name: "Ollama", baseUrl: fake.url, auto: false });
+      const qwen = localModelId(server.id, "qwen3:1.7b");
+      const gemma = localModelId(server.id, "gemma3:1b");
+      addModel(db, withCatalogDefaults({ id: qwen, name: "qwen3:1.7b", contextLength: 40960, supportsTools: true }));
+      addModel(db, withCatalogDefaults({ id: gemma, name: "gemma3:1b", contextLength: 32768 }));
+      const make = (moderator: string, other: string) => call("POST", "/api/discussions", newDiscussion({
+        participants: [
+          ...newDiscussion().participants.map((p) => ({ ...p, modelId: other })),
+          { name: "Moderator", modelId: moderator, instructions: "", isModerator: true },
+        ],
+      }));
+      const bad = await make(gemma, qwen);
+      expect(bad.status).toBe(400);
+      expect(await bad.json()).toEqual({ error: "The moderator needs a model that can use tools. Pick another model for it." });
+      expect((await make(qwen, qwen)).status).toBe(201);
+      expect((await make(qwen, gemma)).status).toBe(201);
+    } finally {
+      await fake.close();
+    }
   });
 });
