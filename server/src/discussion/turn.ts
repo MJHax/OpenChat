@@ -38,6 +38,8 @@ export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () 
   const messageId = newId();
   const abort = new AbortController();
   let finished = false;
+  // A listener on a signal that has already fired never runs.
+  if (c.req.raw.signal.aborted) abort.abort();
   c.req.raw.signal.addEventListener('abort', () => abort.abort());
 
   const finish = () => {

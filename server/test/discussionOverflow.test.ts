@@ -18,15 +18,17 @@ afterEach(async () => {
 
 const USAGE = { promptTokens: 1, completionTokens: 2, cost: 0.002, webSearches: null, cachedTokens: null, cacheWriteTokens: null, reasoningTokens: null, loadMs: null, generationMs: null };
 
-async function setup(o: { cloudSpeaker?: boolean } = {}) {
-  fake = await startFakeLocalServer({ flavor: 'ollama', models: [{ name: 'qwen3:1.7b', contextLength: 8192 }] });
+async function setup(o: { cloudSpeaker?: boolean; slowWindow?: boolean } = {}) {
+  fake = o.slowWindow
+    ? await startFakeLocalServer({ flavor: 'lmstudio', models: [{ name: 'qwen3:1.7b', contextLength: 8192, loaded: true }], listDelayMs: 300 })
+    : await startFakeLocalServer({ flavor: 'ollama', models: [{ name: 'qwen3:1.7b', contextLength: 8192 }] });
   const app = makeApp({
     streamChat: async function* () {
       yield { type: 'delta' as const, text: 'cloud reply' };
       yield { type: 'usage' as const, usage: USAGE };
     },
   });
-  const server = addServer(app.db, { type: 'ollama', name: 'Ollama', baseUrl: fake.url, auto: false });
+  const server = addServer(app.db, { type: o.slowWindow ? 'lmstudio' : 'ollama', name: 'Ollama', baseUrl: fake.url, auto: false });
   const local = localModelId(server.id, 'qwen3:1.7b');
   addModel(app.db, withCatalogDefaults({ id: local, name: 'qwen3:1.7b', contextLength: 2048 }));
   addModel(app.db, withCatalogDefaults({ id: 'openai/gpt-4o', name: 'GPT-4o', contextLength: 128000 }));
@@ -124,5 +126,24 @@ describe('the check before a Discussion turn', () => {
     const res = await s.turn();
     expect(res.status).toBe(200);
     expect((await readEvents(res)).find((e) => e.event === 'done')!.data.message.contextDropped).toBe(false);
+  });
+  it('does not start a turn when the discussion is stopped while the loaded window is looked up', async () => {
+    const s = await setup({ slowWindow: true });
+    const pending = s.turn();
+    await new Promise((r) => setTimeout(r, 100));
+    expect((await s.call('POST', `/api/discussions/${s.id}/stop`)).status).toBe(200);
+    const res = await pending;
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as any).error).toBe('This discussion has ended. Add turns to continue.');
+    expect(s.chatRequests()).toHaveLength(0);
+    expect(s.saved()).toHaveLength(0);
+    expect((await s.turn()).status).toBe(409); // the in-flight mark was released: the answer is the ended copy, not 'still running'
+  });
+
+  it('rejects a flag that is not true or false for an OpenRouter speaker too', async () => {
+    const s = await setup({ cloudSpeaker: true });
+    const res = await s.turn({ allowOverflow: 'yes' });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as any).error).toBe('allowOverflow must be true or false.');
   });
 });

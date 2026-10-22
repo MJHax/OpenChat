@@ -140,4 +140,20 @@ describe('Compare with local models', () => {
     expect(events.filter((e) => e.event === 'slot-done')).toHaveLength(3);
     expect(events.some((e) => e.event === 'status' && e.data.slot === 2)).toBe(false);
   });
+  it('titles a mixed Compare with slot 0 even when a local slot finishes first', async () => {
+    const fake = await startFake();
+    const app = makeApp({
+      streamChat: async function* () {
+        yield { type: 'delta' as const, text: 'hello' };
+      },
+    });
+    const [qwen, gemma] = register(app, fake, 'Ollama', ['qwen3:1.7b', 'gemma3:1b']);
+    addModel(app.db, withCatalogDefaults({ id: 'or/m', name: 'or/m', contextLength: 8000 }));
+    fake.reply({ text: ['A'] }, { model: 'qwen3:1.7b' });
+    fake.reply({ text: ['X'] }, { model: 'gemma3:1b' });
+    const chatId = await newChat(app);
+    const events = await readEvents(await app.call('POST', `/api/chats/${chatId}/messages`, { content: 'Hi', modelIds: ['or/m', qwen, gemma] }));
+    expect(events.some((e) => e.event === 'title')).toBe(true);
+    expect(app.db.prepare("SELECT model_id FROM usage_events WHERE purpose = 'title'").all()).toEqual([{ model_id: 'or/m' }]);
+  });
 });

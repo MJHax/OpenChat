@@ -54,12 +54,18 @@ export function discussionRoutes(deps: Deps): Hono {
     inFlight.add(id);
     try {
       let contextDropped = false;
+      const body = await readOptionalBody(c);
+      if (body.allowOverflow !== undefined && typeof body.allowOverflow !== 'boolean') throw new HttpError(400, 'allowOverflow must be true or false.');
       if (isLocalModelId(speaker.modelId)) {
-        const body = await readOptionalBody(c);
-        if (body.allowOverflow !== undefined && typeof body.allowOverflow !== 'boolean') throw new HttpError(400, 'allowOverflow must be true or false.');
         const overflow = discussionOverflow(db, id, await loadedWindows(deps, [speaker.modelId]));
         if (overflow && body.allowOverflow !== true) throw new HttpError(409, discussionOverflowMessage(overflow), { overflow: [overflow], speaker: speaker.name });
         contextDropped = overflow !== null;
+      }
+      // The user may have ended the discussion, or gone away, during the awaits above.
+      if (getDiscussionRow(db, id).status === 'ended') throw new HttpError(409, ended);
+      if (c.req.raw.signal.aborted) {
+        inFlight.delete(id);
+        return c.body(null);
       }
       return streamTurn(c, deps, id, () => inFlight.delete(id), { contextDropped });
     } catch (err) {

@@ -99,7 +99,7 @@ export function discussionOverflow(db: DB, chatId: string, windows?: Map<string,
   const anchorIndex = messages.findLastIndex((m) => m.participantId === speaker.id && m.promptTokens !== null);
   const anchored = anchorIndex === -1 ? 0
     : messages[anchorIndex].promptTokens! + (messages[anchorIndex].completionTokens ?? textTokens(messages[anchorIndex].content))
-      + messages.slice(anchorIndex + 1).reduce((n, m) => n + textTokens(m.content), 0) + textTokens(tools);
+      + messages.slice(anchorIndex + 1).reduce((n, m) => n + textTokens(m.content), 0); // promptTokens already includes the tools
   const used = Math.max(counted, anchored);
   return used + OVERFLOW_MARGIN > window ? { modelId: speaker.modelId, displayName: displayNameOf(db, speaker.modelId), window, estimate: used } : null;
 }

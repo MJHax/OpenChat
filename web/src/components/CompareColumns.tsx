@@ -36,7 +36,7 @@ export function CompareColumns({ title, columns, onContinue, onClose, note }: Pr
     <div className="compare">
       {(title || onClose || note) && (
         <div className="compare-head">
-          <span className="muted small">{title}</span>
+          {title && <span className="muted small">{title}</span>}
           {note && <span className="muted small">{note}</span>}
           {onClose && <button className="link" onClick={onClose}>Close</button>}
         </div>

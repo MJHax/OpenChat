@@ -79,8 +79,12 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
       (queue = queue.then(() => stream.writeSSE({ event, data: JSON.stringify(data) })).catch(() => {}));
 
     await send('start', { userMessageId: o.userMessageId, slots } satisfies CompareStart);
-    const results = await Promise.all(turnOrders().map((order) => runInOrder(order, send)));
-    const saved = results.flat().filter((m): m is Message => m !== null);
+    const orders = turnOrders();
+    const results = await Promise.all(orders.map((order) => runInOrder(order, send)));
+    // In slot order, whatever order the replies finished in: slot 0 names the chat.
+    const bySlot: (Message | null)[] = slots.map(() => null);
+    results.forEach((order, k) => order.forEach((m, j) => { bySlot[orders[k][j]] = m; }));
+    const saved = bySlot.filter((m): m is Message => m !== null);
 
     if (saved.length === 0) {
       setCompareParent(db, o.chatId, null);
