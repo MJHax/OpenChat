@@ -279,7 +279,8 @@ a.button { border: 1px solid var(--border); background: var(--surface); border-r
 /* Conversation header */
 .chat-header { align-items: center; min-height: 54px; padding: 10px 18px 10px 24px; }
 .chat-header h1 { font-size: 14px; font-weight: 500; }
-.chat-header-tools { align-items: center; gap: 6px; }
+/* Stays on the right even when the title is visually hidden (a new chat) and takes no space. */
+.chat-header-tools { align-items: center; gap: 6px; margin-left: auto; }
 .chat-header-tools .stats-pop { position: relative; }
 .stats-pop-panel.popover { width: 300px; padding: 10px 12px; font-size: 13px; }
 .ring { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0;
