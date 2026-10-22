@@ -8,7 +8,7 @@ import { recordUsage, type ReplyKind, type UsageStatus } from './usage';
 import { insertMessage } from './messages';
 import type { Usage } from './openrouter';
 import { chatProvider } from './providers';
-import { isLocalModelId, statusMessage } from '../../shared/localModels';
+import { isLocalModelId, localServerGroups, statusMessage } from '../../shared/localModels';
 import { displayNameOf } from './library';
 import { maybeGenerateTitle } from './title';
 import type {
@@ -39,7 +39,8 @@ interface CompareOptions {
 }
 
 /**
- * Streams replies from several models to the same user message, concurrently, over one SSE response:
+ * Streams replies from several models to the same user message over one SSE response, concurrently except
+ * that different models on one local server reply one at a time, in slot order:
  * start → (delta|reasoning|slot-done|slot-error)* → done, then optional title. Each reply is saved as a
  * sibling under `parentId`, and the chat waits for the user to pick one (compare_parent_id).
  */
@@ -78,7 +79,8 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
       (queue = queue.then(() => stream.writeSSE({ event, data: JSON.stringify(data) })).catch(() => {}));
 
     await send('start', { userMessageId: o.userMessageId, slots } satisfies CompareStart);
-    const saved = (await Promise.all(slots.map((slot, i) => runSlot(i, slot, send)))).filter((m): m is Message => m !== null);
+    const results = await Promise.all(turnOrders().map((order) => runInOrder(order, send)));
+    const saved = results.flat().filter((m): m is Message => m !== null);
 
     if (saved.length === 0) {
       setCompareParent(db, o.chatId, null);
@@ -94,6 +96,28 @@ export function streamComparison(c: Context, deps: Deps, o: CompareOptions): Res
       const title = await maybeGenerateTitle(deps, o.chatId, firstComplete.modelId!);
       if (title) await send('title', { title } satisfies StreamTitle);
     }
+  }
+
+  /** Slot indexes to run one after another: one list per server with several models, and one per other slot. */
+  function turnOrders(): number[][] {
+    const shared = localServerGroups(o.modelIds).filter((g) => g.length > 1);
+    const orders: number[][] = shared.map((g) => slots.flatMap((s, i) => (g.includes(s.modelId) ? [i] : [])));
+    const queued = new Set(orders.flat());
+    for (let i = 0; i < slots.length; i++) if (!queued.has(i)) orders.push([i]);
+    return orders;
+  }
+
+  async function runInOrder(order: number[], send: (event: string, data: unknown) => Promise<unknown>): Promise<(Message | null)[]> {
+    for (let k = 1; k < order.length; k++) {
+      const before = displayNameOf(db, slots[order[k - 1]].modelId);
+      await send('status', { slot: order[k], message: `Waiting for ${before} to finish…` } satisfies CompareSlotStatus);
+    }
+    const results: (Message | null)[] = [];
+    for (const i of order) {
+      if (abort.signal.aborted) results.push(null);
+      else results.push(await runSlot(i, slots[i], send));
+    }
+    return results;
   }
 
   async function runSlot(i: number, slot: CompareSlot, send: (event: string, data: unknown) => Promise<unknown>): Promise<Message | null> {

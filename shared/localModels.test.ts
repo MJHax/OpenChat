@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultContextWindow, hostOf, isLocalModelId, localModelId, normalizeBaseUrl, parseLocalModelId } from './localModels';
+import { defaultContextWindow, hostOf, isLocalModelId, localModelId, localServerGroups, normalizeBaseUrl, parseLocalModelId, sharesServer } from './localModels';
 
 describe('local model helpers', () => {
   it('round-trips names with colons and slashes', () => {
@@ -30,5 +30,17 @@ describe('local model helpers', () => {
     }
     expect(hostOf('http://192.168.1.50:11434')).toBe('192.168.1.50:11434');
     expect(hostOf('http://me:pw@searx.lan:8080/x')).toBe('searx.lan:8080');
+  });
+});
+
+describe('servers shared by local models', () => {
+  it('groups distinct local ids by server in first-appearance order', () => {
+    const ids = ['local:a:x', 'or/m', 'local:b:y', 'local:a:z', 'local:a:x'];
+    expect(localServerGroups(ids)).toEqual([['local:a:x', 'local:a:z'], ['local:b:y']]);
+    expect(sharesServer(ids)).toBe(true);
+  });
+  it('does not count different servers, the same model twice or OpenRouter models', () => {
+    expect(sharesServer(['local:a:x', 'local:b:y', 'or/m'])).toBe(false);
+    expect(sharesServer(['local:a:x', 'local:a:x'])).toBe(false);
   });
 });

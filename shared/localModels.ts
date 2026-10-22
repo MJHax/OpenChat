@@ -37,6 +37,24 @@ export function parseLocalModelId(id: string): { serverId: string; name: string 
   return { serverId: rest.slice(0, i), name: rest.slice(i + 1) };
 }
 
+/** The distinct local model ids grouped by server, both in first-appearance order; OpenRouter ids are left out. */
+export function localServerGroups(modelIds: string[]): string[][] {
+  const groups = new Map<string, string[]>();
+  for (const id of modelIds) {
+    const parsed = parseLocalModelId(id);
+    if (!parsed) continue;
+    const group = groups.get(parsed.serverId) ?? [];
+    if (!group.includes(id)) group.push(id);
+    groups.set(parsed.serverId, group);
+  }
+  return [...groups.values()];
+}
+
+/** True when two different local models in the list live on the same server. */
+export function sharesServer(modelIds: string[]): boolean {
+  return localServerGroups(modelIds).some((g) => g.length > 1);
+}
+
 export function isLocalModelId(id: string): boolean {
   return parseLocalModelId(id) !== null;
 }
