@@ -1,9 +1,11 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import type { Deps } from '../app';
 import { HttpError, readJson } from '../http';
 import { getChatRow, setActiveLeaf, touchChat } from '../chats';
 import { insertMessage } from '../messages';
 import { checkSpend } from '../limits';
+import { discussionOverflow, discussionOverflowMessage } from '../contextCheck';
+import { loadedWindows } from '../providers';
 import { createDiscussion, discussionState, getDiscussionDetail, getDiscussionRow, setStatus, setTurnLimit } from '../discussion/store';
 import { streamTurn, turnSpeaker } from '../discussion/turn';
 import { isLocalModelId } from '../../../shared/localModels';
@@ -14,6 +16,14 @@ import { MAX_TURN_LIMIT } from '../../../shared/discussion';
 import type { NewDiscussion } from '../../../shared/types';
 
 const MAX_HOST_MESSAGE = 20_000;
+
+/** The turn's optional JSON body: none, or an empty one, is fine. */
+async function readOptionalBody(c: Context): Promise<{ allowOverflow?: unknown }> {
+  const text = (await c.req.text()).trim();
+  if (!text) return {};
+  const body = await readJson<{ allowOverflow?: unknown } | null>(c);
+  return body && typeof body === 'object' ? body : {};
+}
 
 export function discussionRoutes(deps: Deps): Hono {
   const { db } = deps;
@@ -26,10 +36,11 @@ export function discussionRoutes(deps: Deps): Hono {
   r.get('/:id', (c) => c.json(getDiscussionDetail(db, c.req.param('id'))));
 
   /** One turn. A reached spending limit refuses an OpenRouter speaker's turn before anything is saved, never a local one's; a turn already running is never stopped. */
-  r.post('/:id/turn', (c) => {
+  r.post('/:id/turn', async (c) => {
     const id = c.req.param('id');
     const discussion = getDiscussionRow(db, id);
-    if (!isLocalModelId(turnSpeaker(db, id).modelId)) checkSpend(db);
+    const speaker = turnSpeaker(db, id);
+    if (!isLocalModelId(speaker.modelId)) checkSpend(db);
     if (inFlight.has(id)) throw new HttpError(409, 'A turn is still running in this discussion.');
     const ended = 'This discussion has ended. Add turns to continue.';
     if (discussion.status === 'ended') throw new HttpError(409, ended);
@@ -39,9 +50,18 @@ export function discussionRoutes(deps: Deps): Hono {
       setStatus(db, id, 'ended', 'limit');
       throw new HttpError(409, ended);
     }
+    // Taken before the await below, so a second request can't slip in while the loaded window is looked up.
     inFlight.add(id);
     try {
-      return streamTurn(c, deps, id, () => inFlight.delete(id));
+      let contextDropped = false;
+      if (isLocalModelId(speaker.modelId)) {
+        const body = await readOptionalBody(c);
+        if (body.allowOverflow !== undefined && typeof body.allowOverflow !== 'boolean') throw new HttpError(400, 'allowOverflow must be true or false.');
+        const overflow = discussionOverflow(db, id, await loadedWindows(deps, [speaker.modelId]));
+        if (overflow && body.allowOverflow !== true) throw new HttpError(409, discussionOverflowMessage(overflow), { overflow: [overflow], speaker: speaker.name });
+        contextDropped = overflow !== null;
+      }
+      return streamTurn(c, deps, id, () => inFlight.delete(id), { contextDropped });
     } catch (err) {
       inFlight.delete(id);
       throw err;

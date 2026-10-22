@@ -9,7 +9,9 @@ import { pdfWithPages } from '../../test/helpers';
 import { startFakeSearchServer, type FakeSearch } from '../../test/fakeSearchServer';
 import { setSetting } from '../src/settings';
 import { localModelId } from '../../shared/localModels';
-import { withCatalogDefaults, type ChatDetail, type ChatSummary, type Message } from '../../shared/types';
+import { withCatalogDefaults, type ChatDetail, type ChatSummary, type DiscussionDetail, type Message } from '../../shared/types';
+import { discussionOverflow, discussionOverflowMessage } from '../src/contextCheck';
+import { getChatRow } from '../src/chats';
 
 let fake: FakeServer | undefined;
 afterEach(async () => {
@@ -264,5 +266,62 @@ describe('the reserve for web search results', () => {
   it('does not ask when no search service is set up', async () => {
     const s = await nearlyFull('none');
     expect((await send(s, { modelId: s.ids.small, webSearch: true })).status).toBe(200);
+  });
+});
+
+describe('the check before a Discussion turn', () => {
+  async function discussion(s: S, modelId: string, participantIds?: [string, string]) {
+    const a = participantIds ?? [modelId, modelId];
+    const made = (await (await s.call('POST', '/api/discussions', {
+      topic: 'Which came first?', turnLimit: 10,
+      participants: [
+        { name: 'Egg', modelId: a[0], instructions: 'Argue the egg.', isModerator: false },
+        { name: 'Chicken', modelId: a[1], instructions: 'Argue the chicken.', isModerator: false },
+      ],
+    })).json()) as DiscussionDetail;
+    return made;
+  }
+  /** One saved line by `who` (a participant id), parented on the chat's current leaf. */
+  function say(s: S, chatId: string, who: string, content: string, extra: { promptTokens?: number; completionTokens?: number } = {}) {
+    const m = insertMessage(s.db, { chatId, parentId: getChatRow(s.db, chatId)?.active_leaf_id ?? null, role: 'assistant', content, participantId: who, ...extra });
+    setActiveLeaf(s.db, chatId, m.id);
+  }
+
+  it('lets a short transcript through and stops a long one, naming the speaker\'s model', async () => {
+    const s = await setup();
+    const d = await discussion(s, s.ids.small);
+    const [egg, chicken] = d.participants;
+    say(s, d.chat.id, egg.id, 'x'.repeat(1_200)); // ~300 tokens
+    expect(discussionOverflow(s.db, d.chat.id)).toBeNull();
+    say(s, d.chat.id, chicken.id, 'x'.repeat(4_800));
+    say(s, d.chat.id, egg.id, 'x'.repeat(1_200));
+    const o = discussionOverflow(s.db, d.chat.id)!;
+    expect(o).toMatchObject({ modelId: s.ids.small, displayName: 'small', window: 2048 });
+    expect(o.estimate).toBeGreaterThanOrEqual(1_500);
+    expect(discussionOverflowMessage(o)).toBe('This discussion is longer than small can remember.');
+  });
+
+  it('prefers a loaded window over the chosen one', async () => {
+    const s = await setup();
+    const d = await discussion(s, s.ids.small);
+    say(s, d.chat.id, d.participants[0].id, 'x'.repeat(1_200));
+    expect(discussionOverflow(s.db, d.chat.id)).toBeNull();
+    expect(discussionOverflow(s.db, d.chat.id, new Map([[s.ids.small, 1_024]]))).toMatchObject({ window: 1_024 });
+  });
+
+  it('never checks an OpenRouter speaker', async () => {
+    const s = await setup();
+    const d = await discussion(s, s.ids.cloud);
+    say(s, d.chat.id, d.participants[0].id, 'x'.repeat(40_000));
+    expect(discussionOverflow(s.db, d.chat.id)).toBeNull();
+  });
+
+  it('trusts a speaker\'s last reported prompt when it is bigger than the counted text', async () => {
+    const s = await setup();
+    const d = await discussion(s, s.ids.small);
+    const [egg, chicken] = d.participants;
+    say(s, d.chat.id, egg.id, 'short', { promptTokens: 1_900, completionTokens: 5 });
+    say(s, d.chat.id, chicken.id, 'short too');
+    expect(discussionOverflow(s.db, d.chat.id)).toMatchObject({ modelId: s.ids.small });
   });
 });

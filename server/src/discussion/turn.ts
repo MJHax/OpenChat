@@ -26,7 +26,7 @@ export function turnSpeaker(db: DB, chatId: string): DiscussionParticipant {
  * reply (cleaned) when the stream ends, and ends the discussion when the moderator says so or the turn limit is reached.
  * The caller has already checked that a turn may start.
  */
-export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () => void): Response {
+export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () => void, o: { contextDropped?: boolean } = {}): Response {
   const { db } = deps;
   const { topic } = getDiscussionRow(db, chatId);
   const participants = getParticipants(db, chatId);
@@ -70,7 +70,7 @@ export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () 
       const message = insertMessage(db, {
         id: messageId, chatId, parentId: getChatRow(db, chatId)?.active_leaf_id ?? null, role: 'assistant', content,
         modelId: speaker.modelId, promptTokens: usage?.promptTokens ?? null, completionTokens: usage?.completionTokens ?? null,
-        cost: usage?.cost ?? null, status, participantId: speaker.id, handoffTo,
+        cost: usage?.cost ?? null, status, participantId: speaker.id, handoffTo, contextDropped: o.contextDropped ?? false,
         ...timingFields(speaker.modelId, usage, timer.finish()),
       });
       setActiveLeaf(db, chatId, message.id);

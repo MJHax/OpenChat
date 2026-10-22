@@ -4,7 +4,9 @@ import { isLocalModelId } from '../../shared/localModels';
 import type { ContextOverflow, ContextUsage, Message } from '../../shared/types';
 import { chatImageNames, getAttachmentData, type AttachmentRow } from './attachments';
 import { getChatRow } from './chats';
-import { estimateContext } from './context';
+import { estimateContext, textTokens } from './context';
+import { buildDiscussionPrompt, moderatorTools, nextSpeaker } from './discussion/engine';
+import { getDiscussionRow, getParticipants } from './discussion/store';
 import type { DB } from './db';
 import { displayNameOf, modelContextLength, modelModalities } from './library';
 import { pdfTextFor } from './pdfText';
@@ -78,3 +80,28 @@ export function joinNames(names: string[]): string {
 
 export const overflowMessage = (overflow: ContextOverflow[]): string =>
   `This chat is longer than ${joinNames(overflow.map((o) => o.displayName))} can remember.`;
+
+/**
+ * Whether the next Discussion speaker's local model can hold its turn's prompt. The estimate counts the real prompt
+ * (and the moderator's tools) with `textTokens`, and is never below the speaker's last own turn's reported prompt and
+ * reply plus the counted text said since. Null for an OpenRouter speaker or a model whose window isn't known.
+ */
+export function discussionOverflow(db: DB, chatId: string, windows?: Map<string, number>): ContextOverflow | null {
+  const participants = getParticipants(db, chatId);
+  const messages = getChatMessages(db, chatId);
+  const speaker = nextSpeaker(participants, messages);
+  if (!isLocalModelId(speaker.modelId)) return null;
+  const window = windows?.get(speaker.modelId) ?? modelContextLength(db, speaker.modelId);
+  if (window === null) return null;
+  const prompt = buildDiscussionPrompt(getDiscussionRow(db, chatId).topic, participants, messages, speaker);
+  const tools = speaker.isModerator ? JSON.stringify(moderatorTools(participants)) : '';
+  const counted = prompt.reduce((n, m) => n + textTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)), 0) + textTokens(tools);
+  const anchorIndex = messages.findLastIndex((m) => m.participantId === speaker.id && m.promptTokens !== null);
+  const anchored = anchorIndex === -1 ? 0
+    : messages[anchorIndex].promptTokens! + (messages[anchorIndex].completionTokens ?? textTokens(messages[anchorIndex].content))
+      + messages.slice(anchorIndex + 1).reduce((n, m) => n + textTokens(m.content), 0) + textTokens(tools);
+  const used = Math.max(counted, anchored);
+  return used + OVERFLOW_MARGIN > window ? { modelId: speaker.modelId, displayName: displayNameOf(db, speaker.modelId), window, estimate: used } : null;
+}
+
+export const discussionOverflowMessage = (o: ContextOverflow): string => `This discussion is longer than ${o.displayName} can remember.`;
