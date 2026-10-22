@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cheapestModel, endText, initials, turnLabel } from './discussion';
+import { cheapestModel, discussionOverflowBody, discussionOverflowTitle, endText, initials, turnLabel } from './discussion';
 import type { LibraryModel } from '../../../shared/types';
 
 const model = (id: string, completionPrice: number | null, promptPrice: number | null = 0): LibraryModel => ({
@@ -48,5 +48,12 @@ describe('endText', () => {
 describe('turnLabel', () => {
   it('shows turns taken against the limit', () => {
     expect(turnLabel({ status: 'active', endReason: null, endNote: null, turnLimit: 12, turnsTaken: 7, moderatorNoteAfter: null })).toBe('Turn 7 of 12');
+  });
+});
+
+describe('discussion overflow copy', () => {
+  it('names the model and the next speaker', () => {
+    expect(discussionOverflowTitle([{ modelId: 'x', displayName: 'qwen3:1.7b', window: 1, estimate: 2 }])).toBe('This discussion is longer than qwen3:1.7b can remember.');
+    expect(discussionOverflowBody('Egg-Defender')).toBe("It's Egg-Defender's turn next, so the discussion is paused.");
   });
 });

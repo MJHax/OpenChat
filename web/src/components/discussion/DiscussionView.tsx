@@ -5,6 +5,7 @@ import { formatCost } from '../../lib/format';
 import { turnLabel } from '../../lib/discussion';
 import { initialLoop, loopReducer, nextAction, type LoopEvent } from '../../lib/discussionLoop';
 import { ErrorText } from '../ErrorText';
+import { DiscussionOverflowDialog } from './DiscussionOverflowDialog';
 import { SpendNotice } from '../SpendNotice';
 import { DiscussionTranscript, type LiveTurn } from './DiscussionTranscript';
 import { ParticipantsPopover } from './ParticipantsPopover';
@@ -60,9 +61,11 @@ export function DiscussionView({ initial, justCreated, models, onChanged }: Disc
             if (e.partial) append(e.partial);
             setState(e.state);
           }
-          outcome = { type: 'turnFailed', message: e.message, spend: 'status' in e && e.status === 402 };
+          outcome = 'overflow' in e && e.overflow
+            ? { type: 'turnOverflow', overflow: e.overflow, speaker: e.speaker ?? '' }
+            : { type: 'turnFailed', message: e.message, spend: 'status' in e && e.status === 402 };
         },
-      }, controller.signal);
+      }, controller.signal, { allowOverflow: loop.allowOverflow });
     } catch (e) {
       if (!isAbort(e)) outcome = { type: 'turnFailed', message: (e as Error).message || 'The connection was lost.', spend: false };
     }
@@ -166,12 +169,22 @@ export function DiscussionView({ initial, justCreated, models, onChanged }: Disc
       <div className="messages" ref={listRef}>
         <div className="messages-inner">
           <DiscussionTranscript detail={detail} live={live} queued={loop.queued} nameOf={nameOf} />
-          {loop.mode === 'paused' && !loop.streaming && !loop.error && (
+          {loop.mode === 'paused' && !loop.streaming && !loop.error && !loop.overflow && (
             <div className="discussion-end muted">Paused. Press Resume to continue.</div>
           )}
           {loop.error && <div className="error-bubble"><ErrorText message={loop.error} /></div>}
         </div>
       </div>
+
+      {loop.overflow && (
+        <DiscussionOverflowDialog
+          overflow={loop.overflow.overflow}
+          speaker={loop.overflow.speaker}
+          onStayPaused={() => dispatch({ type: 'pause' })}
+          onEnd={() => void stop()}
+          onSendAnyway={() => dispatch({ type: 'sendAnyway' })}
+        />
+      )}
 
       <div className="composer">
         <div className="composer-box">

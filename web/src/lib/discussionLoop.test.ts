@@ -8,7 +8,7 @@ const run = (s: LoopState, ...events: LoopEvent[]) => events.reduce(loopReducer,
 
 describe('discussion loop', () => {
   it('runs a new discussion and opens an existing active one paused', () => {
-    expect(initialLoop(active, true)).toEqual({ mode: 'running', streaming: false, queued: [], error: null, spendBlocked: false });
+    expect(initialLoop(active, true)).toEqual({ mode: 'running', streaming: false, queued: [], error: null, spendBlocked: false, overflow: null, allowOverflow: false });
     expect(initialLoop(active, false).mode).toBe('paused');
     expect(initialLoop(ended, true).mode).toBe('ended');
     expect(nextAction(initialLoop(active, true))).toBe('turn');
@@ -90,5 +90,22 @@ describe('discussion loop', () => {
 
   it('does not resume an ended discussion', () => {
     expect(run(initialLoop(ended, false), { type: 'resume' }).mode).toBe('ended');
+  });
+
+  it('pauses on an overflow and sends anyway on request', () => {
+    const overflow = [{ modelId: 'local:a:m', displayName: 'qwen3:1.7b', window: 4096, estimate: 5000 }];
+    const s = run(initialLoop(active, true), { type: 'turnStarted' }, { type: 'turnOverflow', overflow, speaker: 'Egg-Defender' });
+    expect(s).toMatchObject({ mode: 'paused', streaming: false, overflow: { overflow, speaker: 'Egg-Defender' }, error: null });
+    expect(nextAction(s)).toBe('idle');
+    const go = loopReducer(s, { type: 'sendAnyway' });
+    expect(go).toMatchObject({ mode: 'running', allowOverflow: true, overflow: null });
+    expect(nextAction(go)).toBe('turn');
+    const again = run(go, { type: 'pause' }, { type: 'resume' });
+    expect(again.allowOverflow).toBe(true);
+  });
+
+  it('ends after a stop while the overflow dialog is open', () => {
+    const s = run(initialLoop(active, true), { type: 'turnOverflow', overflow: [], speaker: 'A' }, { type: 'stopped' });
+    expect(s).toMatchObject({ mode: 'ended', overflow: null });
   });
 });

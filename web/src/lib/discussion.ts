@@ -1,4 +1,5 @@
-import type { DiscussionState, LibraryModel } from '../../../shared/types';
+import { overflowTitle } from './overflow';
+import type { ContextOverflow, DiscussionState, LibraryModel } from '../../../shared/types';
 
 /** A price we can compare: known and not "varies" (negative). */
 const known = (p: number | null) => (p !== null && p >= 0 ? p : Infinity);
@@ -30,3 +31,10 @@ export function endText(s: DiscussionState): string | null {
 }
 
 export const turnLabel = (s: DiscussionState) => `Turn ${s.turnsTaken} of ${s.turnLimit}`;
+
+/** The Discussion overflow question; the speaker's model is the one that can't remember. */
+export function discussionOverflowTitle(overflow: ContextOverflow[]): string {
+  return overflowTitle(overflow).replace('This chat', 'This discussion');
+}
+
+export const discussionOverflowBody = (participantName: string) => `It's ${participantName}'s turn next, so the discussion is paused.`;

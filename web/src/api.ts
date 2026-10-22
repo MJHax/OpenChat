@@ -237,15 +237,25 @@ export interface DiscussionTurnHandlers {
   onStatus(message: string): void;
   onDone(e: DiscussionTurnDone): void;
   /** A failed turn, or a refused request (`status` is its HTTP status; 402 is a spending limit). */
-  onError(e: DiscussionTurnError | { message: string; status: number }): void;
+  onError(e: DiscussionTurnError | { message: string; status: number; overflow?: ContextOverflow[]; speaker?: string }): void;
 }
 
 /** Streams one discussion turn. Rejects with AbortError when `signal` aborts. */
-export async function streamDiscussionTurn(id: string, h: DiscussionTurnHandlers, signal: AbortSignal): Promise<void> {
-  const res = await fetch(`/api/discussions/${id}/turn`, { method: 'POST', signal });
+export async function streamDiscussionTurn(id: string, h: DiscussionTurnHandlers, signal: AbortSignal, o: { allowOverflow?: boolean } = {}): Promise<void> {
+  const res = await fetch(`/api/discussions/${id}/turn`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ allowOverflow: o.allowOverflow }),
+    signal,
+  });
   if (!res.ok || !res.body) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
-    h.onError({ message: data.error ?? `Request failed (${res.status})`, status: res.status });
+    const data = (await res.json().catch(() => ({}))) as { error?: string; overflow?: ContextOverflow[]; speaker?: string };
+    h.onError({
+      message: data.error ?? `Request failed (${res.status})`,
+      status: res.status,
+      ...(data.overflow ? { overflow: data.overflow } : {}),
+      ...(data.speaker ? { speaker: data.speaker } : {}),
+    });
     return;
   }
   for await (const ev of parseSSE(res.body)) {

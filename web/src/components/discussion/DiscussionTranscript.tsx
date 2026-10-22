@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import type { DiscussionDetail, Message } from '../../../../shared/types';
 import { Markdown } from '../Markdown';
 import { formatCost } from '../../lib/format';
@@ -43,6 +44,7 @@ function Line({ m, detail, nameOf }: { m: Message; detail: DiscussionDetail; nam
           {m.status === 'stopped' && <span className="muted"> · cut off</span>}
         </div>
         <div className="msg-body"><Markdown text={m.content} /></div>
+        {m.contextDropped && <div className="muted small">Earlier messages were dropped because the chat is longer than this model's memory.</div>}
       </div>
     </div>
   );
@@ -53,7 +55,14 @@ export function DiscussionTranscript({ detail, live, queued, nameOf }: Discussio
   const ended = endText(detail.state);
   return (
     <>
-      {detail.messages.map((m) => <Line key={m.id} m={m} detail={detail} nameOf={nameOf} />)}
+      {detail.messages.map((m) => (
+        <Fragment key={m.id}>
+          <Line m={m} detail={detail} nameOf={nameOf} />
+          {m.id === detail.state.moderatorNoteAfter && (
+            <div className="discussion-end muted">The moderator isn't choosing speakers, so the normal order is being used.</div>
+          )}
+        </Fragment>
+      ))}
       {speaker && (
         <div className="turn">
           <Avatar name={speaker.name} position={speaker.position} />
