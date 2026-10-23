@@ -44,7 +44,7 @@ function ImageModelCard({ m, entry, busy, onAdd, onRemove }: {
       )}
       <div className="model-card-actions">
         <button className="primary" disabled={!!entry || busy} onClick={onAdd}>{entry ? 'Added' : 'Add'}</button>
-        {entry && <button className="link danger" disabled={busy} onClick={onRemove}>Remove</button>}
+        {entry && <button className="link accent" disabled={busy} onClick={onRemove}>Remove</button>}
         <button className="link" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Less' : 'More'}</button>
       </div>
     </TiltCard>
@@ -112,7 +112,7 @@ export function ImageModelLibrary() {
                 ) : (
                   <button className="link" disabled={busy === e.id} onClick={() => act(e.id, () => api.setDefaultMediaModel(e.id, 'image'))}>Make default</button>
                 )}
-                <button className="link danger" disabled={busy === e.id} onClick={() => act(e.id, () => api.removeMediaModel(e.id, 'image'))}>Remove</button>
+                <button className="link accent" disabled={busy === e.id} onClick={() => act(e.id, () => api.removeMediaModel(e.id, 'image'))}>Remove</button>
               </div>
             </li>
           ))}

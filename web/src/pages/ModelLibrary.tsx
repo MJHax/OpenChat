@@ -28,7 +28,8 @@ export interface ModelLibraryProps {
   onSort(sort: LibrarySort): void;
 }
 
-const KINDS: { id: 'chat' | 'image' | 'video'; label: string }[] = [
+type Kind = 'chat' | 'image' | 'video';
+const KINDS: { id: Kind; label: string }[] = [
   { id: 'chat', label: 'Chat models' }, { id: 'image', label: 'Image models' }, { id: 'video', label: 'Video models' },
 ];
 const PAGE_SIZE = 60;
@@ -45,7 +46,7 @@ export function ModelLibrary({ models, noKey = false, onChanged, sort: librarySo
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [kind, setKind] = useState<'chat' | 'image' | 'video'>('chat');
+  const [kind, setKind] = useState<Kind>('chat');
   const [source, setSource] = useState<SourceFilter>('all');
   const [local, setLocal] = useState<LocalCatalog | null>(null);
   /** The error from saving a local model's settings, shown on its row. */
@@ -114,22 +115,17 @@ export function ModelLibrary({ models, noKey = false, onChanged, sort: librarySo
     }
   }
 
-  const switcher = <Segmented label="Model kind" options={KINDS} value={kind} onChange={setKind} />;
-  if (kind !== 'chat') {
-    return (
-      <div className="page">
-        <div className="page-inner">
-          <div className="stats-head"><h1>Model Library</h1>{switcher}</div>
-          {kind === 'image' ? <ImageModelLibrary /> : <VideoModelLibrary />}
-        </div>
-      </div>
-    );
-  }
+  // Sections stay mounted once opened, so switching back doesn't refetch and flash an empty list.
+  const [opened, setOpened] = useState<Set<Kind>>(() => new Set(['chat']));
+  const pickKind = (k: Kind) => { setKind(k); setOpened((o) => (o.has(k) ? o : new Set(o).add(k))); };
 
   return (
     <div className="page">
       <div className="page-inner">
-        <div className="stats-head"><h1>Model Library</h1>{switcher}</div>
+        <div className="stats-head"><h1>Model Library</h1><Segmented label="Model kind" options={KINDS} value={kind} onChange={pickKind} /></div>
+        {opened.has('image') && <div className="lib-panel" hidden={kind !== 'image'}><ImageModelLibrary /></div>}
+        {opened.has('video') && <div className="lib-panel" hidden={kind !== 'video'}><VideoModelLibrary /></div>}
+        <div className="lib-panel" hidden={kind !== 'chat'}>
         {actionError && <p className="error-text">{actionError}</p>}
 
         <LibraryHeading title="My models" count={models.length} sort={librarySort} onSort={onLibrarySort} />
@@ -205,7 +201,7 @@ export function ModelLibrary({ models, noKey = false, onChanged, sort: librarySo
           <p key={s.id} className="muted small">{s.name} isn't reachable{s.error ? `: ${s.error}` : ''}.</p>
         ))}
         {localShown.length > 0 && (
-          <ul className="model-grid">
+          <ul className="model-grid local-grid">
             {localShown.map((m) => (
               <LocalModelCard
                 key={m.id}
@@ -278,6 +274,7 @@ export function ModelLibrary({ models, noKey = false, onChanged, sort: librarySo
         )}
         </>
         )}
+        </div>
       </div>
     </div>
   );

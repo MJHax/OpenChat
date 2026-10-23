@@ -212,3 +212,8 @@ button.chip.on { background: var(--accent-fill); color: var(--on-accent); border
 .local-settings .error-text { flex-basis: 100%; margin: 0; }
 .window-input { width: 92px; padding: 2px 6px; }
 .local-cap { display: inline-flex; align-items: center; }
+
+/* Model Library sections and Browse spacing */
+.lib-panel { animation: fade 0.22s ease; }
+.lib-panel > .seg { margin-bottom: 14px; }
+.local-grid { margin-bottom: 20px; }

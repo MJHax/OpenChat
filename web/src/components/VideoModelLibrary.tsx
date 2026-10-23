@@ -36,7 +36,7 @@ function VideoModelCard({ m, added, busy, onAdd, onRemove }: { m: VideoModel; ad
       )}
       <div className="model-card-actions">
         <button className="primary" disabled={added || busy} onClick={onAdd}>{added ? 'Added' : 'Add'}</button>
-        {added && <button className="link danger" disabled={busy} onClick={onRemove}>Remove</button>}
+        {added && <button className="link accent" disabled={busy} onClick={onRemove}>Remove</button>}
         <button className="link" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Less' : 'More'}</button>
       </div>
     </TiltCard>
@@ -101,7 +101,7 @@ export function VideoModelLibrary() {
                 ) : (
                   <button className="link" disabled={busy === e.id} onClick={() => act(e.id, () => api.setDefaultMediaModel(e.id, 'video'))}>Make default</button>
                 )}
-                <button className="link danger" disabled={busy === e.id} onClick={() => act(e.id, () => api.removeMediaModel(e.id, 'video'))}>Remove</button>
+                <button className="link accent" disabled={busy === e.id} onClick={() => act(e.id, () => api.removeMediaModel(e.id, 'video'))}>Remove</button>
               </div>
             </li>
           ))}
