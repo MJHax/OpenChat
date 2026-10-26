@@ -46,7 +46,7 @@ Chat with hundreds of cloud models through one OpenRouter key, or run fully offl
 
 ## Quick start
 
-You need [Node.js](https://nodejs.org) 22 or newer.
+You need [Node.js](https://nodejs.org) 22.12 or newer.
 
 ```bash
 git clone https://github.com/MJHax/OpenChat.git
