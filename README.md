@@ -60,6 +60,35 @@ Open http://127.0.0.1:3000, then pick one or both:
 - **Local models (free, private):** install [Ollama](https://ollama.com), download a model with `ollama pull qwen3:1.7b`, and open **Model Library** in OpenChat. Ollama is found automatically; click **Add** on the model.
 - **OpenRouter (hundreds of cloud models):** create a key at [openrouter.ai/keys](https://openrouter.ai/keys), paste it in **Settings → General → OpenRouter**, then add models from the **Model Library**.
 
+The first `npm start` builds the web app, which takes a few seconds; after that it starts at once, and only builds again when the code changes (after a `git pull`, say).
+
+## Run it on a home server
+
+### With Docker
+
+```bash
+git clone https://github.com/MJHax/OpenChat.git
+cd OpenChat
+docker compose up -d
+```
+
+Open `http://<server address>:3000` from any device on your network. Your data is kept in the `openchat-data` volume, so it survives updates. To update: `git pull`, then `docker compose up -d --build`. To use another port, change the left number in `compose.yaml` (`"8080:3000"`).
+
+Ollama or LM Studio on the same machine is found at `host.docker.internal`. On Linux, Ollama only listens on its own machine by default, so start it with `OLLAMA_HOST=0.0.0.0` for the container to reach it. A server elsewhere, including Ollama in its own container, can be added in **Settings → General → Local servers**.
+
+### Without Docker
+
+```bash
+OPENCHAT_HOST=0.0.0.0 OPENCHAT_PORT=3000 npm start
+```
+
+On Windows PowerShell: `$env:OPENCHAT_HOST="0.0.0.0"; npm start`. The server prints the addresses it can be reached at. You can also put these settings in `.env`.
+
+> [!WARNING]
+> OpenChat has no login. Anyone who can reach it can read your chats and spend your OpenRouter credit, so only open it to a network you trust, and never forward its port to the internet. To reach it from outside your home, use a VPN such as [Tailscale](https://tailscale.com) or [WireGuard](https://www.wireguard.com). See [SECURITY.md](SECURITY.md).
+
+OpenChat answers on `localhost` and on IP addresses. To open it by a name, like `http://homelab.local:3000`, list the name in `OPENCHAT_ALLOWED_HOSTS`. Other names are refused, which stops a malicious website from reaching OpenChat through your browser (a DNS rebinding attack).
+
 ## Local models
 
 OpenChat talks to three kinds of local server:
@@ -82,11 +111,14 @@ Settings are made in the app. A `.env` file (see `.env.example`) can also set:
 |---|---|---|
 | `OPENROUTER_API_KEY` | none | OpenRouter key, used when none is saved in Settings |
 | `OPENCHAT_PORT` | `3000` | Port the app listens on |
+| `OPENCHAT_HOST` | `127.0.0.1` | Address to listen on; `0.0.0.0` lets other machines on your network connect (the Docker image sets this) |
+| `OPENCHAT_ALLOWED_HOSTS` | none | Names besides `localhost` and IP addresses that OpenChat answers on, comma-separated, e.g. `homelab.local` |
+| `OPENCHAT_DETECT_HOST` | `localhost` | Machine to look for Ollama and LM Studio on (`host.docker.internal` in Docker) |
 | `OPENCHAT_DB` | `data/openchat.db` | Location of the SQLite database |
 
 **Web search for local models:** in **Settings → General → Web search**, choose SearXNG (your instance's address; JSON output must be enabled in its `settings.yml`, and the connection test tells you how) or Tavily (an API key; the free tier includes 1,000 searches a month).
 
-OpenChat only listens on `127.0.0.1` and has no login, so it is meant for one person on one machine.
+By default OpenChat only listens on `127.0.0.1`, so only this machine can reach it. It has no login, so it is meant for one person, or a household on a trusted network.
 
 ## How it works
 
@@ -122,7 +154,8 @@ OpenChat was built in about a week by directing an AI coding agent ([Claude Code
 
 ## Roadmap
 
-- Docker image and an optional login, for hosting on a home server
+- An optional login, for sharing a server with people you don't fully trust
+- A prebuilt Docker image
 - More testing with LM Studio
 - More web search services
 

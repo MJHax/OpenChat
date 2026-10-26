@@ -1,0 +1,21 @@
+# docker compose up -d   →   http://<this machine's address>:3000
+services:
+  openchat:
+    build: .
+    container_name: openchat
+    restart: unless-stopped
+    ports:
+      - "3000:3000" # change the left number to use another port
+    volumes:
+      - openchat-data:/app/data # chats, files, videos and settings
+    environment:
+      # Look for Ollama and LM Studio on the machine running Docker, not inside the container.
+      OPENCHAT_DETECT_HOST: host.docker.internal
+      # Names (not IP addresses) you open OpenChat by, comma-separated, e.g. homelab.local
+      # OPENCHAT_ALLOWED_HOSTS: homelab.local
+      # OPENROUTER_API_KEY: sk-or-...   (or set it in the app's Settings)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  openchat-data:

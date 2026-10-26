@@ -5,6 +5,13 @@ import type { LocalModelInfo } from './providers/types';
 import { DETECT_CANDIDATES, SERVER_TYPE_NAMES, localModelId, parseLocalModelId } from '../../shared/localModels';
 import type { LocalAvailability, LocalServerStatus } from '../../shared/types';
 
+/** The detection addresses, on another machine when OPENCHAT_DETECT_HOST names one (in Docker, host.docker.internal). */
+export function detectCandidates(host?: string): typeof DETECT_CANDIDATES {
+  const name = host?.trim();
+  if (!name) return DETECT_CANDIDATES;
+  return DETECT_CANDIDATES.map((c) => ({ ...c, baseUrl: c.baseUrl.replace('localhost', name) }));
+}
+
 /**
  * Looks for servers already running on this machine and lists the ones that answer. A server the user removed is only
  * brought back when `force` is set (the "Detect again" button), so removing one sticks across restarts.

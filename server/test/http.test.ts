@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { makeApp } from './appHelpers';
-import { isLocalHost } from '../src/app';
+import { isIpLiteral, isLocalHost } from '../src/app';
 
 // A generated page runs in a null-origin sandbox, and a page it navigates to is cross-site. Neither may change data,
 // even with a no-cors "simple" request that the browser sends without asking first.
@@ -56,6 +56,28 @@ describe('DNS rebinding protection', () => {
     });
     expect(write.status).toBe(403);
     expect(await (await call('GET', '/api/memories')).json()).toEqual([]);
+  });
+
+  it('answers on IP addresses, so other machines on the network can connect', async () => {
+    const { app } = makeApp();
+    for (const host of ['192.168.1.5:3000', '10.0.0.2', '[fe80::1]:3000']) {
+      expect((await at(app, host)).status).toBe(200);
+    }
+  });
+
+  it('answers on names listed in OPENCHAT_ALLOWED_HOSTS, and only those', async () => {
+    const { app } = makeApp({}, { OPENCHAT_ALLOWED_HOSTS: 'homelab.local, NAS' });
+    expect((await at(app, 'homelab.local:3000')).status).toBe(200);
+    expect((await at(app, 'nas')).status).toBe(200);
+    expect((await at(app, 'attacker.example')).status).toBe(403);
+    expect((await at(app, 'homelab.local.attacker.example')).status).toBe(403);
+  });
+
+  it('does not mistake look-alike names for IP addresses', () => {
+    expect(isIpLiteral('192.168.1.5')).toBe(true);
+    expect(isIpLiteral('[::1]')).toBe(true);
+    expect(isIpLiteral('192.168.1.5.attacker.example')).toBe(false);
+    expect(isIpLiteral('1.2.3.4.nip.io')).toBe(false);
   });
 
   it('does not mistake look-alike names for local ones', () => {

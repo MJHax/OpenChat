@@ -4,6 +4,7 @@ import type { DB } from './db';
 import type { OpenRouterClient } from './openrouter';
 import type { Env } from './settings';
 import type { DETECT_CANDIDATES } from '../../shared/localModels';
+import { isIP } from 'node:net';
 import { HttpError } from './http';
 import { settingsRoutes } from './routes/settings';
 import { memoryRoutes } from './routes/memories';
@@ -37,6 +38,16 @@ export interface Deps {
 export const isLocalHost = (hostname: string): boolean =>
   hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname.endsWith('.localhost');
 
+/** An address typed as numbers, like 192.168.1.5 or [fe80::1]. DNS rebinding needs a domain name, so these are safe. */
+export const isIpLiteral = (hostname: string): boolean => isIP(hostname.replace(/^\[(.*)\]$/, '$1')) !== 0;
+
+/** Names the API answers on: local names, IP addresses, and any listed in OPENCHAT_ALLOWED_HOSTS (comma-separated). */
+export function hostAllowed(hostname: string, env: Env): boolean {
+  if (isLocalHost(hostname) || isIpLiteral(hostname)) return true;
+  const allowed = (env.OPENCHAT_ALLOWED_HOSTS ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean);
+  return allowed.includes(hostname.toLowerCase());
+}
+
 export function createApp(deps: Deps): Hono {
   const app = new Hono();
 
@@ -46,10 +57,14 @@ export function createApp(deps: Deps): Hono {
     return c.json({ error: 'Internal server error' }, 500);
   });
 
-  // A site that points its own domain at 127.0.0.1 (DNS rebinding) would count as same-origin, so only local names may
-  // reach the API. The URL's host comes from the Host header, which the browser sets to the name it looked up.
+  // A site that points its own domain at this machine (DNS rebinding) would count as same-origin, so only local names,
+  // IP addresses and names the user listed may reach the API. The URL's host comes from the Host header, which the
+  // browser sets to the name it looked up.
   app.use('/api/*', async (c, next) => {
-    if (!isLocalHost(new URL(c.req.url).hostname)) throw new HttpError(403, 'OpenChat only answers on localhost.');
+    const { hostname } = new URL(c.req.url);
+    if (!hostAllowed(hostname, deps.env)) {
+      throw new HttpError(403, `OpenChat doesn't answer on ${hostname}. To use this name, add it to OPENCHAT_ALLOWED_HOSTS.`);
+    }
     await next();
   });
 

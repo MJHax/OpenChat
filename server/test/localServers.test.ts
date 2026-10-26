@@ -10,6 +10,8 @@ import { getSetting, setSetting } from '../src/settings';
 import { createChat } from '../src/chats';
 import { insertMessage, getChatMessages } from '../src/messages';
 import { HttpError } from '../src/http';
+import { detectCandidates } from '../src/localDetect';
+import { DETECT_CANDIDATES } from '../../shared/localModels';
 
 function insertLocalModel(db: ReturnType<typeof openDb>, id: string, extra: { contextWindow?: number | null; contextLength?: number | null } = {}) {
   db.prepare('INSERT INTO models (id, display_name, context_length, context_window, added_at) VALUES (?, ?, ?, ?, ?)').run(
@@ -125,5 +127,19 @@ describe('local server storage', () => {
     expect(cols('models')).toContain('context_window');
     expect(cols('messages')).toContain('context_dropped');
     expect(cols('local_servers')).toContain('removed_at');
+  });
+});
+
+describe('detection addresses', () => {
+  it('looks on this machine by default', () => {
+    expect(detectCandidates(undefined)).toEqual(DETECT_CANDIDATES);
+    expect(detectCandidates('  ')).toEqual(DETECT_CANDIDATES);
+  });
+
+  it('looks on another machine when OPENCHAT_DETECT_HOST names one', () => {
+    expect(detectCandidates('host.docker.internal')).toEqual([
+      { type: 'ollama', baseUrl: 'http://host.docker.internal:11434' },
+      { type: 'lmstudio', baseUrl: 'http://host.docker.internal:1234' },
+    ]);
   });
 });

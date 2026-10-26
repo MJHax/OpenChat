@@ -1,14 +1,36 @@
 {
   "name": "openchat",
+  "version": "0.1.0",
+  "description": "A self-hosted chat app for OpenRouter and your own local models (Ollama, LM Studio).",
   "private": true,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MJHax/OpenChat.git"
+  },
+  "homepage": "https://github.com/MJHax/OpenChat#readme",
+  "bugs": {
+    "url": "https://github.com/MJHax/OpenChat/issues"
+  },
+  "keywords": [
+    "chat",
+    "llm",
+    "openrouter",
+    "ollama",
+    "lm-studio",
+    "self-hosted",
+    "ai"
+  ],
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "concurrently -k -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
     "dev:server": "node --watch --import tsx server/src/index.ts",
     "dev:web": "vite",
     "build": "vite build",
-    "start": "vite build && tsx server/src/index.ts",
+    "start": "node scripts/build-if-stale.mjs && tsx server/src/index.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "fake-local": "tsx test/fakeLocalServer.ts",
@@ -29,6 +51,7 @@
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
+    "tsx": "^4.23.15",
     "unpdf": "1.8.1"
   },
   "devDependencies": {
@@ -38,7 +61,6 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
     "concurrently": "^9.2.5",
-    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vite": "^7.3.7",
     "vitest": "^3.2.7"

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Accent, ChatSummary, ColorStyle, LibraryModel, LocalAvailability, SettingsView, ThreadKind } from '../../shared/types';
 import { api } from './api';
 import { navigate, replaceHash, routeHash, settingsBackdrop, settingsCloseAction, threadHref, useRoute, type Route } from './lib/route';
@@ -7,20 +7,22 @@ import { ThreadPanel } from './components/shell/ThreadPanel';
 import { CommandPalette } from './components/shell/CommandPalette';
 import { nextTheme, resolvedTheme } from './lib/appearance';
 import { ChatView } from './components/ChatView';
-import { ImageThread } from './pages/ImageThread';
-import { VideoThread } from './pages/VideoThread';
-import { DiscussionPage } from './pages/DiscussionPage';
 import { systemNotify } from './lib/notify';
 import { loadLibrarySort, saveLibrarySort, sortLibrary, type LibrarySort } from './lib/models';
-import { ModelLibrary } from './pages/ModelLibrary';
-import { Settings } from './pages/Settings';
-import { Stats } from './pages/Stats';
-import { Library } from './pages/Library';
 import { PromptsWindow } from './components/PromptsWindow';
 import type { ReuseDraft } from './lib/reuse';
 import { useAppearance } from './components/useAppearance';
 import { AvailabilityContext } from './components/AvailabilityContext';
 import { Clapperboard, X } from 'lucide-react';
+
+// Pages other than chat load when first opened, so the chat screen starts with less code.
+const ImageThread = lazy(() => import('./pages/ImageThread').then((m) => ({ default: m.ImageThread })));
+const VideoThread = lazy(() => import('./pages/VideoThread').then((m) => ({ default: m.VideoThread })));
+const DiscussionPage = lazy(() => import('./pages/DiscussionPage').then((m) => ({ default: m.DiscussionPage })));
+const ModelLibrary = lazy(() => import('./pages/ModelLibrary').then((m) => ({ default: m.ModelLibrary })));
+const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })));
+const Stats = lazy(() => import('./pages/Stats').then((m) => ({ default: m.Stats })));
+const Library = lazy(() => import('./pages/Library').then((m) => ({ default: m.Library })));
 
 const NARROW = '(max-width: 899px)';
 
@@ -226,6 +228,7 @@ export function App() {
         <div className="aurora" aria-hidden />
         <div className="page-slot" inert={overlayOpen}>
         {loadError && <div className="banner error">Can't reach the OpenChat server: {loadError}</div>}
+        <Suspense fallback={null}>
         {page.page === 'chat' && (
           <ChatView chatId={page.chatId} title={title} reloadToken={chatReload} models={models} settings={settings} onChatsChanged={refreshChats}
             startDraft={page.chatId ? null : startDraft} onStartDraftUsed={() => setStartDraft(null)}
@@ -244,12 +247,15 @@ export function App() {
         {page.page === 'models' && <ModelLibrary models={models} noKey={settings !== null && !settings.hasApiKey} onChanged={refreshModels} sort={librarySort} onSort={changeLibrarySort} />}
         {page.page === 'stats' && <Stats />}
         {page.page === 'library' && <Library onReuse={startChatWith} />}
+        </Suspense>
         </div>
+        <Suspense fallback={null}>
         {route.page === 'settings' && (
           <Settings models={models} tab={route.tab} section={route.section} onChanged={refreshSettings} onClose={closeSettings}
             appearance={appearance} onAppearance={(patch) => void setAppearance(patch)}
             onDataChanged={() => { refreshChats(); refreshModels(); }} />
         )}
+        </Suspense>
       </main>
       {promptsOpen && (
         <PromptsWindow canInsert={page.page === 'chat' && route.page !== 'settings'} onClose={() => setPromptsOpen(false)}
