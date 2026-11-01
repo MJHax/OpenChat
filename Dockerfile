@@ -19,7 +19,8 @@ ENV NODE_ENV=production \
     OPENCHAT_DB=/app/data/openchat.db
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-COPY package.json ./
+# tsconfig.json tells tsx how to compile the server's JSX.
+COPY package.json tsconfig.json ./
 COPY server/src ./server/src
 COPY shared ./shared
 RUN mkdir -p /app/data && chown node:node /app/data

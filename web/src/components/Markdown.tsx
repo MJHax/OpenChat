@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { FilePanelContext } from './FilePanelContext';
+import { writeClipboard } from '../lib/clipboard';
 import { saveableCode, snippetName } from '../lib/filePreview';
 
 function CodeBlock({ node: _node, children, ...props }: ComponentProps<'pre'> & { node?: unknown }) {
@@ -15,7 +16,7 @@ function CodeBlock({ node: _node, children, ...props }: ComponentProps<'pre'> & 
   const [lang, setLang] = useState<string | null>(null);
   useEffect(() => setLang(/language-([\w+-]+)/.exec(ref.current?.querySelector('code')?.className ?? '')?.[1] ?? null), [children]);
   const copy = async () => {
-    await navigator.clipboard.writeText(ref.current?.innerText ?? '');
+    await writeClipboard(ref.current?.innerText ?? '');
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };

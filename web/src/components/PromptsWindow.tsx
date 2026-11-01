@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import type { SavedPrompt } from '../../../shared/types';
 import { api } from '../api';
+import { writeClipboard } from '../lib/clipboard';
 import { closesOverlay } from '../lib/escape';
 import { fillSlots, matchesPrompt, promptLabel, promptSlots, slotValue } from '../lib/prompts';
 import { ErrorText } from './ErrorText';
@@ -100,7 +101,7 @@ export function PromptsWindow({ canInsert, onInsert, onStartChat, onClose }: Pro
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(filled);
+      await writeClipboard(filled);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {

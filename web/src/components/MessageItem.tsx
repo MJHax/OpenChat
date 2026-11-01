@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Attachment, LibraryModel, PathMessage } from '../../../shared/types';
 import { sendBlockReason } from '../lib/attachments';
+import { writeClipboard } from '../lib/clipboard';
 import { formatCost, formatTokens } from '../lib/format';
 import { timingParts } from '../lib/timing';
 import { AttachButton, useFileDrop } from './AttachButton';
@@ -78,7 +79,7 @@ export function MessageItem({
   );
 
   const copy = async () => {
-    await navigator.clipboard.writeText(message.role === 'assistant' ? copyText(message.content) : message.content);
+    await writeClipboard(message.role === 'assistant' ? copyText(message.content) : message.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
