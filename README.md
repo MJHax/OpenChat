@@ -150,14 +150,13 @@ npm run fake-local -- --flavor ollama --port 11434   # a fake Ollama for trying 
 
 ## How it was built
 
-OpenChat was built in about a week by directing an AI coding agent ([Claude Code](https://claude.com/claude-code)) through a written process: every feature started as a design spec, became a step-by-step plan, and was built task by task with a separate review of each task and a final review of the whole change. The specs and plans are in [`docs/superpowers`](docs/superpowers), and most commits credit the agent as co-author.
+OpenChat was built over a couple weeks by directing an AI coding agent ([Claude Code](https://claude.com/claude-code)) through a written process: every feature started as a design spec, became a step-by-step plan, and was built task by task with a separate review of each task and a final review of the whole change. The specs and plans are in [`docs/superpowers`](docs/superpowers), and most commits credit the agent as co-author.
 
 ## Roadmap
 
-- An optional login, for sharing a server with people you don't fully trust
-- A prebuilt Docker image
+- A login option, or multiple 'account' support
 - More testing with LM Studio
-- More web search services
+- Text chats integrating image models for image generation in an existing conversation
 
 ## Contributing
 
