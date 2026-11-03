@@ -140,3 +140,34 @@ describe('deletes', () => {
     expect(settings).toMatchObject({ aboutMe: '', theme: 'system', apiKeySource: 'env' });
   });
 });
+
+describe('import', () => {
+  const zipOf = async (app: ReturnType<typeof makeApp>) => Buffer.from(await (await app.call('GET', '/api/data/export')).arrayBuffer());
+  const post = (app: ReturnType<typeof makeApp>, zip: Buffer, query: string, headers: Record<string, string> = {}) =>
+    app.app.request(`/api/data/import${query}`, { method: 'POST', body: new Uint8Array(zip), headers: { 'Content-Type': 'application/zip', ...headers } });
+
+  it('import needs REPLACE', async () => {
+    const src = await seed();
+    const dst = makeApp();
+    const res = await post(dst, await zipOf(src), '?confirm=replace');
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('Type REPLACE to confirm.');
+  });
+
+  it('import restores an export', async () => {
+    const src = await seed();
+    const dst = makeApp();
+    const res = await post(dst, await zipOf(src), '?confirm=REPLACE');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(kinds(dst.db)).toEqual(kinds(src.db));
+  });
+
+  it('a cross-site import is refused', async () => {
+    const src = await seed();
+    const dst = makeApp();
+    const res = await post(dst, await zipOf(src), '?confirm=REPLACE', { 'sec-fetch-site': 'cross-site' });
+    expect(res.status).toBe(403);
+    expect(kinds(dst.db)).toEqual([]);
+  });
+});
