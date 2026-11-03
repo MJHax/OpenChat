@@ -112,6 +112,8 @@ button.danger-button:not(:disabled):hover { background: var(--danger); color: #f
 .settings-pane-head h1 { margin: 0; font-size: 18px; }
 .settings-pane h2 { font-size: 15px; margin: 24px 0 8px; }
 .settings-pane h2[id] { scroll-margin-top: 56px; }
+/* Cards in a row under one heading (General's OpenRouter, Local servers, Web search) need room between their borders. */
+.settings-pane .card + .card:not(.danger-zone) { margin-top: 12px; }
 @media (max-width: 700px) {
   .settings-sheet { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); height: calc(100vh - 32px); }
   .settings-tabs { flex-direction: row; border-right: none; border-bottom: 1px solid var(--border); overflow-x: auto; padding: 8px; }
