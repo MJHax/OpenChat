@@ -87,6 +87,12 @@ On Windows PowerShell: `$env:OPENCHAT_HOST="0.0.0.0"; npm start`. The server pri
 > [!WARNING]
 > OpenChat has no login. Anyone who can reach it can read your chats and spend your OpenRouter credit, so only open it to a network you trust, and never forward its port to the internet. To reach it from outside your home, use a VPN such as [Tailscale](https://tailscale.com) or [WireGuard](https://www.wireguard.com). See [SECURITY.md](SECURITY.md).
 
+### Moving to another machine
+
+In **Settings → Data**, **Export all data** on the old machine, then **Import a backup** on the new one. Import replaces everything there with the backup. API keys are never in a backup, so add your key on the new machine if it doesn't have one.
+
+### Allowed names
+
 OpenChat answers on `localhost` and on IP addresses. To open it by a name, like `http://homelab.local:3000`, list the name in `OPENCHAT_ALLOWED_HOSTS`. Other names are refused, which stops a malicious website from reaching OpenChat through your browser (a DNS rebinding attack).
 
 ## Local models

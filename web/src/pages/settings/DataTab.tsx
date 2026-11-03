@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DeleteTarget, SettingsView, StorageUsage } from '../../../../shared/types';
 import { api } from '../../api';
 import { formatBytes } from '../../lib/format';
@@ -105,12 +105,56 @@ function ConfirmDelete({ target, view, onClose, onDone }: {
   );
 }
 
+function ConfirmImport({ file, onClose }: { file: File; onClose(): void }) {
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirm() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.importData(file, typed);
+      forgetAllPrefs();
+      window.location.reload();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div className="modal card" role="dialog" aria-modal="true" aria-labelledby="confirm-import-title">
+        <h3 id="confirm-import-title">Replace everything with this backup?</h3>
+        <p className="small"><strong>{file.name}</strong> · {formatBytes(file.size)}</p>
+        <p>
+          Every chat, image, video, discussion, memory, saved prompt, setting and stat here is replaced by the backup's.
+          <strong> This can't be undone.</strong> Export first if you might want any of it.
+        </p>
+        <p className="small">Other open tabs and devices will show old data until you reload them.</p>
+        <label className="field">
+          Type REPLACE to confirm
+          <input type="text" aria-label="Type REPLACE to confirm" value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus autoComplete="off" spellCheck={false} />
+        </label>
+        {error && <p className="error-text small">{error}</p>}
+        <div className="row">
+          <button onClick={onClose} disabled={busy}>Cancel</button>
+          <button className="danger-button" onClick={confirm} disabled={typed !== 'REPLACE' || busy}>{busy ? 'Importing…' : 'Replace everything'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DataTab({ view, onDeleted }: DataTabProps) {
   const [usage, setUsage] = useState<StorageUsage | null>(null);
   const [cleaning, setCleaning] = useState(false);
   const [confirming, setConfirming] = useState<DeleteTarget | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const refresh = () => api.storage().then(setUsage).catch((e: Error) => setError(e.message));
   useEffect(() => { void refresh(); }, []);
@@ -172,6 +216,18 @@ export function DataTab({ view, onDeleted }: DataTabProps) {
         </div>
       </div>
 
+      <h2>Import</h2>
+      <div className="card">
+        <div className="muted small">
+          Replace everything in this OpenChat with a backup made by Export. Your API keys aren't in backups, so this OpenChat keeps its own.
+        </div>
+        <div className="row" style={{ justifyContent: 'flex-start' }}>
+          <input ref={fileInput} type="file" accept=".zip,application/zip" hidden
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setImporting(f); }} />
+          <button onClick={() => fileInput.current?.click()}>Import a backup…</button>
+        </div>
+      </div>
+
       <h2>Delete</h2>
       {note && <p className="small" role="status">{note}</p>}
       <div className="card">
@@ -191,6 +247,7 @@ export function DataTab({ view, onDeleted }: DataTabProps) {
         </div>
       </div>
 
+      {importing && <ConfirmImport file={importing} onClose={() => setImporting(null)} />}
       {confirming && (
         <ConfirmDelete target={confirming} view={view} onClose={() => setConfirming(null)} onDone={(ids) => deleted(confirming, ids)} />
       )}

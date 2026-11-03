@@ -101,6 +101,13 @@ export const api = {
   storage: () => json<StorageUsage>('GET', '/api/data/storage'),
   cleanUp: () => json<StorageUsage>('POST', '/api/data/cleanup'),
   deleteData: (target: DeleteTarget, confirm: string) => json<{ ok: true; chatIds: string[] }>('POST', '/api/data/delete', { target, confirm }),
+  /** Replaces everything with the backup in an export zip; the file is sent as the request body. */
+  importData: async (file: File, confirm: string): Promise<{ ok: true }> => {
+    const res = await fetch(`/api/data/import?confirm=${encodeURIComponent(confirm)}`, { method: 'POST', headers: { 'Content-Type': 'application/zip' }, body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError((data as { error?: string }).error ?? `Import failed (${res.status})`, res.status, data as Record<string, unknown>);
+    return data as { ok: true };
+  },
 
   createDiscussion: (d: NewDiscussion) => json<DiscussionDetail>('POST', '/api/discussions', d),
   getDiscussion: (id: string) => json<DiscussionDetail>('GET', `/api/discussions/${id}`),
