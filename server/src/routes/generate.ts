@@ -1,5 +1,6 @@
 import { Hono, type Context } from 'hono';
 import type { Deps } from '../app';
+import { workSets } from '../activity';
 import { HttpError, readJson } from '../http';
 import { pendingChoice, requireChat, setActiveLeaf, touchChat, type ChatRow } from '../chats';
 import { getMessage, insertMessage } from '../messages';
@@ -71,7 +72,7 @@ export function generationRoutes(deps: Deps): Hono {
   const { db } = deps;
   const r = new Hono();
   // Chats with a reply currently streaming; a second generation would fork the tree mid-reply.
-  const inFlight = new Set<string>();
+  const inFlight = workSets(db).replies;
 
   /**
    * Reserves the chat for one generation. A running generation wins over a pending choice (it sets that choice).

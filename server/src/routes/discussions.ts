@@ -1,5 +1,6 @@
 import { Hono, type Context } from 'hono';
 import type { Deps } from '../app';
+import { workSets } from '../activity';
 import { HttpError, readJson } from '../http';
 import { getChatRow, setActiveLeaf, touchChat } from '../chats';
 import { insertMessage } from '../messages';
@@ -29,7 +30,7 @@ export function discussionRoutes(deps: Deps): Hono {
   const { db } = deps;
   const r = new Hono();
   // Discussions with a turn streaming: a second turn or a host message would land in the middle of it.
-  const inFlight = new Set<string>();
+  const inFlight = workSets(db).turns;
 
   r.post('/', async (c) => c.json(createDiscussion(db, await readJson<NewDiscussion>(c)), 201));
 

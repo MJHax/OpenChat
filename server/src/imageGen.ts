@@ -33,6 +33,11 @@ type Mode = ImageGeneration['mode'];
 // Generations still running, so tests (and shutdown) can wait for them.
 const running = new Set<Promise<void>>();
 
+/** Generations started and not yet finished. */
+export function imageGenerationsRunning(): number {
+  return running.size;
+}
+
 /** Resolves once every generation started so far has finished, including its title. */
 export async function whenIdle(): Promise<void> {
   while (running.size) await Promise.all([...running]);
