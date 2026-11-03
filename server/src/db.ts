@@ -252,6 +252,12 @@ CREATE TABLE IF NOT EXISTS discussion_participants (
 CREATE INDEX IF NOT EXISTS discussion_participants_chat ON discussion_participants(chat_id, position);
 `;
 
+/**
+ * The schema this code writes, kept in PRAGMA user_version. Bump it whenever SCHEMA or migrate changes: importing a
+ * backup refuses one stamped with a higher number, since this code wouldn't know its tables.
+ */
+export const SCHEMA_VERSION = 1;
+
 export function openDb(file: string): DB {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
   const db = new Database(file);
@@ -304,6 +310,7 @@ function migrate(db: DB): void {
   db.exec('CREATE INDEX IF NOT EXISTS attachments_hash ON attachments(hash)');
   backfillHashes(db);
   backfillUsage(db);
+  db.pragma(`user_version = ${SCHEMA_VERSION}`);
 }
 
 /**

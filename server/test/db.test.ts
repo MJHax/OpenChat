@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { openDb, now } from '../src/db';
+import { openDb, now, SCHEMA_VERSION } from '../src/db';
 import { hashBytes, insertPending } from '../src/attachments';
 import Database from 'better-sqlite3';
 import { mkdtempSync } from 'node:fs';
@@ -289,5 +289,13 @@ describe('discussion storage', () => {
     deleteChat(db, chat.id);
     expect(db.prepare('SELECT count(*) AS n FROM discussions').get()).toEqual({ n: 0 });
     expect(db.prepare('SELECT count(*) AS n FROM discussion_participants').get()).toEqual({ n: 0 });
+  });
+});
+
+describe('schema version', () => {
+  it('stamps the schema version', () => {
+    const db = openDb(':memory:');
+    expect(SCHEMA_VERSION).toBeGreaterThan(0);
+    expect(db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION);
   });
 });
