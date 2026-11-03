@@ -164,8 +164,8 @@ export function DataTab({ view, onDeleted }: DataTabProps) {
       <h2>Export</h2>
       <div className="card">
         <div className="muted small">
-          One .zip with each chat, image and video thread as a Markdown file, a JSON file with all chats, messages, memories, saved prompts,
-          personalization and settings (but not your API key), and every attachment, image and video.
+          One .zip with each chat, image and video thread as a Markdown file, a JSON file with your data, every attachment, image and video,
+          and a full backup that Import can restore. Your API keys are never included.
         </div>
         <div className="row" style={{ justifyContent: 'flex-start' }}>
           <a className="button-link" href="/api/data/export" download>Export all data</a>

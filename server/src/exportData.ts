@@ -6,6 +6,7 @@ import { getChatMessages } from './messages';
 import { activePath } from './tree';
 import { clipPath } from './videoJobs';
 import type { ZipEntry } from './zip';
+import { backupEntries, SECRET_SETTINGS } from './backup';
 import { getDiscussionDetail } from './discussion/store';
 import type { DiscussionDetail, Message, ThreadKind } from '../../shared/types';
 
@@ -81,7 +82,7 @@ export async function* exportEntries(deps: Deps): AsyncGenerator<ZipEntry> {
     prompts: db.prepare('SELECT * FROM saved_prompts ORDER BY created_at, id').all(),
     localServers: db.prepare('SELECT * FROM local_servers ORDER BY created_at').all(),
     // Personalization (about_me, custom_instructions) and every other setting, but never the API keys.
-    settings: Object.fromEntries((db.prepare("SELECT key, value FROM settings WHERE key NOT IN ('api_key', 'tavily_api_key')").all() as { key: string; value: string }[]).map((r) => [r.key, r.value])),
+    settings: Object.fromEntries((db.prepare(`SELECT key, value FROM settings WHERE key NOT IN (${SECRET_SETTINGS.map(() => '?').join(', ')})`).all(...SECRET_SETTINGS) as { key: string; value: string }[]).map((r) => [r.key, r.value])),
   };
   yield { name: `${ROOT}/data.json`, data: () => [Buffer.from(JSON.stringify(data, null, 2))] };
 
@@ -104,4 +105,6 @@ export async function* exportEntries(deps: Deps): AsyncGenerator<ZipEntry> {
     if (!existsSync(file)) continue;
     yield { name: `${ROOT}/clips/${id}.mp4`, size: statSync(file).size, data: () => createReadStream(file) };
   }
+
+  yield* backupEntries(deps);
 }
