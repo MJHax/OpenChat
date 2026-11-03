@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import * as fs from 'node:fs';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -9,6 +10,13 @@ import { insertMessage } from '../src/messages';
 import { getSetting, setSetting } from '../src/settings';
 import { SCHEMA_VERSION } from '../src/db';
 import { restoreBackup } from '../src/restore';
+import { workSets } from '../src/activity';
+
+// Wrapped so a test can make one rename or removal fail; everything else is the real thing.
+vi.mock('node:fs', async (importOriginal) => {
+  const real = await importOriginal<typeof import('node:fs')>();
+  return { ...real, renameSync: vi.fn(real.renameSync), rmSync: vi.fn(real.rmSync) };
+});
 import { zipStream } from '../src/zip';
 import { HttpError } from '../src/http';
 import type { ChatSummary, ThreadKind } from '../../shared/types';
@@ -189,5 +197,71 @@ describe('restoreBackup', () => {
       `INSERT INTO video_jobs (job_id, thread_id, message_id, model_id, settings, polling_url, started_at, next_poll_at) VALUES ('job-9', 'x', 'y', 'v/m', '{}', 'u', 1, 1)`,
     ).run();
     await expectRefused(dst, zip, /clip is still rendering/);
+  });
+
+  it('a clip folder swap that fails leaves everything as it was', async () => {
+    const zip = await exportOf(await source());
+    const dst = await target();
+    const real = (await vi.importActual<typeof import('node:fs')>('node:fs')).renameSync;
+    vi.mocked(fs.renameSync).mockImplementation((from, to) => {
+      if (String(from).endsWith('.restoring')) throw Object.assign(new Error('EBUSY: resource busy'), { code: 'EBUSY' });
+      return real(from, to);
+    });
+    try {
+      const before = snapshot(dst);
+      await expect(restoreBackup(dst.deps, zip)).rejects.toThrow(/Nothing was changed/);
+      expect(snapshot(dst)).toEqual(before);
+      expect(readFileSync(join(dst.deps.mediaDir, '11111111-1111-1111-1111-111111111111.mp4')).toString()).toBe('target clip');
+    } finally {
+      vi.mocked(fs.renameSync).mockImplementation(real);
+    }
+  });
+
+  it('removing the old clips afterwards can fail without failing the import', async () => {
+    const src = await source();
+    const zip = await exportOf(src);
+    const dst = await target();
+    const real = (await vi.importActual<typeof import('node:fs')>('node:fs')).rmSync;
+    vi.mocked(fs.rmSync).mockImplementation((path, opts) => {
+      if (String(path).endsWith('.old') && fs.existsSync(path)) throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+      return real(path, opts);
+    });
+    try {
+      await restoreBackup(dst.deps, zip);
+      expect(chatIds(dst)).toEqual(chatIds(src));
+      expect(readdirSync(dst.deps.mediaDir)).toEqual([`${src.video.reply.id}.mp4`]);
+    } finally {
+      vi.mocked(fs.rmSync).mockImplementation(real);
+    }
+  });
+
+  it('refuses work that starts while the backup is being read', async () => {
+    const zip = await exportOf(await source());
+    const dst = await target();
+    const before = snapshot(dst);
+    const running = restoreBackup(dst.deps, zip);
+    workSets(dst.db).replies.add(dst.chat.id);
+    try {
+      await expect(running).rejects.toThrow(/reply is still being written/);
+      expect(snapshot(dst)).toEqual(before);
+    } finally {
+      workSets(dst.db).replies.delete(dst.chat.id);
+    }
+  });
+
+  it('refuses a second import while one is running', async () => {
+    const zip = await exportOf(await source());
+    const dst = await target();
+    const first = restoreBackup(dst.deps, zip);
+    await expect(restoreBackup(dst.deps, zip)).rejects.toThrow(/An import is already running/);
+    await first;
+  });
+
+  it('keeps one sqlite_sequence row per table', async () => {
+    const zip = await exportOf(await source());
+    const dst = await target();
+    await restoreBackup(dst.deps, zip);
+    await restoreBackup(dst.deps, zip);
+    expect(dst.db.prepare('SELECT name FROM sqlite_sequence GROUP BY name HAVING count(*) > 1').all()).toEqual([]);
   });
 });

@@ -15,7 +15,11 @@ const NOT_A_BACKUP = "This isn't an OpenChat backup. Use a .zip made by Export i
 const NEWER = 'This backup was made by a newer version of OpenChat. Update this OpenChat first.';
 const DAMAGED = 'The backup file is damaged or incomplete. Export it again and retry.';
 const INTERRUPTED_CLIP = 'Interrupted by a restore. The clip may still finish on the OpenChat this backup came from.';
+const SWAP_FAILED = "Couldn't move the backup's clips into place. Nothing was changed. Close anything using OpenChat's video files and try again.";
 const CLIP_NAME = /^[0-9a-f-]{36}\.mp4$/;
+
+// One import at a time: a second would share the staging folder and replace data under the first.
+let restoring = false;
 
 /** The manifest, checked; anything that isn't one of ours is refused here. */
 async function readManifest(zipFile: string, entry: ZipFileEntry | undefined, dir: string): Promise<BackupManifest> {
@@ -94,10 +98,15 @@ function copyRows(db: DB, file: string): void {
       db.pragma('defer_foreign_keys = ON');
       for (const t of tables) db.exec(`DELETE FROM main."${t}"`);
       for (const t of tables) {
-        if (!inBackup.has(t)) continue;
+        // Inserting into AUTOINCREMENT tables writes sqlite_sequence too, so it is copied last, on its own.
+        if (!inBackup.has(t) || t === 'sqlite_sequence') continue;
         const shared = columns(db, 'backup', t);
         const cols = columns(db, 'main', t).filter((c) => shared.includes(c)).map((c) => `"${c}"`).join(', ');
         db.exec(`INSERT INTO main."${t}" (${cols}) SELECT ${cols} FROM backup."${t}"`);
+      }
+      if (tables.includes('sqlite_sequence')) {
+        db.exec('DELETE FROM main.sqlite_sequence');
+        if (inBackup.has('sqlite_sequence')) db.exec('INSERT INTO main.sqlite_sequence (name, seq) SELECT name, seq FROM backup.sqlite_sequence');
       }
       const put = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
       for (const k of keys) put.run(k.key, k.value);
@@ -113,10 +122,12 @@ function copyRows(db: DB, file: string): void {
  * failure before the copy commits leaves the database and the clip folder exactly as they were.
  */
 export async function restoreBackup(deps: Deps, zipFile: string): Promise<void> {
+  if (restoring) throw new HttpError(409, 'An import is already running. Wait for it to finish.');
   const busy = busyReason(deps);
   if (busy) throw new HttpError(409, busy);
   const work = mkdtempSync(join(tmpdir(), 'openchat-restore-'));
   const staging = `${deps.mediaDir}.restoring`;
+  restoring = true;
   try {
     let index: Map<string, ZipFileEntry>;
     try {
@@ -145,21 +156,41 @@ export async function restoreBackup(deps: Deps, zipFile: string): Promise<void> 
       throw err;
     }
 
+    // Checked again: work may have started while the backup was read. Nothing below awaits, so none can start now.
+    const busyNow = busyReason(deps);
+    if (busyNow) throw new HttpError(409, busyNow);
+
+    // The folders are swapped before the copy, while both steps can still be undone.
+    const old = `${deps.mediaDir}.old`;
+    rmSync(old, { recursive: true, force: true });
+    const hadClips = existsSync(deps.mediaDir);
+    try {
+      if (hadClips) renameSync(deps.mediaDir, old);
+      renameSync(staging, deps.mediaDir);
+    } catch (err) {
+      if (hadClips && !existsSync(deps.mediaDir)) renameSync(old, deps.mediaDir);
+      console.error(err);
+      throw new HttpError(500, SWAP_FAILED);
+    }
     try {
       copyRows(deps.db, copyFile);
     } catch (err) {
+      renameSync(deps.mediaDir, staging);
+      if (hadClips) renameSync(old, deps.mediaDir);
       if (err instanceof HttpError) throw err;
       console.error(err);
       throw new HttpError(400, DAMAGED);
     }
 
-    const old = `${deps.mediaDir}.old`;
-    rmSync(old, { recursive: true, force: true });
-    if (existsSync(deps.mediaDir)) renameSync(deps.mediaDir, old);
-    renameSync(staging, deps.mediaDir);
-    rmSync(old, { recursive: true, force: true });
-    purgeDeleted(deps.db);
+    // The import has happened; tidying up after it must not report a failure.
+    try {
+      rmSync(old, { recursive: true, force: true });
+      purgeDeleted(deps.db);
+    } catch (err) {
+      console.error('Restore: tidying up afterwards failed:', err);
+    }
   } finally {
+    restoring = false;
     rmSync(work, { recursive: true, force: true });
     rmSync(staging, { recursive: true, force: true });
   }

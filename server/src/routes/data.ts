@@ -37,6 +37,8 @@ export function dataRoutes(deps: Deps): Hono {
   // The body is the export zip itself, streamed to disk: a backup can be far larger than memory should hold.
   r.post('/import', async (c) => {
     if (c.req.query('confirm') !== 'REPLACE') throw new HttpError(400, 'Type REPLACE to confirm.');
+    // A zip content type makes a cross-site fetch preflight, so another page can't send one (as readJson does for JSON).
+    if (c.req.header('content-type') !== 'application/zip') throw new HttpError(415, 'Send the backup as application/zip.');
     const body = c.req.raw.body;
     if (!body) throw new HttpError(400, 'Choose a backup file to import.');
     const dir = mkdtempSync(join(tmpdir(), 'openchat-import-'));

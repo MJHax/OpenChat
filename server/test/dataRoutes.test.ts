@@ -170,4 +170,12 @@ describe('import', () => {
     expect(res.status).toBe(403);
     expect(kinds(dst.db)).toEqual([]);
   });
+
+  it('an import not sent as a zip is refused', async () => {
+    const src = await seed();
+    const dst = makeApp();
+    const res = await post(dst, await zipOf(src), '?confirm=REPLACE', { 'Content-Type': 'text/plain' });
+    expect(res.status).toBe(415);
+    expect(kinds(dst.db)).toEqual([]);
+  });
 });
