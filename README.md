@@ -1,3 +1,5 @@
+![OpenChat: a rainbow quill logo beside the name](docs/brand/banner.png)
+
 # OpenChat
 
 **A self-hosted chat app for [OpenRouter](https://openrouter.ai) and your own local models.**

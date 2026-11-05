@@ -23,6 +23,10 @@
   color-scheme: dark;
 }
 
+/* The logo's own colors (docs/brand), the same whatever the accent. */
+:root { --logo-0: #7c3aed; --logo-1: #2563eb; --logo-2: #16a34a; --logo-3: #d97706; --logo-4: #ea580c; }
+:root[data-theme='dark'] { --logo-0: #8b5cf6; --logo-1: #3b82f6; --logo-2: #22c55e; --logo-3: #f59e0b; --logo-4: #f97316; }
+
 /* Accents: --accent is the solid color (text, borders, rings); --accent-fill paints filled things. Text on fills is near-black: white fails contrast on every vivid duotone and on flat orange/green. */
 :root, :root[data-accent='blue'] { --accent: #3b82f6; --accent-fill: #3b82f6; --on-accent: #0a0a0a; --glow-a: #3b82f6; --glow-b: #22d3ee; }
 :root[data-accent='orange'] { --accent: #f97316; --accent-fill: #f97316; --on-accent: #0a0a0a; --glow-a: #f97316; --glow-b: #f43f5e; }
