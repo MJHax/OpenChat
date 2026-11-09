@@ -24,6 +24,8 @@ export interface ChatRequest {
   plugins?: Plugin[];
   webSearch?: WebSearchMode;
   tools?: FunctionTool[];
+  /** 'required' makes the model call a tool; 'auto' (the default) lets it answer in text. Ollama has no such setting and ignores it. */
+  toolChoice?: 'auto' | 'required';
   effort?: Effort;
   /** Local thinking models only: false turns thinking off; undefined leaves the model's default. */
   think?: boolean;

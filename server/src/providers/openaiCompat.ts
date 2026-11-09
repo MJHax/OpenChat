@@ -65,7 +65,7 @@ export function createOpenAIChat(
           stream: true,
           stream_options: { include_usage: true },
           ...(o.maxTokens !== undefined ? { max_tokens: o.maxTokens } : {}),
-          ...(o.tools?.length ? { tools: o.tools.map((f) => ({ type: 'function', function: f })), tool_choice: 'auto' } : {}),
+          ...(o.tools?.length ? { tools: o.tools.map((f) => ({ type: 'function', function: f })), tool_choice: o.toolChoice ?? 'auto' } : {}),
         }),
       },
       fetchImpl,

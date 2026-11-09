@@ -108,7 +108,7 @@ export type StreamEvent =
   | { type: 'tool_call'; name: string; arguments: string };
 
 /** Request fields for web search and function tools. The search tool's 3-call cap bounds the cost of one reply. */
-function toolFields(mode: WebSearchMode | undefined, plugins: Plugin[] | undefined, functions: FunctionTool[] | undefined): Record<string, unknown> {
+function toolFields(mode: WebSearchMode | undefined, plugins: Plugin[] | undefined, functions: FunctionTool[] | undefined, toolChoice: 'auto' | 'required' = 'auto'): Record<string, unknown> {
   const all: object[] = [...(plugins ?? [])];
   const tools: object[] = [];
   const fields: Record<string, unknown> = {};
@@ -120,7 +120,7 @@ function toolFields(mode: WebSearchMode | undefined, plugins: Plugin[] | undefin
   }
   if (functions?.length) {
     tools.push(...functions.map((f) => ({ type: 'function', function: f })));
-    fields.tool_choice = 'auto';
+    fields.tool_choice = toolChoice;
   }
   if (tools.length) fields.tools = tools;
   if (all.length) fields.plugins = all;
@@ -133,7 +133,7 @@ export interface OpenRouterClient {
   checkKey(apiKey: string): Promise<void>;
   complete(o: { apiKey: string; model: string; messages: ChatMessage[]; maxTokens?: number; onUsage?: (usage: Usage) => void }): Promise<string>;
   streamChat(o: {
-    apiKey: string; model: string; messages: ChatMessage[]; plugins?: Plugin[]; webSearch?: WebSearchMode; tools?: FunctionTool[]; signal?: AbortSignal;
+    apiKey: string; model: string; messages: ChatMessage[]; plugins?: Plugin[]; webSearch?: WebSearchMode; tools?: FunctionTool[]; toolChoice?: 'auto' | 'required'; signal?: AbortSignal;
     /** Only for models that support reasoning; left out, the model uses its own default. */
     effort?: Effort;
   }): AsyncGenerator<StreamEvent>;
@@ -313,13 +313,13 @@ export function createOpenRouterClient(fetchImpl: typeof fetch = fetch, base = O
       return { data, mime, usage: json.usage ? parseUsage(json.usage) : null };
     },
 
-    async *streamChat({ apiKey, model, messages, plugins, webSearch, tools, signal, effort }) {
+    async *streamChat({ apiKey, model, messages, plugins, webSearch, tools, toolChoice, signal, effort }) {
       const res = await request('/chat/completions', {
         method: 'POST',
         apiKey,
         signal,
         body: JSON.stringify({
-          model, messages, stream: true, usage: { include: true }, ...toolFields(webSearch, plugins, tools), ...(effort ? { reasoning: { effort } } : {}),
+          model, messages, stream: true, usage: { include: true }, ...toolFields(webSearch, plugins, tools, toolChoice), ...(effort ? { reasoning: { effort } } : {}),
         }),
       });
       if (!res.body) throw new OpenRouterError('Empty response from OpenRouter.', 502);

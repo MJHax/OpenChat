@@ -270,6 +270,11 @@ describe('streamChat function tools', () => {
     expect(await bodyOf({})).not.toHaveProperty('tool_choice');
   });
 
+  it('sends tool_choice required when asked', async () => {
+    expect((await bodyOf({ tools: [passTo], toolChoice: 'required' })).tool_choice).toBe('required');
+    expect((await bodyOf({ tools: [passTo] })).tool_choice).toBe('auto');
+  });
+
   it('assembles streamed tool call arguments', async () => {
     const { fn } = fakeFetch(() => sse(
       `data: ${JSON.stringify({ choices: [{ delta: { content: 'Over to you.' } }] })}`,

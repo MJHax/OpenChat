@@ -265,6 +265,16 @@ describe('OpenAI-compatible client', () => {
     expect(chatBody()).toMatchObject({ model: 'gpt-local', stream: true, stream_options: { include_usage: true } });
   });
 
+  it('passes toolChoice to OpenAI-compatible servers', async () => {
+    const client = await startOpenAI();
+    const tools = [{ name: 'pass_to', description: 'd', parameters: { type: 'object' } }];
+    await collect(client.streamChat({ model: 'gpt-local', messages: hello, tools, toolChoice: 'required' }));
+    expect(chatBody().tool_choice).toBe('required');
+    server!.requests.length = 0;
+    await collect(client.streamChat({ model: 'gpt-local', messages: hello, tools }));
+    expect(chatBody().tool_choice).toBe('auto');
+  });
+
   it('reports errors from the server', async () => {
     const client = await startOpenAI();
     server!.failNext(401, 'bad key');
