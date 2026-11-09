@@ -70,7 +70,10 @@ export function DiscussionView({ initial, justCreated, models, onChanged }: Disc
   const append = (message: Message) =>
     setDetail((d) => (d.messages.some((m) => m.id === message.id) ? d : { ...d, messages: [...d.messages, message] }));
 
-  /** Puts a reply that is still being revealed into the transcript now. True if there was one. */
+  /**
+   * Puts a reply that is still being revealed into the transcript now and releases the loop's reveal hold (the live line
+   * that would have reported it is gone). True if there was one.
+   */
   function settleReveal(): boolean {
     if (beat.current) clearTimeout(beat.current);
     beat.current = null;
@@ -79,6 +82,7 @@ export function DiscussionView({ initial, justCreated, models, onChanged }: Disc
     revealing.current = null;
     append(message);
     setLive(null);
+    dispatch({ type: 'revealDone' });
     return true;
   }
 
@@ -87,9 +91,7 @@ export function DiscussionView({ initial, justCreated, models, onChanged }: Disc
     if (beat.current || !revealing.current) return;
     beat.current = setTimeout(() => {
       beat.current = null;
-      if (!settleReveal()) return;
-      dispatch({ type: 'revealDone' });
-      refresh();
+      if (settleReveal()) refresh();
     }, REVEAL_BEAT_MS);
   }
 

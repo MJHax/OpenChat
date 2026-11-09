@@ -176,6 +176,13 @@ describe('discussion loop', () => {
       expect(nextAction(loopReducer(s, { type: 'revealDone' }))).toBe('sendHost');
     });
 
+    it('keeps the reveal hold through a failure, so the view must release it with revealDone', () => {
+      const failed = run(started(), done(true), { type: 'turnFailed', message: 'Stop failed', spend: false });
+      expect(failed).toMatchObject({ mode: 'paused', revealing: true });
+      expect(nextAction(loopReducer(failed, { type: 'resume' }))).toBe('idle');
+      expect(nextAction(run(failed, { type: 'revealDone' }, { type: 'resume' }))).toBe('turn');
+    });
+
     it('releases a waiting hold when wait-for-me is switched off', () => {
       const s = run(started(), { type: 'setWaitForMe', on: true }, done(false), { type: 'setWaitForMe', on: false });
       expect(s).toMatchObject({ waitForMe: false, awaitingNext: false });
