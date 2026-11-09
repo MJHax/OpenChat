@@ -233,7 +233,7 @@ export function DiscussionView({ initial, justCreated, models, onChanged }: Disc
   }
 
   const running = loop.mode === 'running';
-  const ended = loop.mode === 'ended' && !live; // not yet while the last reply is still being revealed
+  const ended = loop.mode === 'ended';
   // Typing is the only thing keeping a running debate from its next turn.
   const typingHold = running && !loop.streaming && drafting && nextAction(loop) === 'turn';
   const status = typingHold ? 'Waiting for you to send your message.'
