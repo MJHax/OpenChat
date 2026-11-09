@@ -115,9 +115,8 @@ export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () 
           else if (event.type === 'usage') followUsage = event.usage;
           else if (event.type === 'tool_call') followCall ??= event;
         }
-      } catch (err) {
-        if (abort.signal.aborted) throw err;
-        return null;
+      } catch {
+        return null; // a Stop here ends the discussion; the finished reply stays complete (see `stoppedInFollowUp`)
       } finally {
         if (followUsage) usage = addUsage(usage, followUsage);
       }
@@ -147,14 +146,17 @@ export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () 
       }
       const cleaned = cleanReply(text, speaker.name, others);
       let decision = speaker.isModerator && call ? readToolCall(participants, call) : null;
+      let followedUp = false;
       if (speaker.isModerator && !decision && !abort.signal.aborted) {
+        followedUp = true;
         await send('status', { message: 'Deciding who speaks next…' } satisfies StreamStatus);
         decision = await askForDecision(provider, cleaned);
       }
+      const stoppedInFollowUp = followedUp && abort.signal.aborted;
       const handoffTo = decision && 'handoffTo' in decision ? decision.handoffTo : null;
       const message = save('complete', cleaned, handoffTo);
       log('complete', message.id);
-      if (speaker.isModerator) recordModeratorTurn(db, chatId, message.id, decision !== null);
+      if (speaker.isModerator && !stoppedInFollowUp) recordModeratorTurn(db, chatId, message.id, decision !== null);
       settle(decision && 'end' in decision ? decision.end : null);
       await send('done', { message, state: discussionState(db, chatId) } satisfies DiscussionTurnDone);
     } catch (err) {

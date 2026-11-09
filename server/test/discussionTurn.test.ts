@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { makeApp, readEvents } from './appHelpers';
 import { DECISION_PROMPT } from '../src/discussion/engine';
 import { newDiscussion, seedModel, withModerator } from './discussionHelpers';
@@ -381,6 +381,22 @@ describe('discussion turns', () => {
       const { events } = await s.turn();
       expect(events.some((e) => e.event === 'error')).toBe(false);
       expect(ev(events, 'done').message).toMatchObject({ content: 'Hmm.', status: 'complete', handoffTo: null });
+    });
+
+    it('keeps a finished moderator reply as complete when Stop arrives during the follow-up', async () => {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => (release = r));
+      const s = await setup([{ text: ['Wrapping up.'] }, { hold, fail: new Error('aborted') }], withModerator());
+      const abort = new AbortController();
+      const reading = Promise.resolve(s.app.request(`/api/discussions/${s.id}/turn`, { method: 'POST', signal: abort.signal })).then(readEvents).catch(() => {});
+      await vi.waitFor(() => expect(s.calls).toHaveLength(2));
+      abort.abort();
+      release();
+      await reading;
+      await new Promise((r) => setTimeout(r, 20));
+      const detail = await s.detail();
+      expect(detail.messages).toHaveLength(1);
+      expect(detail.messages[0]).toMatchObject({ content: 'Wrapping up.', status: 'complete', handoffTo: null });
     });
 
     it('makes no follow-up for a stopped turn', async () => {
