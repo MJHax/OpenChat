@@ -85,7 +85,7 @@ function LiveLine({ live, speaker, naturalReveal, onRevealed, nameOf }: {
 
 export function DiscussionTranscript({ detail, live, queued, naturalReveal, onRevealed, nameOf }: DiscussionTranscriptProps) {
   const speaker = live && detail.participants.find((p) => p.id === live.participantId);
-  const ended = endText(detail.state);
+  const ended = live ? null : endText(detail.state); // the end line waits until the last reply has fully appeared
   return (
     <>
       {detail.messages.map((m) => (
