@@ -54,7 +54,7 @@ export function DiscussionView({ initial, justCreated, models, onChanged }: Disc
         onDone: (e) => {
           append(e.message);
           setState(e.state);
-          outcome = { type: 'turnDone', state: e.state };
+          outcome = { type: 'turnDone', state: e.state, visible: !!e.message.content.trim(), reveal: false };
         },
         onError: (e) => {
           if ('state' in e) {

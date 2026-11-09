@@ -8,7 +8,7 @@ const run = (s: LoopState, ...events: LoopEvent[]) => events.reduce(loopReducer,
 
 describe('discussion loop', () => {
   it('runs a new discussion and opens an existing active one paused', () => {
-    expect(initialLoop(active, true)).toEqual({ mode: 'running', streaming: false, queued: [], error: null, spendBlocked: false, overflow: null, allowOverflow: false });
+    expect(initialLoop(active, true)).toEqual({ mode: 'running', streaming: false, queued: [], error: null, spendBlocked: false, overflow: null, allowOverflow: false, revealing: false, waitForMe: false, awaitingNext: false });
     expect(initialLoop(active, false).mode).toBe('paused');
     expect(initialLoop(ended, true).mode).toBe('ended');
     expect(nextAction(initialLoop(active, true))).toBe('turn');
@@ -22,13 +22,13 @@ describe('discussion loop', () => {
   it('pauses after the current turn when paused mid-stream', () => {
     const s = run(initialLoop(active, true), { type: 'turnStarted' }, { type: 'pause' });
     expect(s).toMatchObject({ mode: 'paused', streaming: true });
-    const after = loopReducer(s, { type: 'turnDone', state: { ...active, turnsTaken: 1 } });
+    const after = loopReducer(s, { type: 'turnDone', state: { ...active, turnsTaken: 1 }, visible: true, reveal: false });
     expect(after.streaming).toBe(false);
     expect(nextAction(after)).toBe('idle');
   });
 
   it('keeps going after a turn while running', () => {
-    const s = run(initialLoop(active, true), { type: 'turnStarted' }, { type: 'turnDone', state: { ...active, turnsTaken: 1 } });
+    const s = run(initialLoop(active, true), { type: 'turnStarted' }, { type: 'turnDone', state: { ...active, turnsTaken: 1 }, visible: true, reveal: false });
     expect(nextAction(s)).toBe('turn');
   });
 
@@ -47,7 +47,7 @@ describe('discussion loop', () => {
   it('sends a queued host message before the next turn, and only after the stream ends', () => {
     let s = run(initialLoop(active, true), { type: 'turnStarted' }, { type: 'hostTyped', text: 'Wrap it up' });
     expect(nextAction(s)).toBe('idle');
-    s = loopReducer(s, { type: 'turnDone', state: { ...active, turnsTaken: 1 } });
+    s = loopReducer(s, { type: 'turnDone', state: { ...active, turnsTaken: 1 }, visible: true, reveal: false });
     expect(nextAction(s)).toBe('sendHost');
     expect(s.queued).toEqual(['Wrap it up']);
     s = loopReducer(s, { type: 'hostSent' });
@@ -69,7 +69,7 @@ describe('discussion loop', () => {
   });
 
   it('turnDone with an ended state ends the loop', () => {
-    const s = run(initialLoop(active, true), { type: 'turnStarted' }, { type: 'turnDone', state: ended });
+    const s = run(initialLoop(active, true), { type: 'turnStarted' }, { type: 'turnDone', state: ended, visible: true, reveal: false });
     expect(s.mode).toBe('ended');
     expect(nextAction(s)).toBe('idle');
   });
@@ -107,5 +107,67 @@ describe('discussion loop', () => {
   it('ends after a stop while the overflow dialog is open', () => {
     const s = run(initialLoop(active, true), { type: 'turnOverflow', overflow: [], speaker: 'A' }, { type: 'stopped' });
     expect(s).toMatchObject({ mode: 'ended', overflow: null });
+  });
+
+  describe('holds', () => {
+    const done = (reveal: boolean, visible = true): LoopEvent => ({ type: 'turnDone', state: { ...active, turnsTaken: 1 }, visible, reveal });
+    const started = () => run(initialLoop(active, true), { type: 'turnStarted' });
+
+    it('holds the next turn until the reveal is done', () => {
+      const s = loopReducer(started(), done(true));
+      expect(s.revealing).toBe(true);
+      expect(nextAction(s)).toBe('idle');
+      const after = loopReducer(s, { type: 'revealDone' });
+      expect(after.revealing).toBe(false);
+      expect(nextAction(after)).toBe('turn');
+      expect(loopReducer(started(), done(true, false)).revealing).toBe(false);
+    });
+
+    it('waits for Next after a visible reply in wait-for-me mode', () => {
+      const s = loopReducer(run(started(), { type: 'setWaitForMe', on: true }), done(false));
+      expect(s.awaitingNext).toBe(true);
+      expect(nextAction(s)).toBe('idle');
+      const after = loopReducer(s, { type: 'next' });
+      expect(after.awaitingNext).toBe(false);
+      expect(nextAction(after)).toBe('turn');
+    });
+
+    it('does not resume a paused discussion on Next', () => {
+      const s = run(started(), { type: 'setWaitForMe', on: true }, { type: 'pause' }, done(false), { type: 'next' });
+      expect(s).toMatchObject({ mode: 'paused', awaitingNext: false });
+      expect(nextAction(s)).toBe('idle');
+    });
+
+    it('lets a silent moderator turn flow through in wait-for-me mode', () => {
+      const s = loopReducer(run(started(), { type: 'setWaitForMe', on: true }), done(false, false));
+      expect(s.awaitingNext).toBe(false);
+      expect(nextAction(s)).toBe('turn');
+    });
+
+    it('starts in wait-for-me mode when asked', () => {
+      expect(initialLoop(active, true, true).waitForMe).toBe(true);
+      expect(run(initialLoop(active, true), { type: 'setWaitForMe', on: true }).waitForMe).toBe(true);
+    });
+
+    it('counts a sent host message as Next', () => {
+      let s = run(started(), { type: 'setWaitForMe', on: true }, done(false), { type: 'hostTyped', text: 'Hi' });
+      expect(s.awaitingNext).toBe(true);
+      expect(nextAction(s)).toBe('sendHost');
+      s = loopReducer(s, { type: 'hostSent' });
+      expect(s.awaitingNext).toBe(false);
+      expect(nextAction(s)).toBe('turn');
+    });
+
+    it('holds while the host is drafting and continues when the box is cleared', () => {
+      const s = loopReducer(started(), done(false));
+      expect(nextAction(s, true)).toBe('idle');
+      expect(nextAction(s, false)).toBe('turn');
+      expect(nextAction(loopReducer(s, { type: 'hostTyped', text: 'Hi' }), true)).toBe('sendHost');
+    });
+
+    it('clears every hold when stopped', () => {
+      const s = run(started(), { type: 'setWaitForMe', on: true }, done(true), { type: 'stopped' });
+      expect(s).toMatchObject({ revealing: false, awaitingNext: false, mode: 'ended' });
+    });
   });
 });
