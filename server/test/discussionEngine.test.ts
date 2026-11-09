@@ -109,6 +109,14 @@ describe('cleanReply', () => {
     expect(cleanReply('The egg.\nHost: thanks', 'Egg-Defender', others)).toBe('The egg.');
   });
 
+  it('drops handoff notes a model writes itself', () => {
+    const mo = ['Egg-Defender', 'Chicken-Defender'];
+    expect(cleanReply('Thanks, Egg. Chicken, your turn.\n\n(You passed the floor to Chicken-Defender.)', 'Moderator', mo)).toBe('Thanks, Egg. Chicken, your turn.');
+    expect(cleanReply('Chicken, go ahead. (You passed the floor to Tabs!.)', 'Moderator', mo)).toBe('Chicken, go ahead.');
+    expect(cleanReply('Over to you.\n_Moderator passed the floor to Chicken-Defender._', 'Moderator', mo)).toBe('Over to you.');
+    expect(cleanReply('(You passed the floor to Egg-Defender.)', 'Moderator', mo)).toBe('');
+  });
+
   it('leaves other text alone', () => {
     expect(cleanReply('As Chicken-Defender: said, eggs.', 'Egg-Defender', others)).toBe('As Chicken-Defender: said, eggs.');
   });
@@ -155,15 +163,19 @@ describe('buildDiscussionPrompt', () => {
     ]);
   });
 
-  it("shows the moderator its own handoffs and others' silent ones", () => {
+  it("shows the moderator its own handoffs as narration, not in its own words, and others' silent ones", () => {
     const messages = [say(mod, 'Welcome.', 'egg'), say(egg, 'The egg.'), say(mod, '', 'chicken')];
-    expect(buildDiscussionPrompt(topic, moderated, messages, mod).slice(1)).toEqual([
+    const prompt = buildDiscussionPrompt(topic, moderated, messages, mod);
+    expect(prompt.slice(1)).toEqual([
       { role: 'user', content: 'The discussion is starting.' },
-      { role: 'assistant', content: 'Welcome.\n\n(You passed the floor to Egg-Defender.)' },
-      { role: 'user', content: '**Egg-Defender:** The egg.' },
-      { role: 'assistant', content: '(You passed the floor to Chicken-Defender.)' },
-      { role: 'user', content: "It's your turn, Moderator." },
+      { role: 'assistant', content: 'Welcome.' },
+      {
+        role: 'user',
+        content: "_You passed the floor to Egg-Defender._\n\n**Egg-Defender:** The egg.\n\n_You passed the floor to Chicken-Defender._\n\nIt's your turn, Moderator.",
+      },
     ]);
+    // A model copies patterns from its own past replies, so they must hold only what it said.
+    for (const m of prompt.filter((m) => m.role === 'assistant')) expect(m.content).not.toContain('passed the floor');
     expect(buildDiscussionPrompt(topic, moderated, messages, chicken).at(-1)).toEqual({
       role: 'user',
       content: "**Moderator:** Welcome.\n\n**Egg-Defender:** The egg.\n\n_Moderator passed the floor to Chicken-Defender._\n\nIt's your turn, Chicken-Defender.",

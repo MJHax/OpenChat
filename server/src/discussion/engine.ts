@@ -39,14 +39,17 @@ export function nextSpeaker(participants: DiscussionParticipant[], messages: Mes
   return others.find((p) => p.id === last.handoffTo) ?? rotate(others, messages);
 }
 
-/** Drops a leading own-name label and anything from the first line that labels someone else. */
+/** A handoff note a model wrote itself, copying how handoffs are narrated: "(You passed the floor to Ben.)" or "_Moderator passed the floor to Ben._". */
+const HANDOFF_NOTE = /\([^()\n]*passed the floor to[^()\n]*\)|_[^_\n]*passed the floor to[^_\n]*_/gi;
+
+/** Drops a leading own-name label, anything from the first line that labels someone else, and handoff notes. */
 export function cleanReply(text: string, speaker: string, others: string[]): string {
   const own = new RegExp(`^\\s*(?:\\*\\*\\s*)?${escape(speaker)}(?:\\s*\\*\\*)?\\s*:(?:\\s*\\*\\*)?\\s*`, 'i');
   const names = [...others, HOST_NAME].map(escape).join('|');
   const someoneElse = new RegExp(`\\n\\s*(?:\\*\\*\\s*)?(?:${names})(?:\\s*\\*\\*)?\\s*:`, 'i');
   const rest = text.replace(own, '');
   const cut = rest.search(someoneElse);
-  return (cut === -1 ? rest : rest.slice(0, cut)).trim();
+  return (cut === -1 ? rest : rest.slice(0, cut)).replace(HANDOFF_NOTE, '').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 export function moderatorTools(participants: DiscussionParticipant[]): FunctionTool[] {
@@ -122,10 +125,14 @@ export function buildDiscussionPrompt(
     const text = m.content.trim();
     const handoff = nameOf(m.handoffTo);
     if (m.participantId === speaker.id) {
-      flush();
-      if (out.length === 1) out.push({ role: 'user', content: 'The discussion is starting.' });
-      const note = handoff ? `(You passed the floor to ${handoff}.)` : '';
-      out.push({ role: 'assistant', content: [text, note].filter(Boolean).join('\n\n') || '(You said nothing.)' });
+      // Its own turns hold only what it said: a model copies patterns from its past replies, so a handoff note there
+      // ends up written into later replies. Handoffs are narrated in the next user message instead.
+      if (text || !handoff) {
+        flush();
+        if (out.length === 1) out.push({ role: 'user', content: 'The discussion is starting.' });
+        out.push({ role: 'assistant', content: text || '(You said nothing.)' });
+      }
+      if (handoff) pending.push(`_You passed the floor to ${handoff}._`);
     } else if (m.participantId === null) {
       pending.push(`**${HOST_NAME}:** ${text}`);
     } else {
