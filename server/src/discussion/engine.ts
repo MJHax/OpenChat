@@ -148,3 +148,27 @@ export function buildDiscussionPrompt(
   flush();
   return withCacheMarkers(speaker.modelId, out);
 }
+
+export const DECISION_PROMPT =
+  'Who should speak next? Call pass_to with their name, or end_discussion if the discussion is finished. If you cannot call a tool, reply with only their name, or END.';
+
+/** The moderator's prompt plus its own reply, then a direct question: who speaks next? Used when a turn ended with no tool call. */
+export function buildDecisionPrompt(
+  topic: string, participants: DiscussionParticipant[], messages: Message[], speaker: DiscussionParticipant, reply: string,
+): ChatMessage[] {
+  return [
+    ...buildDiscussionPrompt(topic, participants, messages, speaker),
+    { role: 'assistant', content: reply || '(You said nothing.)' },
+    { role: 'user', content: DECISION_PROMPT },
+  ];
+}
+
+/** Reads a moderator's plain-text answer to DECISION_PROMPT: a participant's name, END, or null when it is neither. */
+export function readTextDecision(
+  participants: DiscussionParticipant[], text: string,
+): { handoffTo: string } | { end: string } | null {
+  const answer = text.trim().replace(/^[*_"'`]+|[*_"'`]+$/g, '').replace(/\.$/, '').replace(/^[*_"'`]+|[*_"'`]+$/g, '').trim();
+  if (answer.toLowerCase() === 'end') return { end: 'The moderator ended the discussion.' };
+  const match = matchParticipant(participants, answer);
+  return match && !match.isModerator ? { handoffTo: match.id } : null;
+}

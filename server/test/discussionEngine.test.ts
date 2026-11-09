@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildDiscussionPrompt, cleanReply, matchParticipant, moderatorTools, nextSpeaker, readToolCall, turnsTaken,
+  buildDecisionPrompt, buildDiscussionPrompt, cleanReply, DECISION_PROMPT, readTextDecision, matchParticipant, moderatorTools, nextSpeaker, readToolCall, turnsTaken,
 } from '../src/discussion/engine';
 import type { DiscussionParticipant, Message } from '../../shared/types';
 
@@ -196,5 +196,40 @@ describe('buildDiscussionPrompt', () => {
       expect(roles.at(-1)).toBe('user');
       roles.forEach((r, i) => i > 0 && expect(r).not.toBe(roles[i - 1]));
     }
+  });
+});
+
+describe('buildDecisionPrompt', () => {
+  const topic = 'Which came first, the chicken or the egg?';
+  const messages = [say(mod, 'Welcome.', 'egg'), say(egg, 'The egg.')];
+
+  it('appends the reply and the decision question to the moderator prompt', () => {
+    const base = buildDiscussionPrompt(topic, moderated, messages, mod);
+    expect(buildDecisionPrompt(topic, moderated, messages, mod, 'Thanks, Egg.')).toEqual([
+      ...base,
+      { role: 'assistant', content: 'Thanks, Egg.' },
+      { role: 'user', content: DECISION_PROMPT },
+    ]);
+    expect(buildDecisionPrompt(topic, moderated, messages, mod, '').at(-2)).toEqual({
+      role: 'assistant', content: '(You said nothing.)',
+    });
+  });
+});
+
+describe('readTextDecision', () => {
+  it('reads a name as a handoff', () => {
+    expect(readTextDecision(moderated, 'Chicken-Defender')).toEqual({ handoffTo: 'chicken' });
+    expect(readTextDecision(moderated, '**chicken-defender**.')).toEqual({ handoffTo: 'chicken' });
+  });
+
+  it('reads END as an end', () => {
+    expect(readTextDecision(moderated, 'END')).toEqual({ end: 'The moderator ended the discussion.' });
+    expect(readTextDecision(moderated, 'end')).toEqual({ end: 'The moderator ended the discussion.' });
+  });
+
+  it('rejects anything else', () => {
+    expect(readTextDecision(moderated, 'Moderator')).toBeNull();
+    expect(readTextDecision(moderated, 'Chicken-Defender should go')).toBeNull();
+    expect(readTextDecision(moderated, '')).toBeNull();
   });
 });
