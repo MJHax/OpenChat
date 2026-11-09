@@ -8,6 +8,8 @@ import { useAvailability } from '../AvailabilityContext';
 import { availabilityLabel } from '../../lib/availability';
 import { ErrorText } from '../ErrorText';
 import { initials, setupNotes } from '../../lib/discussion';
+import { loadDiscussionPrefs, saveDiscussionPrefs } from '../../lib/discussionPrefs';
+import { DiscussionOptions } from './DiscussionOptions';
 import { X } from 'lucide-react';
 
 interface Row {
@@ -32,6 +34,8 @@ export function DiscussionSetup({ models, onCreated }: DiscussionSetupProps) {
   const defaultModel = (models.find((m) => m.isDefault) ?? models[0])?.id ?? '';
   const [topic, setTopic] = useState('');
   const [turnLimit, setTurnLimit] = useState(String(DEFAULT_TURN_LIMIT));
+  const [limitMode, setLimitMode] = useState<'moderator' | 'fixed'>('moderator');
+  const [prefs, setPrefs] = useState(loadDiscussionPrefs);
   const [rows, setRows] = useState<Row[]>(() => [row(1, defaultModel), row(2, defaultModel)]);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -39,6 +43,7 @@ export function DiscussionSetup({ models, onCreated }: DiscussionSetupProps) {
   // Rows made before the library loaded (or whose model was removed since) use the default model.
   const modelOf = (r: Row) => (models.some((m) => m.id === r.modelId) ? r.modelId : defaultModel);
   const moderator = rows.find((r) => r.isModerator && supportsTools(modelOf(r)));
+  const moderatorDecides = !!moderator && limitMode === 'moderator';
   const notes = setupNotes(rows.map(modelOf));
 
   const update = (key: number, patch: Partial<Row>) => {
@@ -52,8 +57,9 @@ export function DiscussionSetup({ models, onCreated }: DiscussionSetupProps) {
 
   async function start() {
     const draft = {
-      topic, turnLimit: Number(turnLimit),
+      topic, turnLimit: moderatorDecides ? MAX_TURN_LIMIT : Number(turnLimit),
       participants: rows.map((r) => ({ name: r.name, modelId: modelOf(r), instructions: r.instructions, isModerator: r === moderator })),
+      ...(moderatorDecides ? { moderatorDecides: true } : {}),
     };
     const problem = validateNewDiscussion(draft, INSTRUCTIONS_MAX);
     if (problem) return setError(problem);
@@ -123,11 +129,35 @@ export function DiscussionSetup({ models, onCreated }: DiscussionSetupProps) {
           {' '}Each participant only sees its own instructions.
         </p>
 
+        <details className="setup-options">
+          <summary>Options</summary>
+          <DiscussionOptions prefs={prefs} onChange={(p) => { setPrefs(p); saveDiscussionPrefs(p); }} />
+        </details>
+
         <div className="setup-footer">
-          <label className="turn-limit">
-            Turn limit
-            <input type="number" min={1} max={MAX_TURN_LIMIT} value={turnLimit} onChange={(e) => { setTurnLimit(e.target.value); setError(null); }} />
-          </label>
+          {moderator ? (
+            <fieldset className="turn-limit-choice" role="radiogroup" aria-label="Turn limit">
+              <legend>Turn limit</legend>
+              <label className="option-radio">
+                <input type="radio" name="turn-limit-mode" checked={limitMode === 'moderator'} onChange={() => setLimitMode('moderator')} />
+                <span>Let the moderator decide<small>It ends the discussion when it is done, after at most {MAX_TURN_LIMIT} turns</small></span>
+              </label>
+              <label className="option-radio">
+                <input type="radio" name="turn-limit-mode" checked={limitMode === 'fixed'} onChange={() => setLimitMode('fixed')} />
+                <span className="turn-limit">
+                  Stop after
+                  <input type="number" aria-label="Turn limit" min={1} max={MAX_TURN_LIMIT} value={turnLimit} disabled={limitMode !== 'fixed'}
+                    onChange={(e) => { setTurnLimit(e.target.value); setError(null); }} />
+                  turns
+                </span>
+              </label>
+            </fieldset>
+          ) : (
+            <label className="turn-limit">
+              Turn limit
+              <input type="number" min={1} max={MAX_TURN_LIMIT} value={turnLimit} onChange={(e) => { setTurnLimit(e.target.value); setError(null); }} />
+            </label>
+          )}
           <button className="primary" disabled={starting} onClick={() => void start()}>{starting ? 'Starting…' : 'Start discussion'}</button>
         </div>
         {error && <p className="error-text"><ErrorText message={error} /></p>}
