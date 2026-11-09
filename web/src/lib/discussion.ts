@@ -31,7 +31,7 @@ export function endText(s: DiscussionState): string | null {
   return 'Reached the turn limit.';
 }
 
-export const turnLabel = (s: DiscussionState) => `Turn ${s.turnsTaken} of ${s.turnLimit}`;
+export const turnLabel = (s: DiscussionState) => (s.moderatorDecides ? `Turn ${s.turnsTaken}` : `Turn ${s.turnsTaken} of ${s.turnLimit}`);
 
 /** The Discussion overflow question; the speaker's model is the one that can't remember. */
 export function discussionOverflowTitle(overflow: ContextOverflow[]): string {

@@ -5,7 +5,7 @@ import { chatCost, createChat, MAX_INSTRUCTIONS, renameChat, requireChat } from 
 import { getChatMessages } from '../messages';
 import { modelSupportsTools } from '../library';
 import { turnsTaken } from './engine';
-import { validateNewDiscussion } from '../../../shared/discussion';
+import { MAX_TURN_LIMIT, validateNewDiscussion } from '../../../shared/discussion';
 import type {
   DiscussionDetail, DiscussionEndReason, DiscussionParticipant, DiscussionState, DiscussionStatus, DiscussionSummary, NewDiscussion,
 } from '../../../shared/types';
@@ -21,7 +21,7 @@ export interface DiscussionRow {
 
 interface RawDiscussion {
   chat_id: string; topic: string; turn_limit: number; status: DiscussionStatus; end_reason: DiscussionEndReason | null; end_note: string | null;
-  moderator_note_after: string | null; summary: string | null; summary_model_id: string | null; summary_cost: number | null; summary_at: number | null;
+  moderator_decides: number; moderator_note_after: string | null; summary: string | null; summary_model_id: string | null; summary_cost: number | null; summary_at: number | null;
 }
 
 const raw = (db: DB, chatId: string) => db.prepare('SELECT * FROM discussions WHERE chat_id = ?').get(chatId) as RawDiscussion | undefined;
@@ -45,6 +45,7 @@ export function discussionState(db: DB, chatId: string): DiscussionState {
   return {
     status: d.status, endReason: d.endReason, endNote: d.endNote, turnLimit: d.turnLimit,
     turnsTaken: turnsTaken(getParticipants(db, chatId), getChatMessages(db, chatId)),
+    moderatorDecides: raw(db, chatId)?.moderator_decides === 1,
     moderatorNoteAfter: raw(db, chatId)?.moderator_note_after ?? null,
   };
 }
@@ -71,6 +72,11 @@ export function setTurnLimit(db: DB, chatId: string, turnLimit: number): void {
   db.prepare('UPDATE discussions SET turn_limit = ? WHERE chat_id = ?').run(turnLimit, chatId);
 }
 
+/** Turns a moderator-decides discussion into an ordinary one, keeping its current turn limit. */
+export function clearModeratorDecides(db: DB, chatId: string): void {
+  db.prepare('UPDATE discussions SET moderator_decides = 0 WHERE chat_id = ?').run(chatId);
+}
+
 export function saveSummary(db: DB, chatId: string, s: DiscussionSummary): void {
   db.prepare('UPDATE discussions SET summary = ?, summary_model_id = ?, summary_cost = ?, summary_at = ? WHERE chat_id = ?')
     .run(s.text, s.modelId, s.cost, s.createdAt, chatId);
@@ -88,7 +94,8 @@ export function createDiscussion(db: DB, d: NewDiscussion): DiscussionDetail {
   const chatId = db.transaction(() => {
     const chat = createChat(db, 'discussion');
     renameChat(db, chat.id, topic.slice(0, 200));
-    db.prepare("INSERT INTO discussions (chat_id, topic, turn_limit, status) VALUES (?, ?, ?, 'active')").run(chat.id, topic, d.turnLimit);
+    db.prepare("INSERT INTO discussions (chat_id, topic, turn_limit, status, moderator_decides) VALUES (?, ?, ?, 'active', ?)")
+      .run(chat.id, topic, d.moderatorDecides ? MAX_TURN_LIMIT : d.turnLimit, d.moderatorDecides ? 1 : 0);
     const insert = db.prepare(
       'INSERT INTO discussion_participants (id, chat_id, position, name, model_id, instructions, is_moderator) VALUES (?, ?, ?, ?, ?, ?, ?)',
     );

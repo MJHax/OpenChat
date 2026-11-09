@@ -144,12 +144,34 @@ describe('discussion turns', () => {
     const stopped = await (await s.call('POST', `/api/discussions/${s.id}/stop`)).json();
     expect(stopped).toMatchObject({ status: 'ended', endReason: 'stopped' });
     const more = await (await s.call('POST', `/api/discussions/${s.id}/more-turns`)).json();
-    expect(more).toEqual({ status: 'active', endReason: null, endNote: null, turnLimit: 3, turnsTaken: 1, moderatorNoteAfter: null });
+    expect(more).toEqual({ status: 'active', endReason: null, endNote: null, turnLimit: 3, turnsTaken: 1, moderatorDecides: false, moderatorNoteAfter: null });
   });
 
   it('more-turns while active adds two to the limit', async () => {
     const s = await setup([]);
     expect(await (await s.call('POST', `/api/discussions/${s.id}/more-turns`)).json()).toMatchObject({ status: 'active', turnLimit: 12 });
+  });
+
+  it('refuses +2 turns while a moderator-decides discussion runs', async () => {
+    const s = await setup([], withModerator({ moderatorDecides: true }));
+    const res = await s.call('POST', `/api/discussions/${s.id}/more-turns`);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'This discussion has no turn limit.' });
+  });
+
+  it('turns an ended moderator-decides discussion into a limited one on +2 turns', async () => {
+    const PASS = { text: ['Next.'], tool: { name: 'pass_to', arguments: '{"name":"Chicken-Defender"}' } };
+    const s = await setup(Array(12).fill(PASS), withModerator({ moderatorDecides: true }));
+    for (let i = 0; i < 3; i++) await s.turn();
+    const before = (await s.detail()).state;
+    await s.call('POST', `/api/discussions/${s.id}/stop`);
+    const more = await (await s.call('POST', `/api/discussions/${s.id}/more-turns`)).json();
+    expect(more).toMatchObject({ status: 'active', turnLimit: before.turnsTaken + 2, moderatorDecides: false });
+    for (let i = 0; i < 2; i++) await s.turn();
+    const after = (await s.detail()).state;
+    expect(after).toMatchObject({ status: 'ended', endReason: 'limit', moderatorDecides: false });
+    const again = await (await s.call('POST', `/api/discussions/${s.id}/more-turns`)).json();
+    expect(again).toMatchObject({ status: 'active', turnLimit: after.turnsTaken + 2 });
   });
 
   it('refuses more turns past the 100-turn maximum', async () => {

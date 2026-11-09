@@ -16,9 +16,10 @@ export const newDiscussion = (over: Partial<NewDiscussion> = {}): NewDiscussion 
   ...over,
 });
 
-export const withModerator = (): NewDiscussion => newDiscussion({
+export const withModerator = (over: Partial<NewDiscussion> = {}): NewDiscussion => newDiscussion({
   participants: [
     ...newDiscussion().participants,
     { name: 'Moderator', modelId: 'test/tools', instructions: 'Keep it fair.', isModerator: true },
   ],
+  ...over,
 });

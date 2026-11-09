@@ -33,13 +33,21 @@ describe('discussion store', () => {
     expect(d.chat.title).toBe('Which came first, the chicken or the egg?');
     expect(d.topic).toBe('Which came first, the chicken or the egg?');
     expect(db.prepare('SELECT kind FROM chats WHERE id = ?').get(d.chat.id)).toEqual({ kind: 'discussion' });
-    expect(d.state).toEqual({ status: 'active', endReason: null, endNote: null, turnLimit: 10, turnsTaken: 0, moderatorNoteAfter: null });
+    expect(d.state).toEqual({ status: 'active', endReason: null, endNote: null, turnLimit: 10, turnsTaken: 0, moderatorDecides: false, moderatorNoteAfter: null });
     expect(d.participants.map((p) => [p.position, p.name, p.instructions, p.isModerator, p.turns, p.cost])).toEqual([
       [0, 'Egg-Defender', 'Argue the egg.', false, 0, 0],
       [1, 'Chicken-Defender', 'Argue the chicken.', false, 0, 0],
     ]);
     expect(d.messages).toEqual([]);
     expect(d.summary).toBeNull();
+  });
+
+  it('stores a moderator-decides discussion with the 100-turn cap', () => {
+    const db = openDb(':memory:');
+    seedModel(db, 'test/tools', true);
+    const d = createDiscussion(db, withModerator({ moderatorDecides: true, turnLimit: 5 }));
+    expect(d.state).toMatchObject({ turnLimit: 100, moderatorDecides: true });
+    expect(createDiscussion(db, newDiscussion()).state.moderatorDecides).toBe(false);
   });
 
   it('reports turns and cost per participant', () => {

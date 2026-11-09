@@ -7,7 +7,7 @@ import { insertMessage } from '../messages';
 import { checkSpend } from '../limits';
 import { discussionOverflow, discussionOverflowMessage } from '../contextCheck';
 import { loadedWindows } from '../providers';
-import { createDiscussion, discussionState, getDiscussionDetail, getDiscussionRow, setStatus, setTurnLimit } from '../discussion/store';
+import { createDiscussion, discussionState, getDiscussionDetail, clearModeratorDecides, getDiscussionRow, setStatus, setTurnLimit } from '../discussion/store';
 import { streamTurn, turnSpeaker } from '../discussion/turn';
 import { isLocalModelId } from '../../../shared/localModels';
 import { summarizeDiscussion } from '../discussion/summary';
@@ -119,11 +119,15 @@ export function discussionRoutes(deps: Deps): Hono {
     const id = c.req.param('id');
     const discussion = getDiscussionRow(db, id);
     const state = discussionState(db, id);
+    if (state.moderatorDecides && discussion.status === 'active') throw new HttpError(400, 'This discussion has no turn limit.');
     const limit = discussion.status === 'active' ? state.turnLimit + 2 : state.turnsTaken + 2;
     if (limit > MAX_TURN_LIMIT) throw new HttpError(400, `This discussion has reached the ${MAX_TURN_LIMIT}-turn maximum.`);
     db.transaction(() => {
       setTurnLimit(db, id, limit);
-      if (discussion.status === 'ended') setStatus(db, id, 'active', null);
+      if (discussion.status === 'ended') {
+        setStatus(db, id, 'active', null);
+        clearModeratorDecides(db, id);
+      }
     })();
     return c.json(discussionState(db, id));
   });

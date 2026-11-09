@@ -92,6 +92,8 @@ export interface DiscussionState {
   endNote: string | null;
   turnLimit: number;
   turnsTaken: number;
+  /** The moderator decides when it ends: no turn limit was set, so the limit is the 100-turn cap. */
+  moderatorDecides: boolean;
   /** The message after which to note that the moderator isn't choosing speakers; null before that happens. */
   moderatorNoteAfter: string | null;
 }
@@ -116,6 +118,8 @@ export interface DiscussionDetail {
 export interface NewDiscussion {
   topic: string;
   turnLimit: number;
+  /** Needs a moderator: no turn limit; the moderator ends it (the 100-turn cap still applies). */
+  moderatorDecides?: boolean;
   participants: { name: string; modelId: string; instructions: string; isModerator: boolean }[];
 }
 

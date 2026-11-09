@@ -35,6 +35,9 @@ export function validateNewDiscussion(d: NewDiscussion, maxInstructions: number)
   }
   if (new Set(people.map((p) => key(p.name))).size !== people.length) return 'Each participant needs a different name.';
   if (people.filter((p) => p.isModerator).length > 1) return 'Only one participant can be the moderator.';
+  if (d.moderatorDecides && !people.some((p) => p.isModerator)) {
+    return 'Only a discussion with a moderator can let the moderator decide when it ends.';
+  }
   return null;
 }
 

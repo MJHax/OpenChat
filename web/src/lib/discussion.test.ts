@@ -36,7 +36,7 @@ describe('initials', () => {
 });
 
 describe('endText', () => {
-  const base = { status: 'ended' as const, endNote: null, turnLimit: 4, turnsTaken: 4, moderatorNoteAfter: null };
+  const base = { status: 'ended' as const, endNote: null, turnLimit: 4, turnsTaken: 4, moderatorDecides: false, moderatorNoteAfter: null };
   it('says why a discussion ended, and nothing while active', () => {
     expect(endText({ ...base, endReason: 'limit' })).toBe('Reached the turn limit.');
     expect(endText({ ...base, endReason: 'stopped' })).toBe('You stopped the discussion.');
@@ -47,7 +47,11 @@ describe('endText', () => {
 
 describe('turnLabel', () => {
   it('shows turns taken against the limit', () => {
-    expect(turnLabel({ status: 'active', endReason: null, endNote: null, turnLimit: 12, turnsTaken: 7, moderatorNoteAfter: null })).toBe('Turn 7 of 12');
+    expect(turnLabel({ status: 'active', endReason: null, endNote: null, turnLimit: 12, turnsTaken: 7, moderatorDecides: false, moderatorNoteAfter: null })).toBe('Turn 7 of 12');
+  });
+
+  it('shows only the turns taken when the moderator decides', () => {
+    expect(turnLabel({ status: 'active', endReason: null, endNote: null, turnLimit: 100, turnsTaken: 7, moderatorDecides: true, moderatorNoteAfter: null })).toBe('Turn 7');
   });
 });
 

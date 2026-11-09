@@ -60,6 +60,12 @@ describe('validateNewDiscussion', () => {
     expect(validateNewDiscussion(draft({ participants: [person('M', true), person('B')] }), MAX)).toBeNull();
   });
 
+  it('only lets a discussion with a moderator skip the turn limit', () => {
+    expect(validateNewDiscussion(draft({ moderatorDecides: true }), MAX))
+      .toBe('Only a discussion with a moderator can let the moderator decide when it ends.');
+    expect(validateNewDiscussion(draft({ moderatorDecides: true, participants: [person('M', true), person('B')] }), MAX)).toBeNull();
+  });
+
   it('limits instructions', () => {
     const long = { ...person('A'), instructions: 'x'.repeat(MAX + 1) };
     expect(validateNewDiscussion(draft({ participants: [long, person('B')] }), MAX)).toBe('Instructions can be at most 20,000 characters.');

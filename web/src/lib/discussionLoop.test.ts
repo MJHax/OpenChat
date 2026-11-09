@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { initialLoop, loopReducer, nextAction, type LoopEvent, type LoopState } from './discussionLoop';
 import type { DiscussionState } from '../../../shared/types';
 
-const active: DiscussionState = { status: 'active', endReason: null, endNote: null, turnLimit: 10, turnsTaken: 0, moderatorNoteAfter: null };
+const active: DiscussionState = { status: 'active', endReason: null, endNote: null, turnLimit: 10, turnsTaken: 0, moderatorDecides: false, moderatorNoteAfter: null };
 const ended: DiscussionState = { ...active, status: 'ended', endReason: 'limit', turnsTaken: 10 };
 const run = (s: LoopState, ...events: LoopEvent[]) => events.reduce(loopReducer, s);
 

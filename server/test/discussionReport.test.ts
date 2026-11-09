@@ -18,7 +18,7 @@ const detail = (messages: Message[], summary: DiscussionDetail['summary'] = null
     { id: 'mod', position: 1, name: 'Moderator', modelId: 'test/mod-model', instructions: '', isModerator: true, turns: 0, cost: 0.001 },
   ],
   messages,
-  state: { status: 'ended', endReason: 'limit', endNote: null, turnLimit: 2, turnsTaken: 2, moderatorNoteAfter: null },
+  state: { status: 'ended', endReason: 'limit', endNote: null, turnLimit: 2, turnsTaken: 2, moderatorDecides: false, moderatorNoteAfter: null },
   summary,
 });
 
