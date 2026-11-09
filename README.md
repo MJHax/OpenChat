@@ -8,6 +8,42 @@ Chat with hundreds of cloud models through one OpenRouter key, or stay fully off
 
 ![OpenChat chatting with a local model](docs/screenshots/chat.png)
 
+## Highlights
+
+### Compare models side by side
+
+Send one message to up to four models at once, local and cloud mixed. Each reply shows its tokens, speed and cost, and you pick the one to continue with.
+
+![Three local models answering the same question side by side](docs/screenshots/compare.png)
+
+### Let models debate
+
+Start a **Discussion**: give each model a name and a position, add an optional moderator who hands out the floor, and watch them argue. You can step in at any point, add more turns, or have the debate summarized.
+
+![A moderated debate between two local models](docs/screenshots/discussion.png)
+
+### Know what you're spending
+
+Every reply shows its cost, token count and speed. The Stats page breaks down spending and usage by model and over time, and spending limits stop OpenRouter requests once you hit your budget.
+
+### Private by default
+
+Chats that only use local models never go to OpenRouter, not even to write their title. Your chats, files and settings stay in one SQLite file on your machine.
+
+### Lightweight
+
+`npm install && npm start` and you're running. No database server and no Docker required (though a Docker setup is included).
+
+### Also included
+
+- Edit and regenerate messages, with every version kept
+- Fork a chat, or summarize it and continue in a fresh one
+- Attach images, PDFs and text files
+- Web search (OpenRouter's, or SearXNG / Tavily for local models)
+- Image and video generation
+- Memories, custom instructions and saved prompts
+- Export and import all your data as one zip
+
 ## Set up
 
 You need [Node.js](https://nodejs.org) 22.12 or newer.
