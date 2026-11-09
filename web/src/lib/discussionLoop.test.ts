@@ -169,5 +169,22 @@ describe('discussion loop', () => {
       const s = run(started(), { type: 'setWaitForMe', on: true }, done(true), { type: 'stopped' });
       expect(s).toMatchObject({ revealing: false, awaitingNext: false, mode: 'ended' });
     });
+
+    it('sends a queued host message only after the reveal, so it lands after the reply', () => {
+      const s = run(started(), done(true), { type: 'hostTyped', text: 'Hi' });
+      expect(nextAction(s)).toBe('idle');
+      expect(nextAction(loopReducer(s, { type: 'revealDone' }))).toBe('sendHost');
+    });
+
+    it('releases a waiting hold when wait-for-me is switched off', () => {
+      const s = run(started(), { type: 'setWaitForMe', on: true }, done(false), { type: 'setWaitForMe', on: false });
+      expect(s).toMatchObject({ waitForMe: false, awaitingNext: false });
+      expect(nextAction(s)).toBe('turn');
+    });
+
+    it('clears the reveal and Next holds when turns are added', () => {
+      const s = run(started(), { type: 'setWaitForMe', on: true }, done(true), { type: 'turnsAdded', state: { ...active, turnsTaken: 1, turnLimit: 12 } });
+      expect(s).toMatchObject({ revealing: false, awaitingNext: false, mode: 'running' });
+    });
   });
 });

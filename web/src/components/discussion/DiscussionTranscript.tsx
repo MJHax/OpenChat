@@ -1,15 +1,20 @@
-import { Fragment } from 'react';
+import { Fragment, useEffect } from 'react';
 import type { DiscussionDetail, Message } from '../../../../shared/types';
 import { Markdown } from '../Markdown';
 import { formatCost } from '../../lib/format';
 import { endText } from '../../lib/discussion';
 import { Avatar } from './ParticipantsPopover';
+import { useReveal } from './useReveal';
 
 export interface LiveTurn {
   participantId: string;
   text: string;
-  /** What the server is waiting on (e.g. a model loading); cleared once the turn starts writing. */
+  /** What the server is waiting on (e.g. a model loading, or the moderator choosing the next speaker). */
   status?: string;
+  /** The stream has ended; the reply may still be appearing. */
+  done?: boolean;
+  /** The saved reply, kept here while it is still being revealed. */
+  message?: Message;
 }
 
 export interface DiscussionTranscriptProps {
@@ -17,6 +22,10 @@ export interface DiscussionTranscriptProps {
   live: LiveTurn | null;
   /** Host messages waiting for the current turn to finish. */
   queued: string[];
+  /** Show the live reply word by word. */
+  naturalReveal: boolean;
+  /** The live reply has ended and fully appeared. */
+  onRevealed(): void;
   nameOf(modelId: string): string;
 }
 
@@ -50,7 +59,31 @@ function Line({ m, detail, nameOf }: { m: Message; detail: DiscussionDetail; nam
   );
 }
 
-export function DiscussionTranscript({ detail, live, queued, nameOf }: DiscussionTranscriptProps) {
+function LiveLine({ live, speaker, naturalReveal, onRevealed, nameOf }: {
+  live: LiveTurn;
+  speaker: DiscussionDetail['participants'][number];
+  naturalReveal: boolean;
+  onRevealed(): void;
+  nameOf(id: string): string;
+}) {
+  const { shown, done, showAll } = useReveal(live.text, naturalReveal, !live.done);
+  useEffect(() => {
+    if (done && live.done) onRevealed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done, live.done]);
+  const appearing = !done && shown !== live.text;
+  return (
+    <div className={`turn${appearing ? ' appearing' : ''}`} onClick={appearing ? showAll : undefined} title={appearing ? 'Click to show the whole reply' : undefined}>
+      <Avatar name={speaker.name} position={speaker.position} />
+      <div className="turn-main">
+        <div className="turn-name">{speaker.name} <span className="muted">· {nameOf(speaker.modelId)} · {live.status ?? 'writing…'}</span></div>
+        {shown && <div className="msg-body"><Markdown text={shown} /></div>}
+      </div>
+    </div>
+  );
+}
+
+export function DiscussionTranscript({ detail, live, queued, naturalReveal, onRevealed, nameOf }: DiscussionTranscriptProps) {
   const speaker = live && detail.participants.find((p) => p.id === live.participantId);
   const ended = endText(detail.state);
   return (
@@ -63,15 +96,7 @@ export function DiscussionTranscript({ detail, live, queued, nameOf }: Discussio
           )}
         </Fragment>
       ))}
-      {speaker && (
-        <div className="turn">
-          <Avatar name={speaker.name} position={speaker.position} />
-          <div className="turn-main">
-            <div className="turn-name">{speaker.name} <span className="muted">· {nameOf(speaker.modelId)} · {live.status && !live.text ? live.status : 'writing…'}</span></div>
-            {live.text && <div className="msg-body"><Markdown text={live.text} /></div>}
-          </div>
-        </div>
-      )}
+      {live && speaker && <LiveLine key={live.participantId} live={live} speaker={speaker} naturalReveal={naturalReveal} onRevealed={onRevealed} nameOf={nameOf} />}
       {queued.map((text, i) => (
         <div key={i} className="turn host queued">
           <div className="turn-name">You (host) <span className="muted">· sends after this turn</span></div>

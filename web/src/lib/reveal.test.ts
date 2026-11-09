@@ -26,4 +26,10 @@ describe('reveal helpers', () => {
     expect(wordsPrefix('a b', 5)).toBe('a b');
     expect(wordsPrefix('a b', 0)).toBe('');
   });
+
+  it('floors a fractional word count and treats NaN as 0', () => {
+    expect(wordsPrefix('a b c', 1.9)).toBe('a');
+    expect(wordsPrefix('a b c', 0.5)).toBe('');
+    expect(wordsPrefix('a b c', Number.NaN)).toBe('');
+  });
 });

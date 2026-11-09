@@ -154,6 +154,22 @@ button.chip.more { border-style: dashed; color: var(--muted); }
 .setup-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .turn-limit { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
 .turn-limit input { width: 80px; }
+.discussion-status { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.discussion-controls { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.discussion-controls > button { display: inline-flex; align-items: center; gap: 5px; }
+/* Both labels share one cell, so the button keeps the width of the longer one. */
+.discussion-controls > button.send-label { display: inline-grid; justify-items: center; }
+.send-label > span { grid-area: 1 / 1; }
+.send-label > .hidden-label { visibility: hidden; }
+.discussion-options-pop { position: relative; }
+.discussion-options-panel { width: 280px; padding: 8px 10px; }
+.discussion-options { display: flex; flex-direction: column; gap: 8px; }
+.discussion-options fieldset { border: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.discussion-options legend { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); padding: 4px 0; }
+.option-radio { display: flex; align-items: flex-start; gap: 8px; padding: 4px 2px; font-size: 13px; cursor: pointer; }
+.option-radio input { margin-top: 3px; accent-color: var(--accent); }
+.option-radio small { display: block; color: var(--muted); font-size: 12px; }
+.turn.appearing { cursor: pointer; }
 
 /* Model libraries */
 .model-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }

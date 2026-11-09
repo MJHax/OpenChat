@@ -74,7 +74,7 @@ export function loopReducer(s: LoopState, e: LoopEvent): LoopState {
     case 'next':
       return { ...s, awaitingNext: false };
     case 'setWaitForMe':
-      return { ...s, waitForMe: e.on };
+      return { ...s, waitForMe: e.on, awaitingNext: e.on && s.awaitingNext };
     case 'turnFailed':
       return { ...s, streaming: false, mode: paused(s.mode), error: e.message, spendBlocked: e.spend };
     case 'turnOverflow':
@@ -90,17 +90,18 @@ export function loopReducer(s: LoopState, e: LoopEvent): LoopState {
     case 'stopped':
       return { ...s, mode: 'ended', streaming: false, error: null, spendBlocked: false, overflow: null, revealing: false, awaitingNext: false };
     case 'turnsAdded': // +2 turns starts turns again, from paused or ended
-      return e.state.status === 'active' ? { ...s, mode: 'running', error: null, spendBlocked: false } : s;
+      return e.state.status === 'active' ? { ...s, mode: 'running', error: null, spendBlocked: false, revealing: false, awaitingNext: false } : s;
   }
 }
 
 /**
- * What the page should do now: nothing while a turn streams, then queued host messages, then the next turn, which also
- * waits for a reveal, a Next press, or the host finishing a message they are drafting.
+ * What the page should do now: nothing while a turn streams, then queued host messages (once the last reply has been
+ * revealed), then the next turn, which also waits for a reveal, a Next press, or the host finishing a message they are
+ * drafting.
  */
 export function nextAction(s: LoopState, drafting = false): 'turn' | 'sendHost' | 'idle' {
   if (s.streaming) return 'idle';
-  if (s.queued.length) return 'sendHost';
+  if (s.queued.length) return s.revealing ? 'idle' : 'sendHost'; // after the reply on screen, in transcript order
   if (s.mode !== 'running') return 'idle';
   return s.revealing || s.awaitingNext || drafting ? 'idle' : 'turn';
 }
