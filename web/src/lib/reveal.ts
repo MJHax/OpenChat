@@ -11,7 +11,7 @@ export function countWords(text: string): number {
 
 /** The text up to and including the n-th word, with its original whitespace and markdown. */
 export function wordsPrefix(text: string, words: number): string {
-  // A count from elapsed time × rate is fractional; never round it up past what should show.
+  // A count from elapsed time x rate is fractional; never round it up past what should show.
   const n = Number.isNaN(words) ? 0 : Math.floor(words);
   if (n <= 0) return '';
   let seen = 0;
