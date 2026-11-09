@@ -10,11 +10,24 @@ import { recordUsage, type UsageStatus } from '../usage';
 import { displayNameOf } from '../library';
 import { statusMessage } from '../../../shared/localModels';
 import { callTimer, failureStatus, timingFields, replyErrorMessage, saveIfChatExists } from '../generate';
-import { buildDiscussionPrompt, cleanReply, moderatorTools, nextSpeaker, readToolCall, turnsTaken } from './engine';
+import { buildDecisionPrompt, buildDiscussionPrompt, cleanReply, moderatorTools, nextSpeaker, readTextDecision, readToolCall, turnsTaken } from './engine';
 import { discussionState, getDiscussionRow, getParticipants, recordModeratorTurn, setStatus } from './store';
 import type {
   DiscussionParticipant, DiscussionState, DiscussionTurnDone, DiscussionTurnError, DiscussionTurnStart, Message, MessageStatus, StreamStatus,
 } from '../../../shared/types';
+
+const sumOrNull = (a: number | null, b: number | null) => (a === null && b === null ? null : (a ?? 0) + (b ?? 0));
+
+/** The turn's usage plus a follow-up call's: tokens and cost add up, the rest stays the first call's. */
+function addUsage(first: Usage | null, extra: Usage): Usage {
+  if (!first) return extra;
+  return {
+    ...first,
+    promptTokens: sumOrNull(first.promptTokens, extra.promptTokens),
+    completionTokens: sumOrNull(first.completionTokens, extra.completionTokens),
+    cost: sumOrNull(first.cost, extra.cost),
+  };
+}
 
 /** The participant who speaks next: the choice `streamTurn` makes, shared so the route can check the limit against its model. */
 export function turnSpeaker(db: DB, chatId: string): DiscussionParticipant {
@@ -87,6 +100,30 @@ export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () 
       else if (turnsTaken(participants, getChatMessages(db, chatId)) >= turnLimit) setStatus(db, chatId, 'ended', 'limit');
     };
 
+    /** A moderator that skipped its tool is asked again, requiring one. Its cost joins the turn's usage; a failed follow-up is a miss, not a turn error. */
+    const askForDecision = async (provider: ReturnType<typeof chatProvider>, reply: string) => {
+      let followText = '';
+      let followCall: { name: string; arguments: string } | null = null;
+      let followUsage: Usage | null = null;
+      try {
+        const request = {
+          model: speaker.modelId, messages: buildDecisionPrompt(topic, participants, history, speaker, reply),
+          tools, toolChoice: 'required' as const, signal: abort.signal,
+        };
+        for await (const event of provider.streamChat(request)) {
+          if (event.type === 'delta') followText += event.text;
+          else if (event.type === 'usage') followUsage = event.usage;
+          else if (event.type === 'tool_call') followCall ??= event;
+        }
+      } catch (err) {
+        if (abort.signal.aborted) throw err;
+        return null;
+      } finally {
+        if (followUsage) usage = addUsage(usage, followUsage);
+      }
+      return (followCall ? readToolCall(participants, followCall) : null) ?? readTextDecision(participants, followText);
+    };
+
     await send('start', { messageId, participantId: speaker.id } satisfies DiscussionTurnStart);
     let resolved = false;
     try {
@@ -108,9 +145,14 @@ export function streamTurn(c: Context, deps: Deps, chatId: string, onFinish: () 
           call ??= event; // only the first call counts
         }
       }
-      const decision = speaker.isModerator && call ? readToolCall(participants, call) : null;
+      const cleaned = cleanReply(text, speaker.name, others);
+      let decision = speaker.isModerator && call ? readToolCall(participants, call) : null;
+      if (speaker.isModerator && !decision && !abort.signal.aborted) {
+        await send('status', { message: 'Deciding who speaks next…' } satisfies StreamStatus);
+        decision = await askForDecision(provider, cleaned);
+      }
       const handoffTo = decision && 'handoffTo' in decision ? decision.handoffTo : null;
-      const message = save('complete', cleanReply(text, speaker.name, others), handoffTo);
+      const message = save('complete', cleaned, handoffTo);
       log('complete', message.id);
       if (speaker.isModerator) recordModeratorTurn(db, chatId, message.id, decision !== null);
       settle(decision && 'end' in decision ? decision.end : null);

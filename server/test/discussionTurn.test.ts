@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { makeApp, readEvents } from './appHelpers';
+import { DECISION_PROMPT } from '../src/discussion/engine';
 import { newDiscussion, seedModel, withModerator } from './discussionHelpers';
 import { OpenRouterError, type OpenRouterClient, type StreamEvent } from '../src/openrouter';
 import type { ChatMessage } from '../src/prompt';
@@ -14,9 +15,9 @@ const USAGE = { promptTokens: 1, completionTokens: 2, cost: 0.002, webSearches: 
 
 /** A fake streamChat that plays `turns` in order (then a plain reply), recording each call's prompt and tools. */
 function scripted(turns: Turn[]) {
-  const calls: { model: string; messages: ChatMessage[]; tools?: unknown[] }[] = [];
-  const streamChat: OpenRouterClient['streamChat'] = async function* ({ model, messages, tools }): AsyncGenerator<StreamEvent> {
-    calls.push({ model, messages, tools });
+  const calls: { model: string; messages: ChatMessage[]; tools?: unknown[]; toolChoice?: string }[] = [];
+  const streamChat: OpenRouterClient['streamChat'] = async function* ({ model, messages, tools, toolChoice }): AsyncGenerator<StreamEvent> {
+    calls.push({ model, messages, tools, toolChoice });
     const t = turns[calls.length - 1] ?? { text: [`turn ${calls.length}`] };
     for (const text of t.text ?? []) yield { type: 'delta', text };
     if (t.hold) await t.hold;
@@ -250,7 +251,7 @@ describe('discussion turns', () => {
     const PASS = { name: "pass_to", arguments: "{\"name\":\"Chicken-Defender\"}" };
     const BAD = { name: "pass_to", arguments: "{\"name\":\"Nobody\"}" };
     const END = { name: "end_discussion", arguments: "{\"reason\":\"Done.\"}" };
-    const MISS: Turn = { text: ["Hmm."] };
+    const MISS: Turn[] = [{ text: ["Hmm."] }, { text: ["Hmm."] }]; // the turn and its follow-up
     const OTHER: Turn = { text: ["A point."] };
 
     /** Runs `n` turns and returns each done frame. */
@@ -261,7 +262,7 @@ describe('discussion turns', () => {
     }
 
     it("notes the moderator turn that made two misses in a row", async () => {
-      const s = await setup([MISS, OTHER, MISS], withModerator());
+      const s = await setup([...MISS, OTHER, ...MISS], withModerator());
       const [first, , second] = await run(s, 3);
       expect(first.state.moderatorNoteAfter).toBeNull();
       expect(second.state.moderatorNoteAfter).toBe(second.message.id);
@@ -269,19 +270,19 @@ describe('discussion turns', () => {
     });
 
     it("counts a pass_to with an unknown name as a miss", async () => {
-      const s = await setup([{ text: ["x"], tool: BAD }, OTHER, { text: ["y"], tool: BAD }], withModerator());
+      const s = await setup([{ text: ["x"], tool: BAD }, MISS[1], OTHER, { text: ["y"], tool: BAD }, MISS[1]], withModerator());
       const done = await run(s, 3);
       expect(done[2].state.moderatorNoteAfter).toBe(done[2].message.id);
     });
 
     it("a valid pass_to between two misses means no note", async () => {
-      const s = await setup([MISS, OTHER, { text: ["go"], tool: PASS }, OTHER, MISS], withModerator());
+      const s = await setup([...MISS, OTHER, { text: ["go"], tool: PASS }, OTHER, ...MISS], withModerator());
       const done = await run(s, 5);
       expect(done[4].state.moderatorNoteAfter).toBeNull();
     });
 
     it("end_discussion resets the count, and more-turns does not bring it back", async () => {
-      const s = await setup([MISS, OTHER, { text: ["done"], tool: END }, OTHER, MISS], withModerator());
+      const s = await setup([...MISS, OTHER, { text: ["done"], tool: END }, OTHER, ...MISS], withModerator());
       await run(s, 3);
       await s.call("POST", `/api/discussions/${s.id}/more-turns`);
       const done = await run(s, 2);
@@ -289,18 +290,89 @@ describe('discussion turns', () => {
     });
 
     it("keeps the note on the second miss when a third follows", async () => {
-      const s = await setup([MISS, OTHER, MISS, OTHER, MISS], withModerator());
+      const s = await setup([...MISS, OTHER, ...MISS, OTHER, ...MISS], withModerator());
       const done = await run(s, 5);
       expect(done[4].state.moderatorNoteAfter).toBe(done[2].message.id);
     });
 
     it("a moderator turn that fails mid-stream leaves the count alone", async () => {
-      const s = await setup([MISS, OTHER, { text: ["The"], fail: new OpenRouterError("Bad.", 502) }, OTHER, MISS], withModerator());
+      const s = await setup([...MISS, OTHER, { text: ["The"], fail: new OpenRouterError("Bad.", 502) }, OTHER, ...MISS], withModerator());
       await run(s, 2);
       const failed = ev((await s.turn()).events, "error");
       expect(failed.state.moderatorNoteAfter).toBeNull();
       const done = await run(s, 2);
       expect(done[1].state.moderatorNoteAfter).toBe(done[1].message.id);
+    });
+  });
+
+  describe('moderator follow-up decision', () => {
+    const END_CALL: Turn = { tool: { name: 'end_discussion', arguments: '{"reason":"Done"}' } };
+
+    it('asks a moderator that skipped the tool to decide, and ends when it says so', async () => {
+      const s = await setup([{ text: ['That was great. Tabs wins.'] }, END_CALL], withModerator());
+      const { events } = await s.turn();
+      expect(s.calls).toHaveLength(2);
+      expect(s.calls[1].toolChoice).toBe('required');
+      expect(s.calls[1].messages.at(-1)?.content).toBe(DECISION_PROMPT);
+      const done = ev(events, 'done');
+      expect(done.state).toMatchObject({ status: 'ended', endReason: 'moderator', endNote: 'Done' });
+      expect(done.message.content).toBe('That was great. Tabs wins.');
+      expect(events.some((e) => e.event === 'status' && e.data.message === 'Deciding who speaks next…')).toBe(true);
+    });
+
+    it('adds the follow-up cost to the moderator message', async () => {
+      const s = await setup([{ text: ['That was great. Tabs wins.'] }, END_CALL], withModerator());
+      const { message } = ev((await s.turn()).events, 'done');
+      expect(message).toMatchObject({ cost: 0.004, promptTokens: 2, completionTokens: 4 });
+      const rows = loadUsageRows(s.db, null).filter((r) => r.chatId === s.id);
+      expect(rows).toEqual([expect.objectContaining({ cost: 0.004 })]);
+    });
+
+    it('reads a plain-text name from the follow-up as a handoff', async () => {
+      const s = await setup([{ text: ['Over to you.'] }, { text: ['Chicken-Defender'] }], withModerator());
+      const [, chicken] = s.created.participants;
+      const first = await s.turn();
+      expect(ev(first.events, 'done').message.handoffTo).toBe(chicken.id);
+      expect(ev((await s.turn()).events, 'start').participantId).toBe(chicken.id);
+    });
+
+    it('makes no follow-up when the moderator called a tool', async () => {
+      const s = await setup([{ text: ['Go.'], tool: { name: 'pass_to', arguments: '{"name":"Chicken-Defender"}' } }], withModerator());
+      await s.turn();
+      expect(s.calls).toHaveLength(1);
+    });
+
+    it('counts a miss when the follow-up decides nothing either', async () => {
+      const s = await setup([{ text: ['Hmm.'] }, { text: ['Hmm.'] }, { text: ['A point.'] }, { text: ['Hmm.'] }, { text: ['Hmm.'] }], withModerator());
+      const first = await s.turn();
+      expect(first.status).toBe(200);
+      await s.turn();
+      const second = await s.turn();
+      expect(second.status).toBe(200);
+      expect(second.events.some((e) => e.event === 'error')).toBe(false);
+      const done = ev(second.events, 'done');
+      expect(done.state.moderatorNoteAfter).toBe(done.message.id);
+    });
+
+    it('counts a miss when the follow-up itself fails', async () => {
+      const s = await setup([{ text: ['Hmm.'] }, { fail: new OpenRouterError('Bad.', 502) }], withModerator());
+      const { events } = await s.turn();
+      expect(events.some((e) => e.event === 'error')).toBe(false);
+      expect(ev(events, 'done').message).toMatchObject({ content: 'Hmm.', status: 'complete', handoffTo: null });
+    });
+
+    it('makes no follow-up for a stopped turn', async () => {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => (release = r));
+      const s = await setup([{ text: ['Thinking'], hold }], withModerator());
+      const abort = new AbortController();
+      const running = s.app.request(`/api/discussions/${s.id}/turn`, { method: 'POST', signal: abort.signal });
+      await new Promise((r) => setTimeout(r, 20));
+      abort.abort();
+      release();
+      await readEvents(await running).catch(() => {});
+      await new Promise((r) => setTimeout(r, 20));
+      expect(s.calls).toHaveLength(1);
     });
   });
 });
