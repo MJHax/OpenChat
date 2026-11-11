@@ -134,24 +134,26 @@ export function DiscussionSetup({ models, onCreated }: DiscussionSetupProps) {
           <DiscussionOptions prefs={prefs} onChange={(p) => { setPrefs(p); saveDiscussionPrefs(p); }} />
         </details>
 
+        {moderator && (
+          <div className="discussion-options turn-limit-choice">
+            <div className="toggle-row">
+              <div>Moderator decides when to stop<small>It ends the discussion when it is done, after at most {MAX_TURN_LIMIT} turns</small></div>
+              <button role="switch" aria-checked={limitMode === 'moderator'} aria-label="Moderator decides when to stop" className="switch"
+                onClick={() => setLimitMode(limitMode === 'moderator' ? 'fixed' : 'moderator')} />
+            </div>
+          </div>
+        )}
+
         <div className="setup-footer">
           {moderator ? (
-            <fieldset className="turn-limit-choice" role="radiogroup" aria-label="Turn limit">
-              <legend>Turn limit</legend>
-              <label className="option-radio">
-                <input type="radio" name="turn-limit-mode" checked={limitMode === 'moderator'} onChange={() => setLimitMode('moderator')} />
-                <span>Let the moderator decide<small>It ends the discussion when it is done, after at most {MAX_TURN_LIMIT} turns</small></span>
+            limitMode === 'fixed' && (
+              <label className="turn-limit">
+                Stop after
+                <input type="number" aria-label="Turn limit" min={1} max={MAX_TURN_LIMIT} value={turnLimit}
+                  onChange={(e) => { setTurnLimit(e.target.value); setError(null); }} />
+                turns
               </label>
-              <label className="option-radio">
-                <input type="radio" name="turn-limit-mode" checked={limitMode === 'fixed'} onChange={() => setLimitMode('fixed')} />
-                <span className="turn-limit">
-                  Stop after
-                  <input type="number" aria-label="Turn limit" min={1} max={MAX_TURN_LIMIT} value={turnLimit} disabled={limitMode !== 'fixed'}
-                    onChange={(e) => { setTurnLimit(e.target.value); setError(null); }} />
-                  turns
-                </span>
-              </label>
-            </fieldset>
+            )
           ) : (
             <label className="turn-limit">
               Turn limit
