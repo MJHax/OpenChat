@@ -20,7 +20,7 @@ Send one message to up to four models at once, local and cloud mixed. Each reply
 
 Start a **Discussion**: give each model a name and a position, add an optional moderator who hands out the floor, and watch them argue. You can step in at any point, add more turns, or have the debate summarized.
 
-![A moderated debate between two local models](docs/screenshots/discussion.png)
+![A moderator hands the floor between two models debating tabs versus spaces](docs/screenshots/discussion.gif)
 
 ### Know what you're spending
 
