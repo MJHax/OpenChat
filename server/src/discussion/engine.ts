@@ -42,14 +42,19 @@ export function nextSpeaker(participants: DiscussionParticipant[], messages: Mes
 /** A handoff note a model wrote itself, copying how handoffs are narrated: "(You passed the floor to Ben.)" or "_Moderator passed the floor to Ben._". */
 const HANDOFF_NOTE = /\([^()\n]*passed the floor to[^()\n]*\)|_[^_\n]*passed the floor to[^_\n]*_/gi;
 
-/** Drops a leading own-name label, anything from the first line that labels someone else, and handoff notes. */
+/**
+ * Drops a leading own-name label, anything from the first line that labels someone else, handoff notes, and the turn cue
+ * ("It's your turn, <speaker>.") echoed back: every prompt ends with that cue, and some models copy it into their reply.
+ * Only the cue addressed to the speaker itself goes, so a moderator telling someone else it's their turn keeps it.
+ */
 export function cleanReply(text: string, speaker: string, others: string[]): string {
   const own = new RegExp(`^\\s*(?:\\*\\*\\s*)?${escape(speaker)}(?:\\s*\\*\\*)?\\s*:(?:\\s*\\*\\*)?\\s*`, 'i');
+  const echoedCue = new RegExp(`[*_]*it['’]s your turn,\\s*${escape(speaker)}[.!]?[*_]*`, 'gi');
   const names = [...others, HOST_NAME].map(escape).join('|');
   const someoneElse = new RegExp(`\\n\\s*(?:\\*\\*\\s*)?(?:${names})(?:\\s*\\*\\*)?\\s*:`, 'i');
   const rest = text.replace(own, '');
   const cut = rest.search(someoneElse);
-  return (cut === -1 ? rest : rest.slice(0, cut)).replace(HANDOFF_NOTE, '').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  return (cut === -1 ? rest : rest.slice(0, cut)).replace(HANDOFF_NOTE, '').replace(echoedCue, '').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 export function moderatorTools(participants: DiscussionParticipant[]): FunctionTool[] {

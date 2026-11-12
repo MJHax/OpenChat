@@ -117,6 +117,14 @@ describe('cleanReply', () => {
     expect(cleanReply('(You passed the floor to Egg-Defender.)', 'Moderator', mo)).toBe('');
   });
 
+  it("drops the turn cue a model echoes to itself, but keeps it said to someone else", () => {
+    const mo = ['Spaces Defender', 'Tabs Defender'];
+    expect(cleanReply("Spaces Defender, your final thoughts?\n\nIt's your turn, Moderator.", 'Moderator', mo)).toBe('Spaces Defender, your final thoughts?');
+    expect(cleanReply('Final thoughts? It’s your turn, moderator', 'Moderator', mo)).toBe('Final thoughts?');
+    expect(cleanReply("It's your turn, Moderator.", 'Moderator', mo)).toBe('');
+    expect(cleanReply("Thanks. It's your turn, Tabs Defender.", 'Moderator', mo)).toBe("Thanks. It's your turn, Tabs Defender.");
+  });
+
   it('leaves other text alone', () => {
     expect(cleanReply('As Chicken-Defender: said, eggs.', 'Egg-Defender', others)).toBe('As Chicken-Defender: said, eggs.');
   });
