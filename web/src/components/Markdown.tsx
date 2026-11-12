@@ -1,5 +1,8 @@
 import { useContext, useEffect, useRef, useState, type ComponentProps } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { rehypeWordFade } from '../lib/wordFade';
+
+type RehypePlugins = NonNullable<ComponentProps<typeof ReactMarkdown>['rehypePlugins']>;
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { FilePanelContext } from './FilePanelContext';
@@ -44,9 +47,13 @@ function Link({ node: _node, ...props }: ComponentProps<'a'> & { node?: unknown 
   return <a {...props} target="_blank" rel="noopener noreferrer" />;
 }
 
-export function Markdown({ text }: { text: string }) {
+/** `fade` marks the words of a reply that is still appearing so they can fade in (see `rehypeWordFade`). */
+export function Markdown({ text, fade }: { text: string; fade?: { seen: number[] } }) {
+  const rehypePlugins: RehypePlugins = fade
+    ? [rehypeHighlight, [rehypeWordFade, { seen: fade.seen, now: performance.now() }] as RehypePlugins[number]]
+    : [rehypeHighlight];
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ pre: CodeBlock, a: Link }}>
+    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugins} components={{ pre: CodeBlock, a: Link }}>
       {text}
     </ReactMarkdown>
   );
