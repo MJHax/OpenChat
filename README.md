@@ -6,7 +6,7 @@
 
 Chat with hundreds of cloud models through one OpenRouter key, or stay fully offline with [Ollama](https://ollama.com) or [LM Studio](https://lmstudio.ai), with no account or key needed.
 
-![OpenChat chatting with a local model](docs/screenshots/chat.png)
+<p align="center"><img src="docs/screenshots/chat.png" alt="OpenChat chatting with a local model" width="75%"></p>
 
 ## Highlights
 
@@ -14,13 +14,13 @@ Chat with hundreds of cloud models through one OpenRouter key, or stay fully off
 
 Send one message to up to four models at once, local and cloud mixed. Each reply shows its tokens, speed and cost, and you pick the one to continue with.
 
-![Three local models answering the same question side by side](docs/screenshots/compare.png)
+<p align="center"><img src="docs/screenshots/compare.png" alt="Three local models answering the same question side by side" width="75%"></p>
 
 ### Let models debate
 
 Start a **Discussion**: give each model a name and a position, add an optional moderator who hands out the floor, and watch them argue. You can step in at any point, add more turns, or have the debate summarized.
 
-![A moderator hands the floor between two models debating tabs versus spaces](docs/screenshots/discussion.gif)
+<p align="center"><img src="docs/screenshots/discussion.gif" alt="A moderator hands the floor between two models debating tabs versus spaces" width="65%"></p>
 
 ### Know what you're spending
 
